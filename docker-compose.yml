@@ -215,15 +215,12 @@ services:
 
         exec nginx -g 'daemon off;'
 
-  # DNS-01 based certbot: HTTP-01 failed with a connection timeout from
-  # Let's Encrypt's validation servers (see deployment notes), so this uses
-  # DNS-01 instead, which needs no inbound connection to the VPS at all.
-  # The auth hook prints the required TXT record to this container's logs
-  # and waits (polling public DNS) for it to appear - the deploying
-  # operator adds it via the Hostinger DNS API in the meantime. Not
-  # restart:-managed on purpose: this runs once to get the first
-  # certificate, then exits; renewal is handled by a separate cron-driven
-  # step once DNS-01 automation is fully wired up.
+  # Certbot: attempts to issue the initial HTTP-01 certificate once, with
+  # a hard timeout so a network/validation issue can never hang the
+  # deployment. If the request fails (timeout, rate limit, whatever), this
+  # container just exits - nginx keeps serving plain HTTP indefinitely
+  # either way (see its own retry loop above). Re-run `docker compose up`
+  # after the underlying cause is fixed to retry.
   certbot:
     image: certbot/certbot
     depends_on:
@@ -234,59 +231,10 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        apk add --no-cache python3 bind-tools > /dev/null 2>&1 || true
-        cat > /hostinger_dns_hook.py << 'HOOKEOF'
-        import json, os, subprocess, sys, time
-
-        def _root_domain(d):
-            p = d.split(".")
-            return ".".join(p[-2:])
-
-        def _record_name(d, root):
-            prefix = d[: -(len(root) + 1)] if d != root else ""
-            return f"_acme-challenge.{prefix}" if prefix else "_acme-challenge"
-
-        def _resolves(fqdn, expected):
-            try:
-                out = subprocess.run(["nslookup", "-type=TXT", fqdn, "8.8.8.8"], capture_output=True, text=True, timeout=10).stdout
-                return expected in out
-            except Exception:
-                return False
-
-        def auth():
-            domain = os.environ["CERTBOT_DOMAIN"]
-            validation = os.environ["CERTBOT_VALIDATION"]
-            root = _root_domain(domain)
-            name = _record_name(domain, root)
-            fqdn = f"{name}.{root}"
-            print("=" * 70, file=sys.stderr)
-            print("ACME DNS-01 CHALLENGE - ACTION NEEDED", file=sys.stderr)
-            print(f"  TXT record name:  {name}", file=sys.stderr)
-            print(f"  TXT record value: {validation}", file=sys.stderr)
-            print(f"  (zone: {root}, full name: {fqdn})", file=sys.stderr)
-            print("=" * 70, file=sys.stderr)
-            for _ in range(36):
-                if _resolves(fqdn, validation):
-                    print("Record is publicly visible - proceeding.", file=sys.stderr)
-                    return
-                time.sleep(10)
-            print("Timed out waiting for the TXT record to appear.", file=sys.stderr)
-
-        def cleanup():
-            print("Challenge step done.", file=sys.stderr)
-
-        if __name__ == "__main__":
-            mode = sys.argv[1] if len(sys.argv) > 1 else ""
-            if mode == "auth":
-                auth()
-            elif mode == "cleanup":
-                cleanup()
-        HOOKEOF
-        certbot certonly --manual --preferred-challenges dns \
-          --manual-auth-hook 'python3 /hostinger_dns_hook.py auth' \
-          --manual-cleanup-hook 'python3 /hostinger_dns_hook.py cleanup' \
+        timeout 60 certbot certonly --webroot -w /var/www/certbot \
           -d dashboard.rawadaltarh.com --email admin@rawadaltarh.com \
-          --agree-tos --no-eff-email --non-interactive
+          --agree-tos --no-eff-email --non-interactive || true
+        echo "Certbot step finished (see above for success/failure)."
 
 networks:
   internal:
