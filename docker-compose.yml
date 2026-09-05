@@ -215,12 +215,20 @@ services:
 
         exec nginx -g 'daemon off;'
 
-  # Certbot: attempts to issue the initial HTTP-01 certificate once, with
-  # a hard timeout so a network/validation issue can never hang the
-  # deployment. If the request fails (timeout, rate limit, whatever), this
-  # container just exits - nginx keeps serving plain HTTP indefinitely
-  # either way (see its own retry loop above). Re-run `docker compose up`
-  # after the underlying cause is fixed to retry.
+  # DNS-01 certbot: HTTP-01 consistently times out for Let's Encrypt's
+  # validation servers specifically (confirmed: the port/path work fine
+  # for normal browser traffic and for curl from this deployment's own
+  # region - see deployment notes - this is a network-path issue between
+  # Let's Encrypt and this VPS's IP, not a config problem). DNS-01 needs no
+  # inbound connection to the VPS at all, only that a TXT record is
+  # publicly visible - so it sidesteps the issue entirely.
+  #
+  # This uses --manual with a plain-sh auth hook (no python/package install
+  # needed - certbot's own image already has sh). The hook writes the
+  # required record name+value to this container's logs and polls public
+  # DNS (via getent, no extra tools needed) for up to ~6 minutes waiting
+  # for it to appear - the deploying operator adds it via the Hostinger
+  # DNS API in the meantime.
   certbot:
     image: certbot/certbot
     depends_on:
@@ -231,7 +239,36 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        timeout 60 certbot certonly --webroot -w /var/www/certbot \
+        cat > /auth-hook.sh << 'HOOKEOF'
+        #!/bin/sh
+        root=$$(echo "$$CERTBOT_DOMAIN" | awk -F. '{print $$(NF-1)"."$$NF}')
+        prefix=$${CERTBOT_DOMAIN%.$$root}
+        if [ "$$prefix" = "$$CERTBOT_DOMAIN" ]; then
+          name="_acme-challenge"
+        else
+          name="_acme-challenge.$$prefix"
+        fi
+        fqdn="$$name.$$root"
+        echo "======================================================================"
+        echo "ACME DNS-01 CHALLENGE - ACTION NEEDED"
+        echo "  TXT record name:  $$name"
+        echo "  TXT record value: $$CERTBOT_VALIDATION"
+        echo "  (zone: $$root, full name: $$fqdn)"
+        echo "======================================================================"
+        i=0
+        while [ $$i -lt 36 ]; do
+          if getent hosts "$$fqdn" > /dev/null 2>&1 || nslookup -type=TXT "$$fqdn" 2>/dev/null | grep -q "$$CERTBOT_VALIDATION"; then
+            echo "Record appears to be visible - proceeding."
+            exit 0
+          fi
+          sleep 10
+          i=$$((i + 1))
+        done
+        echo "Timed out waiting for the TXT record - proceeding anyway (final check happens at Let's Encrypt regardless)."
+        HOOKEOF
+        chmod +x /auth-hook.sh
+        timeout 300 certbot certonly --manual --preferred-challenges dns \
+          --manual-auth-hook /auth-hook.sh \
           -d dashboard.rawadaltarh.com --email admin@rawadaltarh.com \
           --agree-tos --no-eff-email --non-interactive || true
         echo "Certbot step finished (see above for success/failure)."
