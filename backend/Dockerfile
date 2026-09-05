@@ -31,6 +31,8 @@ COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini .
 COPY scripts ./scripts
+COPY docker-entrypoint.sh .
+RUN chmod +x docker-entrypoint.sh
 
 RUN mkdir -p /app/storage/attachments \
     && chown -R appuser:appuser /app
@@ -42,4 +44,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+CMD ["./docker-entrypoint.sh"]

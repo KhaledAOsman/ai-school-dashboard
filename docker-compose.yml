@@ -54,6 +54,9 @@ services:
       MAX_UPLOAD_SIZE_MB: 15
       ALLOWED_ATTACHMENT_TYPES: "application/pdf,image/png,image/jpeg,image/webp"
       DEFAULT_CURRENCY: SAR
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+      SEED_ADMIN_FULL_NAME: "System Administrator"
     volumes:
       - attachments_storage:/app/storage/attachments
     networks:
