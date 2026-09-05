@@ -220,13 +220,22 @@ services:
   # through nginx's /.well-known/acme-challenge/ location, then loops doing
   # automatic renewal checks every 12h. Safe to run repeatedly - certonly
   # is a no-op once a valid certificate already exists.
+  #
+  # depends_on nginx (without a healthcheck-based condition, since nginx
+  # has none) only affects container *start order*, not readiness - nginx
+  # can take a few seconds past "started" to actually accept connections.
+  # The retry loop below (5 attempts, 10s apart) absorbs that gap rather
+  # than relying on start order alone, which is what caused the previous
+  # single-shot attempt to fail with a connection timeout.
   certbot:
     image: certbot/certbot
+    depends_on:
+      - nginx
     volumes:
       - certbot_certs:/etc/letsencrypt
       - certbot_www:/var/www/certbot
     entrypoint: >
-      /bin/sh -c "certbot certonly --webroot -w /var/www/certbot -d dashboard.rawadaltarh.com --email admin@rawadaltarh.com --agree-tos --no-eff-email --non-interactive || true; trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;"
+      /bin/sh -c "for i in 1 2 3 4 5; do certbot certonly --webroot -w /var/www/certbot -d dashboard.rawadaltarh.com --email admin@rawadaltarh.com --agree-tos --no-eff-email --non-interactive && break; echo 'Retrying in 10s...'; sleep 10; done; trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;"
 
 networks:
   internal:
