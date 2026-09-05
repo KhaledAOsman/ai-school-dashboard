@@ -1,0 +1,30 @@
+# Environment / secrets - never commit real values
+.env
+backend/.env
+frontend/.env
+*.env.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+
+# Storage (uploaded files should never be committed)
+backend/storage/attachments/*
+!backend/storage/attachments/.gitkeep
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+*.log

@@ -1,0 +1,36 @@
+# STEP 1 of 2: Initial HTTP-only config, used to bootstrap the site and
+# satisfy certbot's HTTP-01 challenge before a certificate exists. Once
+# certbot has issued a certificate (see docs/deployment.md), replace this
+# file's contents with nginx.conf.https-ready and reload nginx.
+server {
+    listen 80;
+    server_name dashboard.rawadaltarh.com;
+
+    # Required so certbot can complete the HTTP-01 challenge (it writes a
+    # token file here that Let's Encrypt fetches over plain HTTP).
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location /api/ {
+        proxy_pass http://backend:8000/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+
+    location /health {
+        proxy_pass http://backend:8000/health;
+        proxy_set_header Host $host;
+    }
+
+    location / {
+        proxy_pass http://frontend:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

@@ -1,0 +1,124 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # No "ports:" mapping - Postgres is reachable only from the internal
+    # docker network (backend), never exposed to the public internet
+    # (spec section 25/18).
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_NAME: "AI School Management Platform"
+      ENVIRONMENT: production
+      DEBUG: "false"
+      API_V1_PREFIX: /api
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 15
+      REFRESH_TOKEN_EXPIRE_DAYS: 7
+      MFA_ISSUER_NAME: "AI School Dashboard"
+      PASSWORD_MIN_LENGTH: 12
+      PASSWORD_REQUIRE_UPPERCASE: "true"
+      PASSWORD_REQUIRE_LOWERCASE: "true"
+      PASSWORD_REQUIRE_DIGIT: "true"
+      PASSWORD_REQUIRE_SPECIAL: "true"
+      MAX_FAILED_LOGIN_ATTEMPTS: 5
+      LOCKOUT_DURATION_MINUTES: 15
+      LOGIN_RATE_LIMIT: "10/minute"
+      GLOBAL_RATE_LIMIT: "100/minute"
+      CORS_ORIGINS: https://dashboard.rawadaltarh.com
+      STORAGE_BACKEND: local
+      LOCAL_STORAGE_PATH: /app/storage/attachments
+      MAX_UPLOAD_SIZE_MB: 15
+      ALLOWED_ATTACHMENT_TYPES: "application/pdf,image/png,image/jpeg,image/webp"
+      DEFAULT_CURRENCY: SAR
+    volumes:
+      - attachments_storage:/app/storage/attachments
+    networks:
+      - internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    # No "ports:" mapping - only nginx talks to the backend, over the
+    # internal network. Nothing here is directly internet-facing.
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      - internal
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot_certs:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+    networks:
+      - internal
+    depends_on:
+      - backend
+      - frontend
+
+  # Optional: certbot for automated Let's Encrypt renewal. Run manually the
+  # first time (see docs/deployment.md) - this service handles subsequent
+  # automatic renewals only.
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: >
+      /bin/sh -c "trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;"
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  attachments_storage:
+  certbot_certs:
+  certbot_www:

@@ -1,0 +1,57 @@
+# STEP 2 of 2: Full HTTPS config with HTTP->HTTPS redirect. Use this AFTER
+# certbot has successfully issued a certificate for dashboard.rawadaltarh.com
+# (see docs/deployment.md). Copy this file's contents over nginx.conf and
+# reload/restart the nginx container.
+server {
+    listen 80;
+    server_name dashboard.rawadaltarh.com;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    # Redirect all other HTTP to HTTPS.
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name dashboard.rawadaltarh.com;
+
+    ssl_certificate     /etc/letsencrypt/live/dashboard.rawadaltarh.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/dashboard.rawadaltarh.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    client_max_body_size 20M;  # slightly above MAX_UPLOAD_SIZE_MB to allow for multipart overhead
+
+    location /api/ {
+        proxy_pass http://backend:8000/api/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+
+    location /health {
+        proxy_pass http://backend:8000/health;
+        proxy_set_header Host $host;
+    }
+
+    location / {
+        proxy_pass http://frontend:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
