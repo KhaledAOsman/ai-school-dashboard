@@ -241,6 +241,7 @@ services:
       - |
         cat > /auth-hook.sh << 'HOOKEOF'
         #!/bin/sh
+        echo "AUTH HOOK CALLED" >&2
         root=$$(echo "$$CERTBOT_DOMAIN" | awk -F. '{print $$(NF-1)"."$$NF}')
         prefix=$${CERTBOT_DOMAIN%.$$root}
         if [ "$$prefix" = "$$CERTBOT_DOMAIN" ]; then
@@ -267,10 +268,12 @@ services:
         echo "Timed out waiting for the TXT record - proceeding anyway (final check happens at Let's Encrypt regardless)."
         HOOKEOF
         chmod +x /auth-hook.sh
-        timeout 300 certbot certonly --manual --preferred-challenges dns \
+        echo "=== Starting certbot with verbose output ==="
+        timeout 300 certbot certonly -v --manual --preferred-challenges dns \
           --manual-auth-hook /auth-hook.sh \
+          --manual-public-ip-logging-ok \
           -d dashboard.rawadaltarh.com --email admin@rawadaltarh.com \
-          --agree-tos --no-eff-email --non-interactive || true
+          --agree-tos --no-eff-email --non-interactive 2>&1 || true
         echo "Certbot step finished (see above for success/failure)."
 
 networks:
