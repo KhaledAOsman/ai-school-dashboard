@@ -93,7 +93,6 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - certbot_certs:/etc/letsencrypt:ro
       - certbot_www:/var/www/certbot:ro
     networks:
@@ -101,6 +100,51 @@ services:
     depends_on:
       - backend
       - frontend
+    # The nginx config is written inline via `command` rather than mounted
+    # from ./nginx/nginx.conf. This avoids relying on that file existing at
+    # a specific host path relative to docker-compose.yml on every deploy
+    # target (a bind-mount of a missing file silently becomes an empty
+    # directory in Docker, which breaks nginx startup with a confusing
+    # "not a directory" mount error - inlining the config here removes
+    # that failure mode entirely). To switch to the full HTTPS config
+    # after certbot issues a certificate, replace the heredoc content below
+    # with nginx/nginx.conf.https-full's contents and restart this service.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        cat > /etc/nginx/conf.d/default.conf << 'NGINXCONF'
+        server {
+            listen 80;
+            server_name dashboard.rawadaltarh.com;
+
+            location /.well-known/acme-challenge/ {
+                root /var/www/certbot;
+            }
+
+            location /api/ {
+                proxy_pass http://backend:8000/api/;
+                proxy_set_header Host $$host;
+                proxy_set_header X-Real-IP $$remote_addr;
+                proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $$scheme;
+                proxy_read_timeout 60s;
+            }
+
+            location /health {
+                proxy_pass http://backend:8000/health;
+                proxy_set_header Host $$host;
+            }
+
+            location / {
+                proxy_pass http://frontend:80;
+                proxy_set_header Host $$host;
+                proxy_set_header X-Real-IP $$remote_addr;
+                proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $$scheme;
+            }
+        }
+        NGINXCONF
+        exec nginx -g 'daemon off;'
 
   # Optional: certbot for automated Let's Encrypt renewal. Run manually the
   # first time (see docs/deployment.md) - this service handles subsequent
