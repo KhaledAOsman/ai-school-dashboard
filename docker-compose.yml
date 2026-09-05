@@ -115,7 +115,7 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        cat > /etc/nginx/conf.d/default.conf << 'NGINXCONF'
+        cat > /etc/nginx/conf.d/http.conf << 'NGINXCONF'
         server {
             listen 80;
             server_name dashboard.rawadaltarh.com;
@@ -147,18 +147,86 @@ services:
             }
         }
         NGINXCONF
+
+        # Wait for certbot to obtain the certificate (checked every 5s, up
+        # to ~2 minutes) before switching this config over to HTTPS. If it
+        # never appears, nginx just keeps serving plain HTTP indefinitely -
+        # never crashes waiting for a cert that didn't issue.
+        for i in $$(seq 1 24); do
+          if [ -f /etc/letsencrypt/live/dashboard.rawadaltarh.com/fullchain.pem ]; then
+            cat > /etc/nginx/conf.d/http.conf << 'NGINXCONF'
+        server {
+            listen 80;
+            server_name dashboard.rawadaltarh.com;
+            location /.well-known/acme-challenge/ {
+                root /var/www/certbot;
+            }
+            location / {
+                return 301 https://$$host$$request_uri;
+            }
+        }
+        NGINXCONF
+            cat > /etc/nginx/conf.d/https.conf << 'NGINXCONF'
+        server {
+            listen 443 ssl http2;
+            server_name dashboard.rawadaltarh.com;
+
+            ssl_certificate     /etc/letsencrypt/live/dashboard.rawadaltarh.com/fullchain.pem;
+            ssl_certificate_key /etc/letsencrypt/live/dashboard.rawadaltarh.com/privkey.pem;
+            ssl_protocols TLSv1.2 TLSv1.3;
+            ssl_ciphers HIGH:!aNULL:!MD5;
+            ssl_prefer_server_ciphers on;
+
+            add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+            add_header X-Content-Type-Options "nosniff" always;
+            add_header X-Frame-Options "DENY" always;
+            add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+            client_max_body_size 20M;
+
+            location /api/ {
+                proxy_pass http://backend:8000/api/;
+                proxy_set_header Host $$host;
+                proxy_set_header X-Real-IP $$remote_addr;
+                proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $$scheme;
+                proxy_read_timeout 60s;
+            }
+
+            location /health {
+                proxy_pass http://backend:8000/health;
+                proxy_set_header Host $$host;
+            }
+
+            location / {
+                proxy_pass http://frontend:80;
+                proxy_set_header Host $$host;
+                proxy_set_header X-Real-IP $$remote_addr;
+                proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $$scheme;
+            }
+        }
+        NGINXCONF
+            nginx -s reload
+            break
+          fi
+          sleep 5
+        done
+
         exec nginx -g 'daemon off;'
 
-  # Optional: certbot for automated Let's Encrypt renewal. Run manually the
-  # first time (see docs/deployment.md) - this service handles subsequent
-  # automatic renewals only.
+  # Certbot: issues the initial certificate on first startup (if none
+  # exists yet for the domain) via the --webroot HTTP-01 challenge served
+  # through nginx's /.well-known/acme-challenge/ location, then loops doing
+  # automatic renewal checks every 12h. Safe to run repeatedly - certonly
+  # is a no-op once a valid certificate already exists.
   certbot:
     image: certbot/certbot
     volumes:
       - certbot_certs:/etc/letsencrypt
       - certbot_www:/var/www/certbot
     entrypoint: >
-      /bin/sh -c "trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;"
+      /bin/sh -c "certbot certonly --webroot -w /var/www/certbot -d dashboard.rawadaltarh.com --email admin@rawadaltarh.com --agree-tos --no-eff-email --non-interactive || true; trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;"
 
 networks:
   internal:
