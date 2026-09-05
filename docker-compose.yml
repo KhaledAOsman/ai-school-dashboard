@@ -271,7 +271,6 @@ services:
         echo "=== Starting certbot with verbose output ==="
         timeout 300 certbot certonly -v --manual --preferred-challenges dns \
           --manual-auth-hook /auth-hook.sh \
-          --manual-public-ip-logging-ok \
           -d dashboard.rawadaltarh.com --email admin@rawadaltarh.com \
           --agree-tos --no-eff-email --non-interactive 2>&1 || true
         echo "Certbot step finished (see above for success/failure)."
