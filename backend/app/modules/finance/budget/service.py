@@ -80,14 +80,26 @@ class BudgetLineService:
     async def update(
         self, *, budget_line_id: uuid.UUID, payload: BudgetLineUpdateRequest, user_id: uuid.UUID
     ) -> BudgetLine:
+        """
+        Updates a budget line's fields, including its budgeted_amount,
+        regardless of current status (draft/pending/approved/rejected).
+        This is intentional: a manager may need to correct or adjust an
+        already-approved line's amount without going through archive +
+        recreate. Every change is captured in the audit log with the exact
+        before/after values so the change is fully traceable.
+        """
         budget_line = await self.repo.get_by_id(budget_line_id)
         ensure_found(budget_line, "Budget line")
 
-        if budget_line.status == BudgetLineStatus.APPROVED.value:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "Cannot edit an approved budget line. Archive it and create a new one instead.",
-            )
+        previous_snapshot = {
+            "name": budget_line.name,
+            "description": budget_line.description,
+            "kind": budget_line.kind,
+            "period": budget_line.period,
+            "budgeted_amount": str(budget_line.budgeted_amount),
+            "period_start": str(budget_line.period_start) if budget_line.period_start else None,
+            "period_end": str(budget_line.period_end) if budget_line.period_end else None,
+        }
 
         if payload.name is not None:
             budget_line.name = payload.name
@@ -106,11 +118,31 @@ class BudgetLineService:
         if payload.category_ids is not None:
             budget_line.categories = await self._resolve_categories(payload.category_ids)
 
+        new_snapshot = {
+            "name": budget_line.name,
+            "description": budget_line.description,
+            "kind": budget_line.kind,
+            "period": budget_line.period,
+            "budgeted_amount": str(budget_line.budgeted_amount),
+            "period_start": str(budget_line.period_start) if budget_line.period_start else None,
+            "period_end": str(budget_line.period_end) if budget_line.period_end else None,
+        }
+
+        notes = None
+        if previous_snapshot["budgeted_amount"] != new_snapshot["budgeted_amount"]:
+            notes = (
+                f"Budgeted amount changed from {previous_snapshot['budgeted_amount']} "
+                f"to {new_snapshot['budgeted_amount']} (status at time of edit: {budget_line.status})"
+            )
+
         await self.audit.record(
             user_id=user_id,
             action="budget_line.updated",
             resource_type="BudgetLine",
             resource_id=str(budget_line.id),
+            previous_value=previous_snapshot,
+            new_value=new_snapshot,
+            notes=notes,
         )
         await self.db.commit()
         return await self.repo.get_by_id(budget_line_id)

@@ -5,14 +5,7 @@ import { ProtectedRoute } from "@/auth/ProtectedRoute";
 import { LoginPage } from "@/auth/LoginPage";
 import { AppLayout } from "@/layouts/AppLayout";
 import { DashboardPage } from "@/dashboard/DashboardPage";
-import { ExpensesListPage } from "@/modules/finance/pages/ExpensesListPage";
-import { ExpenseDetailPage } from "@/modules/finance/pages/ExpenseDetailPage";
-import { ExpenseFormPage } from "@/modules/finance/pages/ExpenseFormPage";
-import { CategoriesPage } from "@/modules/finance/pages/CategoriesPage";
-import { ChartOfAccountsPage } from "@/modules/finance/pages/ChartOfAccountsPage";
-import { BudgetLinesPage } from "@/modules/finance/pages/BudgetLinesPage";
-import { StaffPage } from "@/modules/finance/pages/StaffPage";
-import { ReportsPage } from "@/modules/finance/pages/ReportsPage";
+import { FinanceSectionPage } from "@/modules/finance/pages/FinanceSectionPage";
 import { UsersPage } from "@/modules/finance/pages/UsersPage";
 import { RolesPage } from "@/modules/finance/pages/RolesPage";
 import { AuditLogPage } from "@/modules/finance/pages/AuditLogPage";
@@ -46,87 +39,20 @@ export function App() {
               }
             />
 
+            {/*
+              Every /finance/* path (expenses, budget-lines, categories,
+              chart-of-accounts, staff, reports) is now handled inside
+              FinanceSectionPage itself via its own nested <Routes>, so the
+              sidebar only needs a single "الماليات" entry pointing at
+              /finance/expenses (see AppLayout) instead of one item per
+              sub-page.
+            */}
             <Route
-              path="/finance/expenses"
+              path="/finance/*"
               element={
                 <ProtectedRoute>
                   <AppLayout>
-                    <ExpensesListPage />
-                  </AppLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/finance/expenses/new"
-              element={
-                <ProtectedRoute>
-                  <AppLayout>
-                    <ExpenseFormPage />
-                  </AppLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/finance/expenses/:expenseId"
-              element={
-                <ProtectedRoute>
-                  <AppLayout>
-                    <ExpenseDetailPage />
-                  </AppLayout>
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="/finance/categories"
-              element={
-                <ProtectedRoute>
-                  <AppLayout>
-                    <CategoriesPage />
-                  </AppLayout>
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="/finance/chart-of-accounts"
-              element={
-                <ProtectedRoute>
-                  <AppLayout>
-                    <ChartOfAccountsPage />
-                  </AppLayout>
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="/finance/budget-lines"
-              element={
-                <ProtectedRoute>
-                  <AppLayout>
-                    <BudgetLinesPage />
-                  </AppLayout>
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="/finance/staff"
-              element={
-                <ProtectedRoute>
-                  <AppLayout>
-                    <StaffPage />
-                  </AppLayout>
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="/finance/reports"
-              element={
-                <ProtectedRoute>
-                  <AppLayout>
-                    <ReportsPage />
+                    <FinanceSectionPage />
                   </AppLayout>
                 </ProtectedRoute>
               }

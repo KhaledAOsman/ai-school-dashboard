@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Wallet, AlertCircle } from "lucide-react";
+import { Plus, Wallet, AlertCircle, Pencil } from "lucide-react";
 import { translate } from "@/i18n";
 import {
   useBudgetLines,
@@ -9,6 +9,7 @@ import {
   useApproveBudgetLine,
   useRejectBudgetLine,
   useArchiveBudgetLine,
+  useUpdateBudgetLine,
 } from "@/modules/finance/hooks/useBudget";
 import { useCategories } from "@/modules/finance/hooks/useFinance";
 import { usePermission } from "@/permissions/usePermission";
@@ -51,16 +52,24 @@ const PERIOD_LABEL: Record<string, string> = {
 function BudgetLineCard({ line }: { line: BudgetLineWithSpend }) {
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [showEditAmount, setShowEditAmount] = useState(false);
+  const [editAmount, setEditAmount] = useState(line.budgeted_amount);
 
   const submitLine = useSubmitBudgetLine(line.id);
   const approveLine = useApproveBudgetLine(line.id);
   const rejectLine = useRejectBudgetLine(line.id);
   const archiveLine = useArchiveBudgetLine(line.id);
+  const updateLine = useUpdateBudgetLine(line.id);
 
   const canSubmit = usePermission(PERMISSIONS.FINANCE_BUDGET_SUBMIT);
   const canApprove = usePermission(PERMISSIONS.FINANCE_BUDGET_APPROVE);
   const canReject = usePermission(PERMISSIONS.FINANCE_BUDGET_REJECT);
   const canArchive = usePermission(PERMISSIONS.FINANCE_BUDGET_ARCHIVE);
+  // Amount editing is gated by the general update permission only - not by
+  // status - so a manager can correct an approved line's figure without
+  // archiving and recreating it. The backend records the before/after
+  // amount in the audit log on every save (see BudgetLineService.update).
+  const canUpdate = usePermission(PERMISSIONS.FINANCE_BUDGET_UPDATE);
 
   const pctClamped = Math.min(100, line.spent_pct);
   const isOverBudget = line.spent_pct > 100;
@@ -89,8 +98,49 @@ function BudgetLineCard({ line }: { line: BudgetLineWithSpend }) {
           </div>
         </div>
         <div className="shrink-0 text-left">
-          <p className="ltr-content text-xl font-bold text-ink-900">{formatSAR(line.budgeted_amount)}</p>
-          <p className="text-xs text-ink-400">الميزانية المخصصة</p>
+          {showEditAmount ? (
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={editAmount}
+                onChange={(e) => setEditAmount(e.target.value)}
+                className="ltr-content w-32 text-left"
+                autoFocus
+              />
+              <Button
+                size="sm"
+                variant="primary"
+                isLoading={updateLine.isPending}
+                onClick={async () => {
+                  await updateLine.mutateAsync({ budgeted_amount: editAmount });
+                  setShowEditAmount(false);
+                }}
+              >
+                حفظ
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => { setShowEditAmount(false); setEditAmount(line.budgeted_amount); }}>
+                إلغاء
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <div>
+                <p className="ltr-content text-xl font-bold text-ink-900">{formatSAR(line.budgeted_amount)}</p>
+                <p className="text-xs text-ink-400">الميزانية المخصصة</p>
+              </div>
+              {canUpdate && (
+                <button
+                  onClick={() => setShowEditAmount(true)}
+                  className="rounded-md p-1.5 text-ink-400 transition-colors hover:bg-ink-100 hover:text-brand-600"
+                  title="تعديل المبلغ"
+                >
+                  <Pencil size={14} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
