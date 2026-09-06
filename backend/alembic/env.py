@@ -28,6 +28,8 @@ from app.modules.finance.expenses.models import Expense, ExpenseVersion, Expense
 from app.modules.finance.attachments.models import ExpenseAttachment  # noqa: F401
 from app.modules.finance.budget.models import BudgetLine, BudgetLineApproval  # noqa: F401
 from app.modules.finance.staff.models import StaffMember, StaffDepartment  # noqa: F401
+from app.modules.crm.teachers.models import CRMTeacher, TeacherSlot  # noqa: F401
+from app.modules.crm.leads.models import Lead, LeadStageEvent  # noqa: F401
 
 config = context.config
 settings = get_settings()

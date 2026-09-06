@@ -58,6 +58,17 @@ DEFAULT_ROLES: dict[str, list[str]] = {
             or p.code.endswith(".export")
         )
     ],
+    # Sales Rep: a call-center / customer-service agent working the trial-
+    # lecture pipeline. Can view teachers' available slots to book against,
+    # and can manage (create/advance/convert/lose) leads - but only ever
+    # sees their OWN assigned leads, since crm.lead.view_all is withheld.
+    "Sales Rep": ["crm.lead.view", "crm.lead.manage", "crm.teacher.view"],
+    # Sales Manager: sees every rep's leads and can reassign them between
+    # reps, plus manages the teacher/slot roster itself.
+    "Sales Manager": [
+        "crm.lead.view", "crm.lead.view_all", "crm.lead.manage",
+        "crm.teacher.view", "crm.teacher.manage",
+    ],
 }
 
 

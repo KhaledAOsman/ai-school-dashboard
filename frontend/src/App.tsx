@@ -6,6 +6,9 @@ import { LoginPage } from "@/auth/LoginPage";
 import { AppLayout } from "@/layouts/AppLayout";
 import { DashboardPage } from "@/dashboard/DashboardPage";
 import { FinanceSectionPage } from "@/modules/finance/pages/FinanceSectionPage";
+import { LeadsListPage } from "@/modules/crm/pages/LeadsListPage";
+import { LeadDetailPage } from "@/modules/crm/pages/LeadDetailPage";
+import { CRMTeachersPage } from "@/modules/crm/pages/CRMTeachersPage";
 import { UsersPage } from "@/modules/finance/pages/UsersPage";
 import { RolesPage } from "@/modules/finance/pages/RolesPage";
 import { AuditLogPage } from "@/modules/finance/pages/AuditLogPage";
@@ -53,6 +56,37 @@ export function App() {
                 <ProtectedRoute>
                   <AppLayout>
                     <FinanceSectionPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/crm/leads"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <LeadsListPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/crm/leads/:id"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <LeadDetailPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/crm/teachers"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <CRMTeachersPage />
                   </AppLayout>
                 </ProtectedRoute>
               }

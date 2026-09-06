@@ -38,6 +38,12 @@ export const PERMISSIONS = {
   FINANCE_STAFF_CREATE: "finance.staff.create",
   FINANCE_STAFF_UPDATE: "finance.staff.update",
 
+  CRM_LEAD_VIEW: "crm.lead.view",
+  CRM_LEAD_VIEW_ALL: "crm.lead.view_all",
+  CRM_LEAD_MANAGE: "crm.lead.manage",
+  CRM_TEACHER_VIEW: "crm.teacher.view",
+  CRM_TEACHER_MANAGE: "crm.teacher.manage",
+
   USERS_VIEW: "users.view",
   USERS_CREATE: "users.create",
   USERS_UPDATE: "users.update",

@@ -15,6 +15,7 @@ import {
   Wallet,
   GraduationCap,
   Users,
+  UserPlus,
   ShieldCheck,
   ScrollText,
   Lock,
@@ -71,6 +72,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const canViewBudget = usePermission(PERMISSIONS.FINANCE_BUDGET_VIEW);
   const canViewStaff = usePermission(PERMISSIONS.FINANCE_STAFF_VIEW);
   const canViewFinanceSection = canViewExpenses || canViewCategories || canViewReports || canViewBudget || canViewStaff;
+  const canViewLeads = usePermission(PERMISSIONS.CRM_LEAD_VIEW);
+  const canViewCRMTeachers = usePermission(PERMISSIONS.CRM_TEACHER_VIEW);
+  const canViewCRMSection = canViewLeads || canViewCRMTeachers;
   const canViewUsers = usePermission(PERMISSIONS.USERS_VIEW);
   const canViewRoles = usePermission(PERMISSIONS.ROLES_VIEW);
   const canViewAudit = usePermission(PERMISSIONS.AUDIT_VIEW);
@@ -127,6 +131,14 @@ export function AppLayout({ children }: { children: ReactNode }) {
               {canViewCategories && <NavItem to="/finance/chart-of-accounts" icon={GitBranch} label="شجرة الحسابات" />}
               {canViewStaff && <NavItem to="/finance/staff" icon={GraduationCap} label="الموظفين" />}
               {canViewReports && <NavItem to="/finance/reports" icon={BarChart3} label={translate("ar", "nav_reports")} />}
+            </>
+          )}
+
+          {canViewCRMSection && (
+            <>
+              <NavSectionLabel>خدمة العملاء</NavSectionLabel>
+              {canViewLeads && <NavItem to="/crm/leads" icon={UserPlus} label="العملاء المحتملون" />}
+              {canViewCRMTeachers && <NavItem to="/crm/teachers" icon={GraduationCap} label="المعلمين والمواعيد" />}
             </>
           )}
 
