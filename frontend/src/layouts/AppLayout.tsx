@@ -8,7 +8,12 @@ import type { ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
+  Receipt,
+  FolderTree,
+  GitBranch,
+  BarChart3,
   Wallet,
+  GraduationCap,
   Users,
   ShieldCheck,
   ScrollText,
@@ -60,13 +65,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const canViewFinanceSection = useAnyPermission([
-    PERMISSIONS.FINANCE_EXPENSE_VIEW,
-    PERMISSIONS.FINANCE_CATEGORY_VIEW,
-    PERMISSIONS.FINANCE_REPORT_VIEW,
-    PERMISSIONS.FINANCE_BUDGET_VIEW,
-    PERMISSIONS.FINANCE_STAFF_VIEW,
-  ]);
+  const canViewExpenses = usePermission(PERMISSIONS.FINANCE_EXPENSE_VIEW);
+  const canViewCategories = usePermission(PERMISSIONS.FINANCE_CATEGORY_VIEW);
+  const canViewReports = usePermission(PERMISSIONS.FINANCE_REPORT_VIEW);
+  const canViewBudget = usePermission(PERMISSIONS.FINANCE_BUDGET_VIEW);
+  const canViewStaff = usePermission(PERMISSIONS.FINANCE_STAFF_VIEW);
+  const canViewFinanceSection = canViewExpenses || canViewCategories || canViewReports || canViewBudget || canViewStaff;
   const canViewUsers = usePermission(PERMISSIONS.USERS_VIEW);
   const canViewRoles = usePermission(PERMISSIONS.ROLES_VIEW);
   const canViewAudit = usePermission(PERMISSIONS.AUDIT_VIEW);
@@ -104,18 +108,25 @@ export function AppLayout({ children }: { children: ReactNode }) {
           )}
 
           {/*
-            Single sidebar entry for the whole finance section - expenses,
-            budget lines, categories, chart of accounts, staff, and reports
-            all live as internal tabs inside FinanceSectionPage now (see
-            App.tsx's /finance/* route), rather than each being its own
-            top-level item here. This also leaves room to add sibling
-            top-level sections later (e.g. خدمة العملاء, CRM) without the
-            sidebar growing unbounded.
+            Each finance page is back to being its own direct sidebar item
+            (not grouped under a single "الماليات" tab-page), gated
+            individually by its own view permission - so a role that only
+            has finance.expense.view (say) sees just "المصروفات" and
+            nothing else finance-related. FinanceSectionPage (tabs) is kept
+            for later use on richer accounts (e.g. Owner) that have many
+            sibling top-level sections (finance + CRM + خدمة العملاء) and
+            benefit from grouping - it isn't wired into the default sidebar
+            here.
           */}
           {canViewFinanceSection && (
             <>
-              <NavSectionLabel>الأقسام</NavSectionLabel>
-              <NavItem to="/finance/expenses" icon={Wallet} label="الماليات" />
+              <NavSectionLabel>الشؤون المالية</NavSectionLabel>
+              {canViewExpenses && <NavItem to="/finance/expenses" icon={Receipt} label={translate("ar", "nav_expenses")} />}
+              {canViewBudget && <NavItem to="/finance/budget-lines" icon={Wallet} label="بنود الميزانية" />}
+              {canViewCategories && <NavItem to="/finance/categories" icon={FolderTree} label={translate("ar", "nav_categories")} />}
+              {canViewCategories && <NavItem to="/finance/chart-of-accounts" icon={GitBranch} label="شجرة الحسابات" />}
+              {canViewStaff && <NavItem to="/finance/staff" icon={GraduationCap} label="الموظفين" />}
+              {canViewReports && <NavItem to="/finance/reports" icon={BarChart3} label={translate("ar", "nav_reports")} />}
             </>
           )}
 
