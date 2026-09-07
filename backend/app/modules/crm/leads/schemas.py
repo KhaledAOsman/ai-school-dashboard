@@ -8,11 +8,20 @@ from pydantic import BaseModel, Field
 
 class LeadCreateRequest(BaseModel):
     """Creates a lead at the first pipeline stage (contacted) - this is the
-    "التواصل بالهاتف" step, the entry point into the pipeline."""
+    "التواصل بالهاتف" step, the entry point into the pipeline.
+
+    assigned_to lets the Admin/Sales Manager who creates the lead hand it
+    straight to the customer-service rep who should work it (the org's
+    process: only an Admin enters leads, then assigns them out - see
+    CRM_LEAD_CREATE vs CRM_LEAD_MANAGE in the permissions registry). If
+    omitted, the lead is left unassigned rather than defaulting to the
+    creator, since the creator here is typically an Admin, not a rep.
+    """
     full_name: str = Field(min_length=1, max_length=200)
     phone: str = Field(min_length=1, max_length=30)
     source: str | None = None
     notes: str | None = None
+    assigned_to: uuid.UUID | None = None
 
 
 class LeadBookRequest(BaseModel):

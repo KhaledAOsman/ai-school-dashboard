@@ -3,9 +3,16 @@
  * area. Professional SaaS visual language - refined elevation, pill-shaped
  * active states with a soft brand glow, subtle motion - built around the
  * AiSchool purple/orange identity.
+ *
+ * Sidebar sections with sub-pages (finance, CRM) render as accordion
+ * groups: clicking the group header expands its sub-items inline and
+ * collapses any other open group (only one open at a time) - this keeps
+ * the sidebar organized as more top-level sections (finance, CRM, and
+ * later e.g. a full CRM module) get added, instead of every sub-page
+ * being a flat always-visible item.
  */
-import type { ReactNode } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { useEffect, useState, type ReactNode } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Receipt,
@@ -21,6 +28,7 @@ import {
   Lock,
   Settings,
   LogOut,
+  ChevronDown,
 } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { usePermission, useAnyPermission } from "@/permissions/usePermission";
@@ -28,13 +36,14 @@ import { PERMISSIONS } from "@/permissions/constants";
 import { translate } from "@/i18n";
 import clsx from "clsx";
 
-function NavItem({ to, icon: Icon, label }: { to: string; icon: typeof LayoutDashboard; label: string }) {
+function NavItem({ to, icon: Icon, label, indented = false }: { to: string; icon: typeof LayoutDashboard; label: string; indented?: boolean }) {
   return (
     <NavLink
       to={to}
       className={({ isActive }) =>
         clsx(
           "group relative flex items-center gap-3 rounded-lg px-3.5 py-2.5 text-[13.5px] font-medium transition-all duration-150",
+          indented && "py-2 text-[13px]",
           isActive ? "bg-brand-50 text-brand-700 shadow-glow-brand" : "text-ink-600 hover:bg-ink-100 hover:text-ink-900"
         )
       }
@@ -43,7 +52,7 @@ function NavItem({ to, icon: Icon, label }: { to: string; icon: typeof LayoutDas
         <>
           {isActive && <span className="absolute right-0 top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-brand-600" />}
           <Icon
-            size={18}
+            size={indented ? 16 : 18}
             strokeWidth={isActive ? 2.25 : 2}
             className={isActive ? "text-brand-600" : "text-ink-400 transition-colors group-hover:text-ink-600"}
           />
@@ -62,9 +71,62 @@ function NavSectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Accordion group for a top-level section with sub-pages. `open`/`onToggle`
+ * are controlled by the parent so only one group can be expanded at a
+ * time (see AppLayout's openGroup state).
+ */
+function NavGroup({
+  icon: Icon,
+  label,
+  isOpen,
+  onToggle,
+  isActive,
+  children,
+}: {
+  icon: typeof LayoutDashboard;
+  label: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  isActive: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <button
+        onClick={onToggle}
+        className={clsx(
+          "group relative flex w-full items-center gap-3 rounded-lg px-3.5 py-2.5 text-[13.5px] font-medium transition-all duration-150",
+          isActive && !isOpen ? "bg-brand-50 text-brand-700 shadow-glow-brand" : "text-ink-600 hover:bg-ink-100 hover:text-ink-900"
+        )}
+      >
+        {isActive && !isOpen && <span className="absolute right-0 top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-brand-600" />}
+        <Icon
+          size={18}
+          strokeWidth={isActive ? 2.25 : 2}
+          className={isActive && !isOpen ? "text-brand-600" : "text-ink-400 transition-colors group-hover:text-ink-600"}
+        />
+        <span className="flex-1 text-start">{label}</span>
+        <ChevronDown size={15} className={clsx("text-ink-400 transition-transform duration-200", isOpen && "rotate-180")} />
+      </button>
+      <div
+        className={clsx(
+          "grid overflow-hidden transition-all duration-200 ease-out-expo",
+          isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+        )}
+      >
+        <div className="min-h-0">
+          <div className="mt-1 space-y-0.5 border-e-2 border-ink-100 pe-0 ps-3.5 me-3.5">{children}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AppLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const canViewExpenses = usePermission(PERMISSIONS.FINANCE_EXPENSE_VIEW);
   const canViewCategories = usePermission(PERMISSIONS.FINANCE_CATEGORY_VIEW);
@@ -82,6 +144,22 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const canViewSettings = usePermission(PERMISSIONS.SETTINGS_VIEW);
   const canViewDashboard = useAnyPermission([PERMISSIONS.DASHBOARDS_VIEW, PERMISSIONS.FINANCE_REPORT_VIEW]);
   const canViewAdminSection = canViewUsers || canViewRoles || canViewAudit || canViewSecurityLogs || canViewSettings;
+
+  const isFinanceRoute = location.pathname.startsWith("/finance");
+  const isCRMRoute = location.pathname.startsWith("/crm");
+
+  // Only one group open at a time. Defaults to whichever section the
+  // current route belongs to, so landing on e.g. /finance/expenses
+  // directly (a refresh, a bookmark) opens "الشؤون المالية" automatically
+  // instead of requiring an extra click.
+  const [openGroup, setOpenGroup] = useState<"finance" | "crm" | null>(
+    isFinanceRoute ? "finance" : isCRMRoute ? "crm" : null
+  );
+
+  useEffect(() => {
+    if (isFinanceRoute) setOpenGroup("finance");
+    else if (isCRMRoute) setOpenGroup("crm");
+  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleLogout() {
     await logout();
@@ -111,35 +189,36 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </>
           )}
 
-          {/*
-            Each finance page is back to being its own direct sidebar item
-            (not grouped under a single "الماليات" tab-page), gated
-            individually by its own view permission - so a role that only
-            has finance.expense.view (say) sees just "المصروفات" and
-            nothing else finance-related. FinanceSectionPage (tabs) is kept
-            for later use on richer accounts (e.g. Owner) that have many
-            sibling top-level sections (finance + CRM + خدمة العملاء) and
-            benefit from grouping - it isn't wired into the default sidebar
-            here.
-          */}
+          {(canViewFinanceSection || canViewCRMSection) && <NavSectionLabel>الأقسام</NavSectionLabel>}
+
           {canViewFinanceSection && (
-            <>
-              <NavSectionLabel>الشؤون المالية</NavSectionLabel>
-              {canViewExpenses && <NavItem to="/finance/expenses" icon={Receipt} label={translate("ar", "nav_expenses")} />}
-              {canViewBudget && <NavItem to="/finance/budget-lines" icon={Wallet} label="بنود الميزانية" />}
-              {canViewCategories && <NavItem to="/finance/categories" icon={FolderTree} label={translate("ar", "nav_categories")} />}
-              {canViewCategories && <NavItem to="/finance/chart-of-accounts" icon={GitBranch} label="شجرة الحسابات" />}
-              {canViewStaff && <NavItem to="/finance/staff" icon={GraduationCap} label="الموظفين" />}
-              {canViewReports && <NavItem to="/finance/reports" icon={BarChart3} label={translate("ar", "nav_reports")} />}
-            </>
+            <NavGroup
+              icon={Wallet}
+              label="الشؤون المالية"
+              isOpen={openGroup === "finance"}
+              onToggle={() => setOpenGroup((prev) => (prev === "finance" ? null : "finance"))}
+              isActive={isFinanceRoute}
+            >
+              {canViewExpenses && <NavItem indented to="/finance/expenses" icon={Receipt} label={translate("ar", "nav_expenses")} />}
+              {canViewBudget && <NavItem indented to="/finance/budget-lines" icon={Wallet} label="بنود الميزانية" />}
+              {canViewCategories && <NavItem indented to="/finance/categories" icon={FolderTree} label={translate("ar", "nav_categories")} />}
+              {canViewCategories && <NavItem indented to="/finance/chart-of-accounts" icon={GitBranch} label="شجرة الحسابات" />}
+              {canViewStaff && <NavItem indented to="/finance/staff" icon={GraduationCap} label="الموظفين" />}
+              {canViewReports && <NavItem indented to="/finance/reports" icon={BarChart3} label={translate("ar", "nav_reports")} />}
+            </NavGroup>
           )}
 
           {canViewCRMSection && (
-            <>
-              <NavSectionLabel>خدمة العملاء</NavSectionLabel>
-              {canViewLeads && <NavItem to="/crm/leads" icon={UserPlus} label="العملاء المحتملون" />}
-              {canViewCRMTeachers && <NavItem to="/crm/teachers" icon={GraduationCap} label="المعلمين والمواعيد" />}
-            </>
+            <NavGroup
+              icon={UserPlus}
+              label="خدمة العملاء"
+              isOpen={openGroup === "crm"}
+              onToggle={() => setOpenGroup((prev) => (prev === "crm" ? null : "crm"))}
+              isActive={isCRMRoute}
+            >
+              {canViewLeads && <NavItem indented to="/crm/leads" icon={UserPlus} label="العملاء المحتملون" />}
+              {canViewCRMTeachers && <NavItem indented to="/crm/teachers" icon={GraduationCap} label="المعلمين والمواعيد" />}
+            </NavGroup>
           )}
 
           {canViewAdminSection && (

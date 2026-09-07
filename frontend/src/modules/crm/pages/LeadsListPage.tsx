@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Plus, Users } from "lucide-react";
 import { translate } from "@/i18n";
 import { useLeads, useCreateLead } from "@/modules/crm/hooks/useCRM";
 import type { LeadStage } from "@/modules/crm/services/crmApi";
+import { adminApi } from "@/modules/finance/services/adminApi";
 import { usePermission } from "@/permissions/usePermission";
 import { PERMISSIONS } from "@/permissions/constants";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -73,14 +75,22 @@ function LeadRow({
 
 function CreateLeadForm({ onDone }: { onDone: () => void }) {
   const createLead = useCreateLead();
+  const { data: users } = useQuery({ queryKey: ["admin-users"], queryFn: adminApi.listUsers });
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [source, setSource] = useState("");
   const [notes, setNotes] = useState("");
+  const [assignedTo, setAssignedTo] = useState("");
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    await createLead.mutateAsync({ full_name: fullName, phone, source: source || null, notes: notes || null });
+    await createLead.mutateAsync({
+      full_name: fullName,
+      phone,
+      source: source || null,
+      notes: notes || null,
+      assigned_to: assignedTo || null,
+    });
     onDone();
   }
 
@@ -98,6 +108,16 @@ function CreateLeadForm({ onDone }: { onDone: () => void }) {
             <Input required value={phone} onChange={(e) => setPhone(e.target.value)} className="ltr-content text-left" />
           </FormField>
         </div>
+        <FormField label="إسناد إلى (موظف خدمة العملاء)" hint="اختر الموظف المسؤول عن متابعة هذا العميل">
+          <Select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}>
+            <option value="">بدون إسناد الآن</option>
+            {(users ?? []).map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.full_name || u.email}
+              </option>
+            ))}
+          </Select>
+        </FormField>
         <FormField label="مصدر التواصل (اختياري)">
           <Input value={source} onChange={(e) => setSource(e.target.value)} placeholder="مثال: إعلان فيسبوك، إحالة" />
         </FormField>
@@ -122,7 +142,7 @@ export function LeadsListPage() {
   const [mineOnly, setMineOnly] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const canViewAll = usePermission(PERMISSIONS.CRM_LEAD_VIEW_ALL);
-  const canManage = usePermission(PERMISSIONS.CRM_LEAD_MANAGE);
+  const canCreate = usePermission(PERMISSIONS.CRM_LEAD_CREATE);
 
   const { data: leads, isLoading } = useLeads({
     stage: stageFilter || undefined,
@@ -136,7 +156,7 @@ export function LeadsListPage() {
           <h1 className="text-[26px] font-bold tracking-tight text-ink-900">العملاء المحتملون</h1>
           <p className="mt-1 text-sm text-ink-500">متابعة رحلة العميل من التواصل الأول حتى التحويل</p>
         </div>
-        {canManage && !showForm && (
+        {canCreate && !showForm && (
           <Button variant="primary" size="lg" onClick={() => setShowForm(true)}>
             <Plus size={17} />
             عميل جديد

@@ -51,7 +51,7 @@ function useInvalidateLead(id: string) {
 export function useCreateLead() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { full_name: string; phone: string; source?: string | null; notes?: string | null }) =>
+    mutationFn: (payload: { full_name: string; phone: string; source?: string | null; notes?: string | null; assigned_to?: string | null }) =>
       crmLeadApi.create(payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["crm-leads"] }),
   });

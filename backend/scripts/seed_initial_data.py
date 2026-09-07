@@ -22,6 +22,7 @@ import os
 import sys
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.core.permissions.registry import SEED_PERMISSIONS
 from app.core.security.passwords import hash_password, validate_password_policy, PasswordPolicyError
@@ -35,6 +36,15 @@ DEFAULT_ROLES: dict[str, list[str]] = {
         p.code
         for p in SEED_PERMISSIONS
         if p.category in {"users", "roles", "permissions", "dashboards", "audit", "security", "settings"}
+    ]
+    + [
+        # Admin is who enters new leads into the system (see crm.lead.create
+        # vs crm.lead.manage) and can see/reassign every rep's leads, plus
+        # manage the teacher/slot roster - but does not work leads through
+        # the pipeline day-to-day (that's crm.lead.manage, left to Sales
+        # Rep/Manager roles).
+        "crm.lead.view", "crm.lead.view_all", "crm.lead.create",
+        "crm.teacher.view", "crm.teacher.manage",
     ],
     "Finance Manager": [p.code for p in SEED_PERMISSIONS if p.category == "finance"],
     "Director": [
@@ -60,13 +70,16 @@ DEFAULT_ROLES: dict[str, list[str]] = {
     ],
     # Sales Rep: a call-center / customer-service agent working the trial-
     # lecture pipeline. Can view teachers' available slots to book against,
-    # and can manage (create/advance/convert/lose) leads - but only ever
-    # sees their OWN assigned leads, since crm.lead.view_all is withheld.
+    # and can work (advance/convert/lose) leads already assigned to them -
+    # but cannot create brand-new leads themselves (only an Admin/Sales
+    # Manager enters new leads - see crm.lead.create), and only ever sees
+    # their OWN assigned leads since crm.lead.view_all is withheld.
     "Sales Rep": ["crm.lead.view", "crm.lead.manage", "crm.teacher.view"],
     # Sales Manager: sees every rep's leads and can reassign them between
-    # reps, plus manages the teacher/slot roster itself.
+    # reps, creates new leads to distribute, plus manages the teacher/slot
+    # roster itself.
     "Sales Manager": [
-        "crm.lead.view", "crm.lead.view_all", "crm.lead.manage",
+        "crm.lead.view", "crm.lead.view_all", "crm.lead.create", "crm.lead.manage",
         "crm.teacher.view", "crm.teacher.manage",
     ],
 }
@@ -87,7 +100,7 @@ async def seed_permissions(session) -> dict[str, Permission]:
 
 
 async def seed_roles(session, permissions_by_code: dict[str, Permission]) -> dict[str, Role]:
-    result = await session.execute(select(Role))
+    result = await session.execute(select(Role).options(selectinload(Role.permissions)))
     existing = {r.name: r for r in result.scalars().all()}
 
     for role_name, perm_codes in DEFAULT_ROLES.items():

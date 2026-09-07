@@ -93,7 +93,7 @@ export const crmLeadApi = {
     const { data } = await api.get(`/crm/leads/${id}`);
     return data;
   },
-  create: async (payload: { full_name: string; phone: string; source?: string | null; notes?: string | null }): Promise<Lead> => {
+  create: async (payload: { full_name: string; phone: string; source?: string | null; notes?: string | null; assigned_to?: string | null }): Promise<Lead> => {
     const { data } = await api.post("/crm/leads", payload);
     return data;
   },

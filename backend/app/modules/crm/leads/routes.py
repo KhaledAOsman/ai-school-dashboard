@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth.dependencies import CurrentUser
 from app.core.permissions.dependencies import require_permission
-from app.core.permissions.registry import CRM_LEAD_MANAGE, CRM_LEAD_VIEW, CRM_LEAD_VIEW_ALL
+from app.core.permissions.registry import CRM_LEAD_CREATE, CRM_LEAD_MANAGE, CRM_LEAD_VIEW, CRM_LEAD_VIEW_ALL
 from app.database.session import get_db
 from app.modules.crm.leads.schemas import (
     LeadAdvanceRequest,
@@ -63,7 +63,7 @@ async def get_lead(
 @router.post("", response_model=LeadResponse, status_code=201)
 async def create_lead(
     payload: LeadCreateRequest,
-    user: CurrentUser = Depends(require_permission(CRM_LEAD_MANAGE)),
+    user: CurrentUser = Depends(require_permission(CRM_LEAD_CREATE)),
     db: AsyncSession = Depends(get_db),
 ):
     service = LeadService(db)

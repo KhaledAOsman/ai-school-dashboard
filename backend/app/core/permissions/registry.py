@@ -65,14 +65,18 @@ FINANCE_STAFF_UPDATE = "finance.staff.update"
 
 # ---- CRM: Leads ----
 # CRM_LEAD_VIEW: can see leads (own, or all if CRM_LEAD_VIEW_ALL is also
-# held). CRM_LEAD_MANAGE covers every pipeline action (create, book,
-# confirm, send zoom, attendance, report, follow-up, convert, lose) - kept
-# as one permission since a salesperson who can work a lead at all needs
-# to perform every step of it. CRM_LEAD_VIEW_ALL is the sales-manager-level
-# permission that both broadens visibility to every rep's leads AND gates
-# reassignment (moving a lead to a different rep).
+# held). CRM_LEAD_CREATE is kept SEPARATE from CRM_LEAD_MANAGE on purpose:
+# in this org, only an Admin/Sales Manager enters new leads into the
+# system - the customer-service/sales team works pipeline steps on leads
+# already assigned to them, but does not add brand-new ones themselves.
+# CRM_LEAD_MANAGE covers every pipeline action on an EXISTING lead (book,
+# confirm, send zoom, attendance, report, follow-up, convert, lose).
+# CRM_LEAD_VIEW_ALL is the sales-manager-level permission that both
+# broadens visibility to every rep's leads AND gates reassignment (moving
+# a lead to a different rep).
 CRM_LEAD_VIEW = "crm.lead.view"
 CRM_LEAD_VIEW_ALL = "crm.lead.view_all"
+CRM_LEAD_CREATE = "crm.lead.create"
 CRM_LEAD_MANAGE = "crm.lead.manage"
 
 # ---- CRM: Teachers (trial-lecture scheduling) ----
@@ -137,7 +141,8 @@ SEED_PERMISSIONS: list[PermissionDef] = [
     PermissionDef(FINANCE_STAFF_UPDATE, "Edit staff/instructor records", "finance"),
     PermissionDef(CRM_LEAD_VIEW, "View CRM leads", "crm"),
     PermissionDef(CRM_LEAD_VIEW_ALL, "View all reps' CRM leads and reassign them", "crm"),
-    PermissionDef(CRM_LEAD_MANAGE, "Manage CRM leads through the pipeline", "crm"),
+    PermissionDef(CRM_LEAD_CREATE, "Create new CRM leads", "crm"),
+    PermissionDef(CRM_LEAD_MANAGE, "Work existing CRM leads through the pipeline", "crm"),
     PermissionDef(CRM_TEACHER_VIEW, "View CRM teachers and their slots", "crm"),
     PermissionDef(CRM_TEACHER_MANAGE, "Manage CRM teachers and their available slots", "crm"),
     PermissionDef(USERS_VIEW, "View users", "users"),

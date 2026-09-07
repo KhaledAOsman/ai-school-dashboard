@@ -112,7 +112,7 @@ class LeadService:
             source=payload.source,
             notes=payload.notes,
             stage=LeadStage.CONTACTED.value,
-            assigned_to=user_id,
+            assigned_to=payload.assigned_to,
             created_by=user_id,
         )
         self.repo.add(lead)
