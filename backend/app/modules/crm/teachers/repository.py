@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -23,6 +23,10 @@ class CRMTeacherRepository:
             stmt = stmt.where(CRMTeacher.is_active.is_(True))
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
+
+    async def count_active(self) -> int:
+        result = await self.db.execute(select(func.count(CRMTeacher.id)).where(CRMTeacher.is_active.is_(True)))
+        return result.scalar_one()
 
     def add(self, teacher: CRMTeacher) -> None:
         self.db.add(teacher)
@@ -48,3 +52,10 @@ class TeacherSlotRepository:
 
     def add(self, slot: TeacherSlot) -> None:
         self.db.add(slot)
+
+    async def delete(self, slot: TeacherSlot) -> None:
+        await self.db.delete(slot)
+
+    async def count_all(self) -> int:
+        result = await self.db.execute(select(func.count(TeacherSlot.id)))
+        return result.scalar_one()

@@ -8,11 +8,18 @@ from pydantic import BaseModel, Field
 
 class CRMTeacherCreateRequest(BaseModel):
     full_name: str = Field(min_length=1, max_length=200)
+    zoom_link: str | None = Field(default=None, max_length=500)
+
+
+class CRMTeacherUpdateRequest(BaseModel):
+    full_name: str | None = Field(default=None, min_length=1, max_length=200)
+    zoom_link: str | None = Field(default=None, max_length=500)
 
 
 class CRMTeacherResponse(BaseModel):
     id: uuid.UUID
     full_name: str
+    zoom_link: str | None
     is_active: bool
     created_at: datetime
 

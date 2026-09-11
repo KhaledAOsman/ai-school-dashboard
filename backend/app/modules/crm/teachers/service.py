@@ -10,6 +10,7 @@ from app.modules.crm.teachers.models import CRMTeacher, TeacherSlot
 from app.modules.crm.teachers.repository import CRMTeacherRepository, TeacherSlotRepository
 from app.modules.crm.teachers.schemas import (
     CRMTeacherCreateRequest,
+    CRMTeacherUpdateRequest,
     CRMTeacherWithSlotsResponse,
     TeacherSlotCreateRequest,
     TeacherSlotResponse,
@@ -23,17 +24,26 @@ class CRMTeacherService:
         self.slot_repo = TeacherSlotRepository(db)
 
     async def create_teacher(self, *, payload: CRMTeacherCreateRequest, user_id: uuid.UUID) -> CRMTeacher:
-        teacher = CRMTeacher(full_name=payload.full_name, created_by=user_id)
+        teacher = CRMTeacher(full_name=payload.full_name, zoom_link=payload.zoom_link, created_by=user_id)
         self.repo.add(teacher)
         await self.db.commit()
         return await self.repo.get_by_id(teacher.id)
 
+    async def update_teacher(self, *, teacher_id: uuid.UUID, payload: CRMTeacherUpdateRequest) -> CRMTeacher:
+        teacher = await self.repo.get_by_id(teacher_id)
+        ensure_found(teacher, "Teacher")
+        if payload.full_name is not None:
+            teacher.full_name = payload.full_name
+        if payload.zoom_link is not None:
+            teacher.zoom_link = payload.zoom_link
+        await self.db.commit()
+        return await self.repo.get_by_id(teacher_id)
+
     async def list_teachers_with_available_slots(self, *, include_inactive: bool = False) -> list[CRMTeacherWithSlotsResponse]:
         """
         Returns every teacher with only their not-yet-booked slots attached
-        - this is what the lead booking step (step 2 of the pipeline) reads
-        from, so a salesperson only ever sees times that are actually still
-        bookable for that teacher.
+        - this is what the lead booking step reads from, so a salesperson
+        only ever sees times that are actually still bookable.
         """
         teachers = await self.repo.list_all(include_inactive=include_inactive)
         results = []
@@ -43,6 +53,7 @@ class CRMTeacherService:
                 CRMTeacherWithSlotsResponse(
                     id=teacher.id,
                     full_name=teacher.full_name,
+                    zoom_link=teacher.zoom_link,
                     is_active=teacher.is_active,
                     created_at=teacher.created_at,
                     available_slots=[TeacherSlotResponse.model_validate(s) for s in slots],
@@ -63,6 +74,19 @@ class CRMTeacherService:
         self.slot_repo.add(slot)
         await self.db.commit()
         return await self.slot_repo.get_by_id(slot.id)
+
+    async def delete_slot(self, *, slot_id: uuid.UUID) -> None:
+        """Removes an available slot customer service no longer wants to
+        offer. Only allowed while the slot is still unbooked - once a lead
+        has booked it, deleting it would silently orphan that lead's
+        lecture_date/time, so a booked slot must be un-booked (or the lead
+        rescheduled) through the lead itself first."""
+        slot = await self.slot_repo.get_by_id(slot_id)
+        ensure_found(slot, "Teacher slot")
+        if slot.is_booked:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot delete a slot that has already been booked")
+        await self.slot_repo.delete(slot)
+        await self.db.commit()
 
     async def deactivate_teacher(self, *, teacher_id: uuid.UUID) -> CRMTeacher:
         teacher = await self.repo.get_by_id(teacher_id)

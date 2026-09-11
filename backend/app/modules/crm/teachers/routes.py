@@ -12,6 +12,7 @@ from app.database.session import get_db
 from app.modules.crm.teachers.schemas import (
     CRMTeacherCreateRequest,
     CRMTeacherResponse,
+    CRMTeacherUpdateRequest,
     CRMTeacherWithSlotsResponse,
     TeacherSlotCreateRequest,
     TeacherSlotResponse,
@@ -54,6 +55,33 @@ async def add_teacher_slot(
     "خدمة العملاء بتتحكم في المواعيد" control point."""
     service = CRMTeacherService(db)
     return await service.add_slot(teacher_id=teacher_id, payload=payload, user_id=user.id)
+
+
+@router.delete("/slots/{slot_id}", status_code=204)
+async def delete_teacher_slot(
+    slot_id: uuid.UUID,
+    user: CurrentUser = Depends(require_permission(CRM_TEACHER_MANAGE)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Removes an available (not-yet-booked) slot - same permission as
+    adding one, since customer service manages the full lifecycle of a
+    teacher's schedule."""
+    service = CRMTeacherService(db)
+    await service.delete_slot(slot_id=slot_id)
+
+
+@router.patch("/{teacher_id}", response_model=CRMTeacherResponse)
+async def update_teacher(
+    teacher_id: uuid.UUID,
+    payload: CRMTeacherUpdateRequest,
+    user: CurrentUser = Depends(require_permission(CRM_TEACHER_MANAGE)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Updates a teacher's name or fixed Zoom link. The Zoom link set here
+    is what gets applied automatically to every lead booked with this
+    teacher (see LeadService.book_slot)."""
+    service = CRMTeacherService(db)
+    return await service.update_teacher(teacher_id=teacher_id, payload=payload)
 
 
 @router.post("/{teacher_id}/deactivate", response_model=CRMTeacherResponse)

@@ -9,10 +9,14 @@ slots, no capacity - one row per bookable slot, one slot per student
 booking (see TeacherSlot.is_booked below).
 
 Customer service team manages this list directly (create teachers, add
-slots) - when a slot is booked from the Lead booking step, it's marked
-is_booked=True and disappears from the "available" list for that teacher,
-never to be reused (a fresh slot must be added if the teacher becomes
-available again at that time).
+slots, delete unbooked slots) - when a slot is booked from the Lead
+booking step, it's marked is_booked=True and disappears from the
+"available" list for that teacher, never to be reused (a fresh slot must
+be added if the teacher becomes available again at that time).
+
+zoom_link is a fixed meeting link per teacher, reused automatically for
+every lead booked with them (see LeadService.book_slot), so customer
+service doesn't have to look it up or retype it each time.
 """
 from __future__ import annotations
 
@@ -30,6 +34,7 @@ class CRMTeacher(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "crm_teachers"
 
     full_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    zoom_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     created_by: Mapped[uuid.UUID | None] = mapped_column(

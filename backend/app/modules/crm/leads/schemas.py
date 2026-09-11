@@ -7,15 +7,14 @@ from pydantic import BaseModel, Field
 
 
 class LeadCreateRequest(BaseModel):
-    """Creates a lead at the first pipeline stage (contacted) - this is the
-    "التواصل بالهاتف" step, the entry point into the pipeline.
+    """Creates a lead at the first pipeline stage (new) - this is the
+    entry point into the pipeline, before any contact has been made.
 
     assigned_to lets the Admin/Sales Manager who creates the lead hand it
-    straight to the customer-service rep who should work it (the org's
-    process: only an Admin enters leads, then assigns them out - see
-    CRM_LEAD_CREATE vs CRM_LEAD_MANAGE in the permissions registry). If
-    omitted, the lead is left unassigned rather than defaulting to the
-    creator, since the creator here is typically an Admin, not a rep.
+    straight to the customer-service rep who should work it (in this org,
+    only an Admin/Sales Manager enters new leads - see CRM_LEAD_CREATE vs
+    CRM_LEAD_MANAGE in the permissions registry). If omitted, the lead is
+    left unassigned rather than defaulting to the creator.
     """
     full_name: str = Field(min_length=1, max_length=200)
     phone: str = Field(min_length=1, max_length=30)
@@ -25,16 +24,25 @@ class LeadCreateRequest(BaseModel):
 
 
 class LeadBookRequest(BaseModel):
-    """Books an available TeacherSlot for this lead - advances stage 1 to 2
-    (booked). The slot must currently be unbooked; booking it consumes it
-    (marks is_booked=True) so it stops appearing as available."""
+    """Books an available TeacherSlot for this lead - moves the lead from
+    group 1 (leads) into group 2 (bookings). The slot must currently be
+    unbooked; booking it consumes it (marks is_booked=True) so it stops
+    appearing as available."""
     teacher_slot_id: uuid.UUID
+
+
+class LeadRescheduleRequest(BaseModel):
+    """تأجيل: frees the lead's current slot (if any) and books a new one,
+    keeping the lead in the 'booked' stage. Used at the attendance step
+    when a lecture needs to move rather than be marked attended/no-show."""
+    teacher_slot_id: uuid.UUID
+    note: str | None = None
 
 
 class LeadAdvanceRequest(BaseModel):
     """Generic advance-to-next-stage call for the simple linear steps
-    (confirm via WhatsApp, confirm via call, send Zoom link, send report,
-    follow-up). Each carries an optional note for the stage-event log."""
+    (confirm via WhatsApp, confirm via call, send report, follow-up). Each
+    carries an optional note for the stage-event log."""
     note: str | None = None
 
 
@@ -53,6 +61,35 @@ class LeadLoseRequest(BaseModel):
 
 class LeadReassignRequest(BaseModel):
     assigned_to: uuid.UUID
+
+
+class LeadUpdateRequest(BaseModel):
+    """Direct edit of a lead's plain fields (name, phone, source, notes) -
+    used by the inline-editable table cells, not the pipeline actions.
+    All fields optional; only provided ones are changed."""
+    full_name: str | None = Field(default=None, min_length=1, max_length=200)
+    phone: str | None = Field(default=None, min_length=1, max_length=30)
+    source: str | None = None
+    notes: str | None = None
+
+
+class LeadCallAttemptRequest(BaseModel):
+    """Logs one call attempt while the lead is being reached (before
+    booking). outcome must be one of: connected, not_answered,
+    unreachable - see CallOutcome in models.py."""
+    outcome: str = Field(pattern="^(connected|not_answered|unreachable)$")
+    note: str | None = None
+
+
+class LeadCallAttemptResponse(BaseModel):
+    id: uuid.UUID
+    outcome: str
+    note: str | None
+    performed_by: uuid.UUID
+    performed_by_name: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class LeadStageEventResponse(BaseModel):
@@ -93,3 +130,68 @@ class LeadResponse(BaseModel):
 
 class LeadDetailResponse(LeadResponse):
     stage_events: list[LeadStageEventResponse]
+    call_attempts: list[LeadCallAttemptResponse]
+
+
+# ---- Bulk import ----
+class LeadImportRow(BaseModel):
+    """One row from a pasted table or uploaded CSV/Excel file. Only
+    full_name and phone are required, so a minimal two-column paste from
+    a spreadsheet still works."""
+    full_name: str = Field(min_length=1, max_length=200)
+    phone: str = Field(min_length=1, max_length=30)
+    source: str | None = None
+    notes: str | None = None
+
+
+class LeadBulkImportRequest(BaseModel):
+    rows: list[LeadImportRow] = Field(min_length=1, max_length=5000)
+    assigned_to: uuid.UUID | None = None
+
+
+class LeadBulkImportRowError(BaseModel):
+    row_index: int
+    full_name: str
+    error: str
+
+
+class LeadBulkImportResult(BaseModel):
+    total_submitted: int
+    created_count: int
+    skipped_duplicate_count: int
+    error_count: int
+    errors: list[LeadBulkImportRowError]
+
+
+# ---- Bulk reassignment ----
+class LeadBulkAssignRequest(BaseModel):
+    lead_ids: list[uuid.UUID] = Field(min_length=1, max_length=1000)
+    assigned_to: uuid.UUID
+
+
+# ---- Paginated, searchable, filterable listing ----
+class PaginatedLeadResponse(BaseModel):
+    items: list[LeadResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+# ---- Upcoming lectures schedule (all booked leads, calendar-style view) ----
+class ScheduledLectureResponse(BaseModel):
+    """One row in the customer-service-facing schedule of upcoming booked
+    lectures - a flattened, calendar-friendly view of leads that have
+    reached the 'booked' stage or beyond with a lecture date still today
+    or in the future."""
+    lead_id: uuid.UUID
+    lead_full_name: str
+    lead_phone: str
+    stage: str
+    teacher_name: str | None
+    lecture_date: date | None
+    lecture_time: time | None
+    zoom_link: str | None
+    assigned_to_name: str | None
+
+    model_config = {"from_attributes": True}

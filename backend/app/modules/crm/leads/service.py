@@ -4,15 +4,16 @@ Lead pipeline service.
 Each advance-stage method here does three things in one transaction:
 1. Applies the actual state change to the Lead row.
 2. Appends a LeadStageEvent recording exactly who performed this step and
-   when - this is the per-lead "who called, who booked, who confirmed"
-   trail requested by the sales manager.
+   when - the per-lead "who called, who booked, who confirmed" trail.
 3. Commits.
 
-The pipeline is intentionally NOT a strict forward-only state machine -
-"follow_up" can be logged repeatedly (see advance_follow_up), and a lead
-marked "did not attend" can still continue to follow-up rather than being
-a dead end. This matches the org's actual process: a no-show is still a
-lead worth chasing.
+Stages move a lead between three UI groups (see models.py):
+group 1 (leads) -> book_slot -> group 2 (bookings) -> send_report ->
+group 3 (interested). Call attempts are logged while in group 1 and only
+not_answered/unreachable change lead.stage (connecting is the trigger to
+book, not a stage of its own). follow_up can be logged repeatedly, and a
+lead marked "did not attend" can still continue to follow-up rather than
+being a dead end.
 """
 from __future__ import annotations
 
@@ -25,10 +26,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit.service import AuditService
 from app.core.permissions.object_policy import ensure_found
 from app.core.users.repository import UserRepository
-from app.modules.crm.leads.models import Lead, LeadStage, LeadStageEvent
+from app.modules.crm.leads.models import Lead, LeadCallAttempt, LeadStage, LeadStageEvent
 from app.modules.crm.leads.repository import LeadRepository
 from app.modules.crm.leads.schemas import (
     LeadAttendanceRequest,
+    LeadBulkAssignRequest,
+    LeadBulkImportRequest,
+    LeadBulkImportResult,
+    LeadBulkImportRowError,
+    LeadCallAttemptRequest,
+    LeadCallAttemptResponse,
     LeadConvertRequest,
     LeadCreateRequest,
     LeadDetailResponse,
@@ -36,6 +43,9 @@ from app.modules.crm.leads.schemas import (
     LeadReassignRequest,
     LeadResponse,
     LeadStageEventResponse,
+    LeadUpdateRequest,
+    PaginatedLeadResponse,
+    ScheduledLectureResponse,
 )
 from app.modules.crm.teachers.repository import TeacherSlotRepository
 
@@ -61,6 +71,16 @@ class LeadService:
             created_at=_utcnow(),
         )
         self.repo.add_stage_event(event)
+
+    def _record_call_attempt(self, *, lead: Lead, outcome: str, user_id: uuid.UUID, note: str | None) -> None:
+        attempt = LeadCallAttempt(
+            lead_id=lead.id,
+            outcome=outcome,
+            note=note,
+            performed_by=user_id,
+            created_at=_utcnow(),
+        )
+        self.repo.add_call_attempt(attempt)
 
     async def _to_response(self, lead: Lead) -> LeadResponse:
         assigned_user = await self.user_repo.get_by_id(lead.assigned_to) if lead.assigned_to else None
@@ -102,22 +122,54 @@ class LeadService:
                     created_at=e.created_at,
                 )
             )
-        return LeadDetailResponse(**base.model_dump(), stage_events=events)
+        call_attempts = []
+        for a in lead.call_attempts:
+            performer = await self.user_repo.get_by_id(a.performed_by)
+            call_attempts.append(
+                LeadCallAttemptResponse(
+                    id=a.id,
+                    outcome=a.outcome,
+                    note=a.note,
+                    performed_by=a.performed_by,
+                    performed_by_name=performer.full_name if performer else "—",
+                    created_at=a.created_at,
+                )
+            )
+        return LeadDetailResponse(**base.model_dump(), stage_events=events, call_attempts=call_attempts)
 
-    # ---- Stage 1: contacted (lead creation) ----
+    # ---- Call attempts (repeatable, happen while stage is in the "leads"
+    # group: NEW / NOT_ANSWERED / UNREACHABLE) ----
+    async def log_call_attempt(self, *, lead_id: uuid.UUID, payload: LeadCallAttemptRequest, user_id: uuid.UUID) -> LeadResponse:
+        """
+        Logs a call attempt AND moves the lead's stage to match the
+        outcome (connected leads stay wherever they are - connecting is
+        the trigger to book, not a stage of its own; not_answered /
+        unreachable become the lead's new stage so it's visible under the
+        right bucket). Repeatable.
+        """
+        lead = await self.repo.get_by_id(lead_id)
+        ensure_found(lead, "Lead")
+        self._record_call_attempt(lead=lead, outcome=payload.outcome, user_id=user_id, note=payload.note)
+        if payload.outcome in (LeadStage.NOT_ANSWERED.value, LeadStage.UNREACHABLE.value):
+            lead.stage = payload.outcome
+        await self.db.commit()
+        lead = await self.repo.get_by_id(lead_id)
+        return await self._to_response(lead)
+
+    # ---- Group 1 -> creation ----
     async def create_lead(self, *, payload: LeadCreateRequest, user_id: uuid.UUID) -> LeadResponse:
         lead = Lead(
             full_name=payload.full_name,
             phone=payload.phone,
             source=payload.source,
             notes=payload.notes,
-            stage=LeadStage.CONTACTED.value,
+            stage=LeadStage.NEW.value,
             assigned_to=payload.assigned_to,
             created_by=user_id,
         )
         self.repo.add(lead)
         await self.db.flush()
-        self._record_stage_event(lead=lead, stage=LeadStage.CONTACTED.value, user_id=user_id, note=None)
+        self._record_stage_event(lead=lead, stage=LeadStage.NEW.value, user_id=user_id, note=None)
         await self.audit.record(
             user_id=user_id, action="crm_lead.created", resource_type="Lead", resource_id=str(lead.id),
         )
@@ -125,8 +177,38 @@ class LeadService:
         lead = await self.repo.get_by_id(lead.id)
         return await self._to_response(lead)
 
-    # ---- Stage 2: booked ----
-    async def book_slot(self, *, lead_id: uuid.UUID, teacher_slot_id: uuid.UUID, user_id: uuid.UUID) -> LeadResponse:
+    # ---- Direct field edit (inline-editable table cells) ----
+    async def update_lead(self, *, lead_id: uuid.UUID, payload: LeadUpdateRequest, user_id: uuid.UUID) -> LeadResponse:
+        """Edits plain fields (name, phone, source, notes) directly - used
+        by the inline-editable source/notes cells in the leads table. Not
+        part of the pipeline, so it does not touch stage or record a
+        stage_event; the audit log still captures the change."""
+        lead = await self.repo.get_by_id(lead_id)
+        ensure_found(lead, "Lead")
+
+        previous = {"full_name": lead.full_name, "phone": lead.phone, "source": lead.source, "notes": lead.notes}
+        if payload.full_name is not None:
+            lead.full_name = payload.full_name
+        if payload.phone is not None:
+            lead.phone = payload.phone
+        if payload.source is not None:
+            lead.source = payload.source
+        if payload.notes is not None:
+            lead.notes = payload.notes
+
+        await self.audit.record(
+            user_id=user_id, action="crm_lead.updated", resource_type="Lead", resource_id=str(lead.id),
+            previous_value=previous,
+            new_value={"full_name": lead.full_name, "phone": lead.phone, "source": lead.source, "notes": lead.notes},
+        )
+        await self.db.commit()
+        lead = await self.repo.get_by_id(lead_id)
+        return await self._to_response(lead)
+
+    # ---- Group 2: booking / reschedule ----
+    async def book_slot(
+        self, *, lead_id: uuid.UUID, teacher_slot_id: uuid.UUID, user_id: uuid.UUID, reschedule_note: str | None = None
+    ) -> LeadResponse:
         lead = await self.repo.get_by_id(lead_id)
         ensure_found(lead, "Lead")
 
@@ -142,17 +224,47 @@ class LeadService:
         lead.teacher_name = slot.teacher.full_name if slot.teacher else None
         lead.lecture_date = slot.slot_date
         lead.lecture_time = slot.slot_time
+        # Auto-apply the teacher's fixed Zoom link, if they have one, so
+        # customer service doesn't have to look it up or retype it - the
+        # explicit send_zoom step still exists for cases where a teacher
+        # has no fixed link yet or it needs to be overridden.
+        if slot.teacher and slot.teacher.zoom_link:
+            lead.zoom_link = slot.teacher.zoom_link
         lead.stage = LeadStage.BOOKED.value
 
-        self._record_stage_event(
-            lead=lead, stage=LeadStage.BOOKED.value, user_id=user_id,
-            note=f"Booked {slot.slot_date} {slot.slot_time}",
-        )
+        note = reschedule_note or f"Booked {slot.slot_date} {slot.slot_time}"
+        if reschedule_note is not None:
+            note = f"Rescheduled to {slot.slot_date} {slot.slot_time}" + (f" - {reschedule_note}" if reschedule_note else "")
+        self._record_stage_event(lead=lead, stage=LeadStage.BOOKED.value, user_id=user_id, note=note)
         await self.db.commit()
         lead = await self.repo.get_by_id(lead_id)
         return await self._to_response(lead)
 
-    # ---- Stages 3, 4, 5, 7: simple linear advances ----
+    async def reschedule(self, *, lead_id: uuid.UUID, teacher_slot_id: uuid.UUID, user_id: uuid.UUID, note: str | None) -> LeadResponse:
+        """
+        تأجيل: used at the attendance step when the lecture needs to be
+        postponed rather than marked attended/did-not-attend. Frees the
+        lead's previous slot (if any, so it becomes bookable again for
+        someone else) and books the new one via book_slot (which also
+        re-applies the new teacher's Zoom link automatically). Resets
+        attended back to None since the previous attendance record no
+        longer applies to the new lecture time.
+        """
+        lead = await self.repo.get_by_id(lead_id)
+        ensure_found(lead, "Lead")
+
+        if lead.teacher_slot_id:
+            old_slot = await self.slot_repo.get_by_id(lead.teacher_slot_id)
+            if old_slot and old_slot.booked_lead_id == lead.id:
+                old_slot.is_booked = False
+                old_slot.booked_lead_id = None
+
+        lead.attended = None
+        await self.db.flush()
+
+        return await self.book_slot(lead_id=lead_id, teacher_slot_id=teacher_slot_id, user_id=user_id, reschedule_note=note)
+
+    # ---- Stages 3, 4, 5: simple linear advances within group 2 ----
     async def _advance(self, *, lead_id: uuid.UUID, target_stage: str, user_id: uuid.UUID, note: str | None) -> LeadResponse:
         lead = await self.repo.get_by_id(lead_id)
         ensure_found(lead, "Lead")
@@ -178,7 +290,7 @@ class LeadService:
         lead = await self.repo.get_by_id(lead_id)
         return await self._to_response(lead)
 
-    # ---- Stage 6: attendance ----
+    # ---- Attendance ----
     async def record_attendance(self, *, lead_id: uuid.UUID, payload: LeadAttendanceRequest, user_id: uuid.UUID) -> LeadResponse:
         lead = await self.repo.get_by_id(lead_id)
         ensure_found(lead, "Lead")
@@ -193,18 +305,20 @@ class LeadService:
         return await self._to_response(lead)
 
     async def send_report(self, *, lead_id: uuid.UUID, user_id: uuid.UUID, note: str | None) -> LeadResponse:
-        """Only meaningful if the lead attended - the UI should hide this
-        action otherwise, but we don't hard-block it server-side since a
-        report might legitimately be sent for other reasons."""
+        """Sends the post-lecture report - this is also the transition
+        point from group 2 (الحجوزات) into group 3 (عملاء مهتمون), where the
+        real sales/conversion follow-up work happens. Only meaningful if
+        the lead attended - the UI hides this action otherwise, but it
+        isn't hard-blocked server-side since a report might legitimately
+        be sent for other reasons."""
         return await self._advance(lead_id=lead_id, target_stage=LeadStage.REPORT_SENT.value, user_id=user_id, note=note)
 
-    # ---- Stage 8: follow-up (repeatable) ----
+    # ---- Group 3: follow-up (repeatable) ----
     async def log_follow_up(self, *, lead_id: uuid.UUID, user_id: uuid.UUID, note: str | None) -> LeadResponse:
         """
         Unlike the other stages, follow-up can be logged multiple times -
         each call just appends another stage_event without necessarily
-        needing lead.stage to change (it may already be "follow_up"). This
-        matches "محاولة تحويل العميل لعميل فعلي فيها FOLLOW UP اكتر من مرة".
+        needing lead.stage to change (it may already be "follow_up").
         """
         lead = await self.repo.get_by_id(lead_id)
         ensure_found(lead, "Lead")
@@ -261,3 +375,110 @@ class LeadService:
     async def list_all(self, *, stage: str | None = None, assigned_to: uuid.UUID | None = None) -> list[LeadResponse]:
         leads = await self.repo.list_all(stage=stage, assigned_to=assigned_to)
         return [await self._to_response(l) for l in leads]
+
+    # ---- Paginated, searchable, filterable listing (used for 1000+ rows) ----
+    async def list_paginated(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        search: str | None,
+        stage: str | None,
+        stages: list[str] | None = None,
+        source: str | None,
+        assigned_to: uuid.UUID | None,
+        date_from,
+        date_to,
+        sort_by: str,
+        sort_dir: str,
+    ) -> PaginatedLeadResponse:
+        leads, total = await self.repo.list_paginated(
+            page=page, page_size=page_size, search=search, stage=stage, stages=stages, source=source,
+            assigned_to=assigned_to, date_from=date_from, date_to=date_to,
+            sort_by=sort_by, sort_dir=sort_dir,
+        )
+        items = [await self._to_response(l) for l in leads]
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        return PaginatedLeadResponse(items=items, total=total, page=page, page_size=page_size, total_pages=total_pages)
+
+    async def list_sources(self) -> list[str]:
+        return await self.repo.list_distinct_sources()
+
+    # ---- Bulk import ----
+    async def bulk_import(self, *, payload: LeadBulkImportRequest, user_id: uuid.UUID) -> LeadBulkImportResult:
+        created_count = 0
+        skipped_duplicate_count = 0
+        errors: list[LeadBulkImportRowError] = []
+
+        for index, row in enumerate(payload.rows):
+            try:
+                if await self.repo.phone_exists(row.phone):
+                    skipped_duplicate_count += 1
+                    continue
+
+                lead = Lead(
+                    full_name=row.full_name,
+                    phone=row.phone,
+                    source=row.source,
+                    notes=row.notes,
+                    stage=LeadStage.NEW.value,
+                    assigned_to=payload.assigned_to,
+                    created_by=user_id,
+                )
+                self.repo.add(lead)
+                await self.db.flush()
+                self._record_stage_event(lead=lead, stage=LeadStage.NEW.value, user_id=user_id, note="Imported")
+                created_count += 1
+            except Exception as exc:  # noqa: BLE001 - one bad row must not abort the batch
+                errors.append(LeadBulkImportRowError(row_index=index, full_name=row.full_name, error=str(exc)))
+
+        await self.audit.record(
+            user_id=user_id, action="crm_lead.bulk_imported", resource_type="Lead", resource_id="bulk",
+            new_value={"created": created_count, "skipped_duplicates": skipped_duplicate_count, "errors": len(errors)},
+        )
+        await self.db.commit()
+
+        return LeadBulkImportResult(
+            total_submitted=len(payload.rows),
+            created_count=created_count,
+            skipped_duplicate_count=skipped_duplicate_count,
+            error_count=len(errors),
+            errors=errors,
+        )
+
+    # ---- Bulk reassignment ----
+    async def bulk_assign(self, *, payload: LeadBulkAssignRequest, user_id: uuid.UUID) -> int:
+        leads = await self.repo.get_by_ids(payload.lead_ids)
+        updated_count = 0
+        for lead in leads:
+            if lead.assigned_to != payload.assigned_to:
+                lead.assigned_to = payload.assigned_to
+                updated_count += 1
+
+        await self.audit.record(
+            user_id=user_id, action="crm_lead.bulk_reassigned", resource_type="Lead", resource_id="bulk",
+            new_value={"lead_count": len(leads), "assigned_to": str(payload.assigned_to)},
+        )
+        await self.db.commit()
+        return updated_count
+
+    # ---- Schedule: every booked lecture, calendar-style ----
+    async def list_scheduled(self, *, assigned_to: uuid.UUID | None = None) -> list[ScheduledLectureResponse]:
+        leads = await self.repo.list_scheduled(assigned_to=assigned_to)
+        results = []
+        for lead in leads:
+            assigned_user = await self.user_repo.get_by_id(lead.assigned_to) if lead.assigned_to else None
+            results.append(
+                ScheduledLectureResponse(
+                    lead_id=lead.id,
+                    lead_full_name=lead.full_name,
+                    lead_phone=lead.phone,
+                    stage=lead.stage,
+                    teacher_name=lead.teacher_name,
+                    lecture_date=lead.lecture_date,
+                    lecture_time=lead.lecture_time,
+                    zoom_link=lead.zoom_link,
+                    assigned_to_name=assigned_user.full_name if assigned_user else None,
+                )
+            )
+        return results
