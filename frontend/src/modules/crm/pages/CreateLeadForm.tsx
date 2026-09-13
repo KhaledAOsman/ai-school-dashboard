@@ -1,18 +1,27 @@
 import { useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Instagram, Music2, Ghost, Sparkles } from "lucide-react";
 import { translate } from "@/i18n";
 import { useCreateLead } from "@/modules/crm/hooks/useCRM";
+import type { LeadSource } from "@/modules/crm/services/crmApi";
 import { adminApi } from "@/modules/finance/services/adminApi";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FormField, Input, Select, Textarea } from "@/components/ui/Field";
+
+const SOURCE_OPTIONS: { key: LeadSource; label: string; Icon: typeof Instagram }[] = [
+  { key: "instagram", label: "انستجرام", Icon: Instagram },
+  { key: "tiktok", label: "تيك توك", Icon: Music2 },
+  { key: "snapchat", label: "سناب شات", Icon: Ghost },
+  { key: "organic", label: "عضوي", Icon: Sparkles },
+];
 
 export function CreateLeadForm({ onDone }: { onDone: () => void }) {
   const createLead = useCreateLead();
   const { data: users } = useQuery({ queryKey: ["admin-users"], queryFn: adminApi.listUsers });
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
-  const [source, setSource] = useState("");
+  const [source, setSource] = useState<LeadSource | "">("");
   const [notes, setNotes] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
 
@@ -47,13 +56,29 @@ export function CreateLeadForm({ onDone }: { onDone: () => void }) {
             <option value="">بدون إسناد الآن</option>
             {(users ?? []).map((u) => (
               <option key={u.id} value={u.id}>
-                {u.full_name || u.email}
+                {u.full_name ? `${u.full_name} — ${u.email}` : u.email}
               </option>
             ))}
           </Select>
         </FormField>
         <FormField label="مصدر التواصل (اختياري)">
-          <Input value={source} onChange={(e) => setSource(e.target.value)} placeholder="مثال: إعلان فيسبوك، إحالة" />
+          <div className="flex gap-2">
+            {SOURCE_OPTIONS.map(({ key, label, Icon }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setSource((prev) => (prev === key ? "" : key))}
+                className={`flex flex-1 flex-col items-center gap-1.5 rounded-lg border px-3 py-2.5 text-xs font-medium transition-colors ${
+                  source === key
+                    ? "border-brand-400 bg-brand-50 text-brand-700"
+                    : "border-ink-200 bg-white text-ink-500 hover:bg-ink-50"
+                }`}
+              >
+                <Icon size={18} />
+                {label}
+              </button>
+            ))}
+          </div>
         </FormField>
         <FormField label="ملاحظات (اختياري)">
           <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />

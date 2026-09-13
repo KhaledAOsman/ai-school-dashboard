@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowRight, Phone, PhoneOff, PhoneMissed, Calendar, CalendarClock, Video, CheckCircle2, XCircle, Send, User } from "lucide-react";
+import { ArrowRight, Phone, PhoneMissed, Calendar, CalendarClock, CheckCircle2, XCircle, Send, User } from "lucide-react";
 import { translate } from "@/i18n";
 import {
   useLead,
   useBookSlot,
   useConfirmWhatsapp,
   useConfirmCall,
-  useSendZoom,
   useRecordAttendance,
   useSendReport,
   useLogFollowUp,
@@ -16,20 +15,19 @@ import {
   useLogCallAttempt,
   useRescheduleLead,
 } from "@/modules/crm/hooks/useCRM";
-import { useCRMTeachers } from "@/modules/crm/hooks/useCRM";
 import type { CallOutcome } from "@/modules/crm/services/crmApi";
 import { STAGE_LABEL, STAGE_TONE } from "@/modules/crm/pages/LeadsListPage";
+import { TeacherScheduleModal } from "@/modules/crm/pages/TeacherScheduleModal";
 import { usePermission } from "@/permissions/usePermission";
 import { PERMISSIONS } from "@/permissions/constants";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { Select, Input, Textarea } from "@/components/ui/Field";
+import { Input, Textarea } from "@/components/ui/Field";
 
 const CALL_OUTCOME_LABEL: Record<CallOutcome, string> = {
-  connected: "تم الاتصال",
+  contacted: "تم الاتصال",
   not_answered: "لم يتم الرد",
-  unreachable: "لم يتم الاتصال",
 };
 
 function formatDateTime(iso: string): string {
@@ -53,17 +51,13 @@ function CallAttemptPanel({ leadId }: { leadId: string }) {
       <div className="space-y-3">
         <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="ملاحظة (اختياري)" />
         <div className="flex flex-wrap gap-2">
-          <Button variant="success" isLoading={logCallAttempt.isPending} onClick={() => log("connected")}>
+          <Button variant="success" isLoading={logCallAttempt.isPending} onClick={() => log("contacted")}>
             <Phone size={15} />
             تم الاتصال
           </Button>
           <Button variant="outline" isLoading={logCallAttempt.isPending} onClick={() => log("not_answered")}>
             <PhoneMissed size={15} />
             لم يتم الرد
-          </Button>
-          <Button variant="outline" isLoading={logCallAttempt.isPending} onClick={() => log("unreachable")}>
-            <PhoneOff size={15} />
-            لم يتم الاتصال
           </Button>
         </div>
       </div>
@@ -72,99 +66,47 @@ function CallAttemptPanel({ leadId }: { leadId: string }) {
 }
 
 function BookingPanel({ leadId }: { leadId: string }) {
-  const { data: teachers } = useCRMTeachers();
   const bookSlot = useBookSlot(leadId);
-  const [teacherId, setTeacherId] = useState("");
-
-  const selectedTeacher = teachers?.find((t) => t.id === teacherId);
+  const [showSchedule, setShowSchedule] = useState(false);
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>حجز موعد المحاضرة</CardTitle>
       </CardHeader>
-      <div className="space-y-3">
-        <Select value={teacherId} onChange={(e) => setTeacherId(e.target.value)}>
-          <option value="">اختر المدرّس</option>
-          {(teachers ?? []).map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.full_name} ({t.available_slots.length} موعد متاح)
-            </option>
-          ))}
-        </Select>
-
-        {selectedTeacher && selectedTeacher.available_slots.length === 0 && (
-          <p className="text-xs text-ink-500">لا توجد مواعيد متاحة حاليًا لهذا المدرّس</p>
-        )}
-
-        {selectedTeacher && selectedTeacher.available_slots.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {selectedTeacher.available_slots.map((slot) => (
-              <button
-                key={slot.id}
-                onClick={() => bookSlot.mutate(slot.id)}
-                disabled={bookSlot.isPending}
-                className="rounded-full bg-ink-100 px-3.5 py-1.5 text-xs font-medium text-ink-700 transition-colors hover:bg-brand-600 hover:text-white disabled:opacity-50"
-              >
-                {slot.slot_date} — {slot.slot_time}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      <Button variant="primary" onClick={() => setShowSchedule(true)}>
+        <Calendar size={15} />
+        فتح جدول المواعيد
+      </Button>
+      {showSchedule && (
+        <TeacherScheduleModal
+          onClose={() => setShowSchedule(false)}
+          isBooking={bookSlot.isPending}
+          onConfirm={(slotId) => bookSlot.mutateAsync(slotId)}
+        />
+      )}
     </Card>
   );
 }
 
 function ReschedulePanel({ leadId }: { leadId: string }) {
-  const { data: teachers } = useCRMTeachers();
   const reschedule = useRescheduleLead(leadId);
-  const [expanded, setExpanded] = useState(false);
-  const [teacherId, setTeacherId] = useState("");
+  const [showSchedule, setShowSchedule] = useState(false);
 
-  const selectedTeacher = teachers?.find((t) => t.id === teacherId);
-
-  if (!expanded) {
-    return (
-      <Button variant="outline" onClick={() => setExpanded(true)}>
+  return (
+    <>
+      <Button variant="outline" onClick={() => setShowSchedule(true)}>
         <CalendarClock size={15} />
         تأجيل الموعد
       </Button>
-    );
-  }
-
-  return (
-    <div className="w-full animate-scale-in space-y-3 rounded-lg bg-ink-50 p-3.5">
-      <p className="text-xs font-medium text-ink-600">اختر الموعد الجديد</p>
-      <Select value={teacherId} onChange={(e) => setTeacherId(e.target.value)}>
-        <option value="">اختر المدرّس</option>
-        {(teachers ?? []).map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.full_name} ({t.available_slots.length} موعد متاح)
-          </option>
-        ))}
-      </Select>
-      {selectedTeacher && selectedTeacher.available_slots.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {selectedTeacher.available_slots.map((slot) => (
-            <button
-              key={slot.id}
-              onClick={() => reschedule.mutate({ teacherSlotId: slot.id })}
-              disabled={reschedule.isPending}
-              className="rounded-full bg-white px-3.5 py-1.5 text-xs font-medium text-ink-700 shadow-xs ring-1 ring-inset ring-ink-200 transition-colors hover:bg-brand-600 hover:text-white disabled:opacity-50"
-            >
-              {slot.slot_date} — {slot.slot_time}
-            </button>
-          ))}
-        </div>
+      {showSchedule && (
+        <TeacherScheduleModal
+          onClose={() => setShowSchedule(false)}
+          isBooking={reschedule.isPending}
+          onConfirm={(slotId) => reschedule.mutateAsync({ teacherSlotId: slotId })}
+        />
       )}
-      {selectedTeacher && selectedTeacher.available_slots.length === 0 && (
-        <p className="text-xs text-ink-500">لا توجد مواعيد متاحة حاليًا لهذا المدرّس</p>
-      )}
-      <button onClick={() => setExpanded(false)} className="text-xs text-ink-400 hover:text-ink-700">
-        إلغاء
-      </button>
-    </div>
+    </>
   );
 }
 
@@ -175,7 +117,6 @@ export function LeadDetailPage() {
 
   const confirmWhatsapp = useConfirmWhatsapp(id!);
   const confirmCall = useConfirmCall(id!);
-  const sendZoom = useSendZoom(id!);
   const recordAttendance = useRecordAttendance(id!);
   const sendReport = useSendReport(id!);
   const logFollowUp = useLogFollowUp(id!);
@@ -184,7 +125,6 @@ export function LeadDetailPage() {
 
   const canManage = usePermission(PERMISSIONS.CRM_LEAD_MANAGE);
 
-  const [zoomLink, setZoomLink] = useState("");
   const [followUpNote, setFollowUpNote] = useState("");
   const [lossReason, setLossReason] = useState("");
   const [showLoseForm, setShowLoseForm] = useState(false);
@@ -230,11 +170,11 @@ export function LeadDetailPage() {
         </Card>
       ) : (
         <div className="mb-5 space-y-4">
-          {(lead.stage === "new" || lead.stage === "not_answered" || lead.stage === "unreachable") && canManage && (
+          {(lead.stage === "new" || lead.stage === "contacted" || lead.stage === "not_answered") && canManage && (
             <CallAttemptPanel leadId={lead.id} />
           )}
 
-          {(lead.stage === "new" || lead.stage === "not_answered" || lead.stage === "unreachable") && canManage && (
+          {(lead.stage === "new" || lead.stage === "contacted" || lead.stage === "not_answered") && canManage && (
             <BookingPanel leadId={lead.id} />
           )}
 
@@ -264,35 +204,6 @@ export function LeadDetailPage() {
                 <Phone size={15} />
                 تم التأكيد هاتفيًا
               </Button>
-            </Card>
-          )}
-
-          {lead.stage === "confirmed_call" && canManage && (
-            <Card>
-              <p className="mb-3 text-sm text-ink-600">إرسال رابط اجتماع الزوم</p>
-              <div className="flex gap-2">
-                <Input value={zoomLink} onChange={(e) => setZoomLink(e.target.value)} placeholder="رابط الزوم" className="ltr-content flex-1 text-left" />
-                <Button
-                  variant="primary"
-                  disabled={!zoomLink.trim()}
-                  isLoading={sendZoom.isPending}
-                  onClick={() => sendZoom.mutate({ link: zoomLink })}
-                >
-                  <Send size={15} />
-                  إرسال
-                </Button>
-              </div>
-            </Card>
-          )}
-
-          {lead.zoom_link && (
-            <Card>
-              <div className="flex items-center gap-2 text-sm text-ink-700">
-                <Video size={16} className="text-brand-600" />
-                <a href={lead.zoom_link} target="_blank" rel="noreferrer" className="link-underline text-brand-600">
-                  رابط الزوم
-                </a>
-              </div>
             </Card>
           )}
 
@@ -409,7 +320,7 @@ export function LeadDetailPage() {
                         {STAGE_LABEL[item.stage]}
                       </Badge>
                     ) : (
-                      <Badge tone={item.outcome === "connected" ? "success" : "neutral"} dot={false}>
+                      <Badge tone={item.outcome === "contacted" ? "success" : "neutral"} dot={false}>
                         {CALL_OUTCOME_LABEL[item.outcome]}
                       </Badge>
                     )}

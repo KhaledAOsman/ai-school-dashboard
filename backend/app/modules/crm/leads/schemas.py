@@ -18,7 +18,7 @@ class LeadCreateRequest(BaseModel):
     """
     full_name: str = Field(min_length=1, max_length=200)
     phone: str = Field(min_length=1, max_length=30)
-    source: str | None = None
+    source: str | None = Field(default=None, pattern="^(instagram|tiktok|snapchat|organic)$")
     notes: str | None = None
     assigned_to: uuid.UUID | None = None
 
@@ -59,6 +59,15 @@ class LeadLoseRequest(BaseModel):
     reason: str = Field(min_length=1)
 
 
+class LeadNotInterestedRequest(BaseModel):
+    """غير مهتم: closes a lead directly from group 1 (before any booking),
+    chosen from the booking-status dropdown in the leads table. Reuses the
+    same is_lost/lost_reason fields as the later-stage LOST outcome, since
+    both represent "this lead will not convert" - just at different
+    points in the pipeline."""
+    reason: str | None = None
+
+
 class LeadReassignRequest(BaseModel):
     assigned_to: uuid.UUID
 
@@ -69,15 +78,15 @@ class LeadUpdateRequest(BaseModel):
     All fields optional; only provided ones are changed."""
     full_name: str | None = Field(default=None, min_length=1, max_length=200)
     phone: str | None = Field(default=None, min_length=1, max_length=30)
-    source: str | None = None
+    source: str | None = Field(default=None, pattern="^(instagram|tiktok|snapchat|organic)$")
     notes: str | None = None
 
 
 class LeadCallAttemptRequest(BaseModel):
     """Logs one call attempt while the lead is being reached (before
-    booking). outcome must be one of: connected, not_answered,
-    unreachable - see CallOutcome in models.py."""
-    outcome: str = Field(pattern="^(connected|not_answered|unreachable)$")
+    booking), and directly sets the lead's stage to match. outcome must be
+    one of: contacted, not_answered - see CallOutcome in models.py."""
+    outcome: str = Field(pattern="^(contacted|not_answered)$")
     note: str | None = None
 
 
@@ -119,6 +128,7 @@ class LeadResponse(BaseModel):
     is_lost: bool
     lost_reason: str | None
     notes: str | None
+    follow_up_count: int
     assigned_to: uuid.UUID | None
     assigned_to_name: str | None
     created_by: uuid.UUID
@@ -140,7 +150,7 @@ class LeadImportRow(BaseModel):
     a spreadsheet still works."""
     full_name: str = Field(min_length=1, max_length=200)
     phone: str = Field(min_length=1, max_length=30)
-    source: str | None = None
+    source: str | None = Field(default=None, pattern="^(instagram|tiktok|snapchat|organic)$")
     notes: str | None = None
 
 

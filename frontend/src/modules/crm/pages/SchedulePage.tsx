@@ -3,13 +3,10 @@
  * has reached the "booked" stage or beyond, grouped by date.
  */
 import { Link } from "react-router-dom";
-import { Calendar, Video } from "lucide-react";
+import { Calendar } from "lucide-react";
 import { translate } from "@/i18n";
 import { useSchedule } from "@/modules/crm/hooks/useCRM";
 import { STAGE_LABEL, STAGE_TONE } from "@/modules/crm/pages/LeadsListPage";
-import { usePermission } from "@/permissions/usePermission";
-import { PERMISSIONS } from "@/permissions/constants";
-import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -28,9 +25,7 @@ function formatDayHeading(dateStr: string): string {
 }
 
 export function SchedulePage() {
-  const canViewAll = usePermission(PERMISSIONS.CRM_LEAD_VIEW_ALL);
-  const [mineOnly, setMineOnly] = useState(true);
-  const { data: schedule, isLoading } = useSchedule(canViewAll ? mineOnly : true);
+  const { data: schedule, isLoading } = useSchedule(false);
 
   const groupedByDate = (schedule ?? []).reduce<Record<string, typeof schedule>>((acc, item) => {
     const key = item.lecture_date ?? "بدون تاريخ";
@@ -43,17 +38,9 @@ export function SchedulePage() {
 
   return (
     <div className="max-w-3xl">
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-[26px] font-bold tracking-tight text-ink-900">جدول المواعيد</h1>
-          <p className="mt-1 text-sm text-ink-500">كل المحاضرات المحجوزة، مرتبة حسب التاريخ</p>
-        </div>
-        {canViewAll && (
-          <label className="flex items-center gap-2 text-sm text-ink-600">
-            <input type="checkbox" checked={mineOnly} onChange={(e) => setMineOnly(e.target.checked)} className="rounded" />
-            مواعيدي فقط
-          </label>
-        )}
+      <div className="mb-6">
+        <h1 className="text-[26px] font-bold tracking-tight text-ink-900">جدول المواعيد</h1>
+        <p className="mt-1 text-sm text-ink-500">كل المحاضرات المحجوزة، مرتبة حسب التاريخ</p>
       </div>
 
       {isLoading ? (
@@ -94,18 +81,6 @@ export function SchedulePage() {
                           <Badge tone={STAGE_TONE[item.stage]}>{STAGE_LABEL[item.stage]}</Badge>
                         </div>
                         <div className="w-24 shrink-0 truncate text-xs text-ink-400">{item.assigned_to_name || "—"}</div>
-                        {item.zoom_link && (
-                          <a
-                            href={item.zoom_link}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="shrink-0 rounded-full bg-brand-50 p-2 text-brand-600 transition-colors hover:bg-brand-100"
-                            title="فتح رابط الزوم"
-                          >
-                            <Video size={14} />
-                          </a>
-                        )}
                       </Link>
                     ))}
                 </div>

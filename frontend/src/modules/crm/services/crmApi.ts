@@ -2,8 +2,8 @@ import { api } from "@/lib/apiClient";
 
 export type LeadStage =
   | "new"
+  | "contacted"
   | "not_answered"
-  | "unreachable"
   | "booked"
   | "confirmed_whatsapp"
   | "confirmed_call"
@@ -12,11 +12,14 @@ export type LeadStage =
   | "report_sent"
   | "follow_up"
   | "converted"
-  | "lost";
+  | "lost"
+  | "not_interested";
 
 export type LeadGroup = "leads" | "bookings" | "interested";
 
-export type CallOutcome = "connected" | "not_answered" | "unreachable";
+export type CallOutcome = "contacted" | "not_answered";
+
+export type LeadSource = "instagram" | "tiktok" | "snapchat" | "organic";
 
 export interface TeacherSlot {
   id: string;
@@ -26,6 +29,16 @@ export interface TeacherSlot {
   is_booked: boolean;
   booked_lead_id: string | null;
   created_at: string;
+}
+
+export interface ScheduleSlot extends TeacherSlot {
+  booked_lead_name: string | null;
+}
+
+export interface TeacherSchedule {
+  teacher_id: string;
+  teacher_full_name: string;
+  slots: ScheduleSlot[];
 }
 
 export interface CRMTeacherWithSlots {
@@ -71,6 +84,7 @@ export interface Lead {
   is_lost: boolean;
   lost_reason: string | null;
   notes: string | null;
+  follow_up_count: number;
   assigned_to: string | null;
   assigned_to_name: string | null;
   created_by: string;
@@ -153,6 +167,10 @@ export const crmDashboardApi = {
 export const crmTeacherApi = {
   list: async (includeInactive = false): Promise<CRMTeacherWithSlots[]> => {
     const { data } = await api.get("/crm/teachers", { params: { include_inactive: includeInactive } });
+    return data;
+  },
+  schedule: async (): Promise<TeacherSchedule[]> => {
+    const { data } = await api.get("/crm/teachers/schedule");
     return data;
   },
   create: async (full_name: string, zoom_link?: string | null): Promise<CRMTeacherWithSlots> => {
@@ -254,6 +272,10 @@ export const crmLeadApi = {
   },
   lose: async (id: string, reason: string): Promise<Lead> => {
     const { data } = await api.post(`/crm/leads/${id}/lose`, { reason });
+    return data;
+  },
+  notInterested: async (id: string, reason?: string): Promise<Lead> => {
+    const { data } = await api.post(`/crm/leads/${id}/not-interested`, { reason });
     return data;
   },
   reassign: async (id: string, assigned_to: string): Promise<Lead> => {

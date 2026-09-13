@@ -13,6 +13,7 @@ import { InterestedPage } from "@/modules/crm/pages/InterestedPage";
 import { LeadDetailPage } from "@/modules/crm/pages/LeadDetailPage";
 import { CRMTeachersPage } from "@/modules/crm/pages/CRMTeachersPage";
 import { CRMDashboardPage } from "@/modules/crm/pages/CRMDashboardPage";
+import { AllLeadsOverviewPage } from "@/modules/crm/pages/AllLeadsOverviewPage";
 import { SchedulePage } from "@/modules/crm/pages/SchedulePage";
 import { UsersPage } from "@/modules/finance/pages/UsersPage";
 import { RolesPage } from "@/modules/finance/pages/RolesPage";
@@ -64,6 +65,16 @@ export function App() {
                 <ProtectedRoute>
                   <AppLayout>
                     <CRMDashboardPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/crm/all-leads"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <AllLeadsOverviewPage />
                   </AppLayout>
                 </ProtectedRoute>
               }

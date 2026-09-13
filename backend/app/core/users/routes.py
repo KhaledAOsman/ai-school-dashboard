@@ -56,6 +56,9 @@ async def update_user(
     user: CurrentUser = Depends(require_permission(USERS_UPDATE)),
     db: AsyncSession = Depends(get_db),
 ):
+    """Edits a user's name, locale, or role assignment - this is how an
+    Admin changes what a user can see/do without disabling and
+    recreating their account."""
     service = UserManagementService(db)
     updated = await service.update_user(user_id=user_id, payload=payload, actor_id=user.id)
     return _to_response(updated)
@@ -69,3 +72,18 @@ async def disable_user(
 ):
     service = UserManagementService(db)
     await service.disable_user(user_id=user_id, actor_id=user.id)
+
+
+@router.post("/{user_id}/enable", response_model=UserResponse)
+async def enable_user(
+    user_id: uuid.UUID,
+    user: CurrentUser = Depends(require_permission(USERS_DISABLE)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-activates a previously disabled account - preferred over trying
+    to recreate the same email, which the unique-email constraint
+    rejects. Same permission as disable, since it's the inverse of the
+    same administrative action."""
+    service = UserManagementService(db)
+    enabled = await service.enable_user(user_id=user_id, actor_id=user.id)
+    return _to_response(enabled)

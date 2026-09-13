@@ -6,12 +6,15 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions.object_policy import ensure_found
+from app.modules.crm.leads.repository import LeadRepository
 from app.modules.crm.teachers.models import CRMTeacher, TeacherSlot
 from app.modules.crm.teachers.repository import CRMTeacherRepository, TeacherSlotRepository
 from app.modules.crm.teachers.schemas import (
     CRMTeacherCreateRequest,
     CRMTeacherUpdateRequest,
     CRMTeacherWithSlotsResponse,
+    ScheduleSlotResponse,
+    TeacherScheduleResponse,
     TeacherSlotCreateRequest,
     TeacherSlotResponse,
 )
@@ -22,6 +25,7 @@ class CRMTeacherService:
         self.db = db
         self.repo = CRMTeacherRepository(db)
         self.slot_repo = TeacherSlotRepository(db)
+        self.lead_repo = LeadRepository(db)
 
     async def create_teacher(self, *, payload: CRMTeacherCreateRequest, user_id: uuid.UUID) -> CRMTeacher:
         teacher = CRMTeacher(full_name=payload.full_name, zoom_link=payload.zoom_link, created_by=user_id)
@@ -65,6 +69,13 @@ class CRMTeacherService:
         teacher = await self.repo.get_by_id(teacher_id)
         ensure_found(teacher, "Teacher")
 
+        # Prevent double-booking the same teacher at the exact same
+        # date+time - two customer-service reps could otherwise add
+        # overlapping slots for the same teacher by mistake.
+        existing_slots = await self.slot_repo.list_all_for_teacher(teacher_id)
+        if any(s.slot_date == payload.slot_date and s.slot_time == payload.slot_time for s in existing_slots):
+            raise HTTPException(status.HTTP_409_CONFLICT, "يوجد موعد مضاف بالفعل لهذا المدرّس في نفس التاريخ والوقت")
+
         slot = TeacherSlot(
             teacher_id=teacher_id,
             slot_date=payload.slot_date,
@@ -94,3 +105,37 @@ class CRMTeacherService:
         teacher.is_active = False
         await self.db.commit()
         return await self.repo.get_by_id(teacher_id)
+
+    async def get_full_schedule(self) -> list[TeacherScheduleResponse]:
+        """
+        Every active teacher with EVERY slot (booked and available), for
+        the professional schedule grid - customer service needs to see
+        the whole picture across all teachers before booking a lead, not
+        just one teacher's free times in a dropdown.
+        """
+        teachers = await self.repo.list_all(include_inactive=False)
+        results = []
+        for teacher in teachers:
+            slots = await self.slot_repo.list_all_for_teacher(teacher.id)
+            slot_responses = []
+            for slot in slots:
+                lead_name = None
+                if slot.booked_lead_id:
+                    lead = await self.lead_repo.get_by_id(slot.booked_lead_id)
+                    lead_name = lead.full_name if lead else None
+                slot_responses.append(
+                    ScheduleSlotResponse(
+                        id=slot.id,
+                        teacher_id=slot.teacher_id,
+                        slot_date=slot.slot_date,
+                        slot_time=slot.slot_time,
+                        is_booked=slot.is_booked,
+                        booked_lead_id=slot.booked_lead_id,
+                        created_at=slot.created_at,
+                        booked_lead_name=lead_name,
+                    )
+                )
+            results.append(
+                TeacherScheduleResponse(teacher_id=teacher.id, teacher_full_name=teacher.full_name, slots=slot_responses)
+            )
+        return results

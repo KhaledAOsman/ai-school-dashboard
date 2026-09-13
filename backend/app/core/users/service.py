@@ -119,5 +119,25 @@ class UserManagementService:
         )
         await self.db.commit()
 
+    async def enable_user(self, *, user_id: uuid.UUID, actor_id: uuid.UUID) -> User:
+        """Re-activates a previously disabled account. Preferred over
+        creating a new user with the same email (which the unique email
+        constraint rejects) whenever the person just needs access
+        restored, possibly with different roles via a follow-up
+        update_user call."""
+        user = await self.users.get_by_id(user_id)
+        if user is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+
+        user.status = AccountStatus.ACTIVE.value
+        await self.audit.record(
+            user_id=actor_id,
+            action="user.enabled",
+            resource_type="User",
+            resource_id=str(user.id),
+        )
+        await self.db.commit()
+        return await self.users.get_by_id(user_id)
+
     async def list_users(self) -> list[User]:
         return await self.users.list_all()

@@ -220,6 +220,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               isActive={isCRMRoute}
             >
               {canViewLeads && <NavItem indented to="/crm/dashboard" icon={LayoutDashboard} label="لوحة التحكم" />}
+              {canViewLeads && <NavItem indented to="/crm/all-leads" icon={Users} label="كل العملاء" />}
               {canViewLeads && <NavItem indented to="/crm/leads" icon={UserPlus} label="العملاء المحتملون" />}
               {canViewLeads && <NavItem indented to="/crm/bookings" icon={CalendarCheck} label="الحجوزات" />}
               {canViewLeads && <NavItem indented to="/crm/interested" icon={Star} label="عملاء مهتمون" />}

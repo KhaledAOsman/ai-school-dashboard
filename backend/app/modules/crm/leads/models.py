@@ -64,6 +64,9 @@ class LeadStage(str, enum.Enum):
     FOLLOW_UP = "follow_up"  # متابعة لتحويله لعميل فعلي (قد تتكرر عدة مرات)
     CONVERTED = "converted"  # تم التحويل لعميل فعلي (نهاية ناجحة)
     LOST = "lost"  # تم إغلاق الـ Lead بدون تحويل (نهاية غير ناجحة)
+    NOT_INTERESTED = "not_interested"  # غير مهتم - يُختار مباشرة من عمود الحجز في المجموعة 1
+    # بدلاً من التقدم لمرحلة الحجز أولاً - يستخدم نفس آلية
+    # is_lost/lost_reason الخاصة بـ LOST
 
 
 # Which UI section/page a lead belongs in, given its current stage. Used by
@@ -81,6 +84,7 @@ INTERESTED_GROUP_STAGES: list[str] = [
     LeadStage.FOLLOW_UP.value,
     LeadStage.CONVERTED.value,
     LeadStage.LOST.value,
+    LeadStage.NOT_INTERESTED.value,
 ]
 
 STAGE_ORDER: list[str] = [
@@ -133,6 +137,13 @@ class Lead(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     lost_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Incremented every time log_follow_up is called - lets the interested-
+    # clients table show "3 محاولات" without re-counting stage_events on
+    # every list request, and is what the UI uses to require an extra
+    # confirmation before closing a lead that's already had several
+    # follow-up attempts.
+    follow_up_count: Mapped[int] = mapped_column(default=0, nullable=False)
 
     assigned_to: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True

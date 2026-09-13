@@ -47,3 +47,18 @@ class CRMTeacherWithSlotsResponse(CRMTeacherResponse):
     """Teacher plus their upcoming available (not-yet-booked) slots - used
     by the lead booking step to show only what's actually bookable."""
     available_slots: list[TeacherSlotResponse]
+
+
+class ScheduleSlotResponse(TeacherSlotResponse):
+    """A slot enriched with the booked lead's name, if any - used by the
+    professional all-teachers schedule grid so customer service can see
+    who occupies a booked slot without a separate lookup."""
+    booked_lead_name: str | None = None
+
+
+class TeacherScheduleResponse(BaseModel):
+    """One teacher's full slot list (booked and available) for the
+    professional schedule grid view."""
+    teacher_id: uuid.UUID
+    teacher_full_name: str
+    slots: list[ScheduleSlotResponse]

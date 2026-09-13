@@ -25,7 +25,7 @@ export function LoginPage() {
       if (result.mfaRequired && result.mfaChallengeToken) {
         setMfaChallengeToken(result.mfaChallengeToken);
       } else {
-        navigate("/dashboard");
+        navigate("/");
       }
     } catch {
       setError(translate("ar", "login_error"));
@@ -35,7 +35,7 @@ export function LoginPage() {
   }
 
   if (mfaChallengeToken) {
-    return <MfaVerifyForm challengeToken={mfaChallengeToken} onSuccess={() => navigate("/dashboard")} />;
+    return <MfaVerifyForm challengeToken={mfaChallengeToken} onSuccess={() => navigate("/")} />;
   }
 
   return (

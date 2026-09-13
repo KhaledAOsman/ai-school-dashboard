@@ -51,6 +51,10 @@ export const adminApi = {
   disableUser: async (id: string) => {
     await api.post(`/users/${id}/disable`);
   },
+  enableUser: async (id: string): Promise<AdminUser> => {
+    const { data } = await api.post(`/users/${id}/enable`);
+    return data;
+  },
 
   listRoles: async (): Promise<AdminRole[]> => {
     const { data } = await api.get("/roles");

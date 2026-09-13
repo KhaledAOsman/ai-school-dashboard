@@ -50,6 +50,17 @@ class TeacherSlotRepository:
         )
         return list(result.scalars().all())
 
+    async def list_all_for_teacher(self, teacher_id: uuid.UUID) -> list[TeacherSlot]:
+        """Every slot for a teacher, booked or not - used by the
+        professional schedule grid so customer service can see the whole
+        picture (who's already booked, not just what's free) at a glance."""
+        result = await self.db.execute(
+            select(TeacherSlot)
+            .where(TeacherSlot.teacher_id == teacher_id)
+            .order_by(TeacherSlot.slot_date, TeacherSlot.slot_time)
+        )
+        return list(result.scalars().all())
+
     def add(self, slot: TeacherSlot) -> None:
         self.db.add(slot)
 

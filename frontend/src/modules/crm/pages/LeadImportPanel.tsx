@@ -17,6 +17,22 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Select, Textarea } from "@/components/ui/Field";
 
+/** Normalizes free-text source values (from pasted sheets or files) down
+ * to the 4 fixed platform values the backend accepts - anything that
+ * doesn't clearly match one of these is dropped rather than sent as-is,
+ * since an unrecognized value would fail validation and reject the whole
+ * row (see LeadCreateRequest.source pattern in the backend). */
+function normalizeSource(raw: string | null): string | null {
+  if (!raw) return null;
+  const value = raw.trim().toLowerCase();
+  if (!value) return null;
+  if (value.includes("insta") || value.includes("انستا") || value.includes("انستجرام")) return "instagram";
+  if (value.includes("tiktok") || value.includes("tik tok") || value.includes("تيك توك")) return "tiktok";
+  if (value.includes("snap") || value.includes("سناب")) return "snapchat";
+  if (value.includes("organic") || value.includes("عضوي") || value.includes("مباشر")) return "organic";
+  return null;
+}
+
 function parseDelimitedText(text: string): LeadImportRow[] {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length === 0) return [];
@@ -36,7 +52,7 @@ function parseDelimitedText(text: string): LeadImportRow[] {
     .map((line) => {
       const cells = line.split(delimiter).map((c) => c.trim());
       const [full_name, phone, source, notes] = cells;
-      return { full_name: full_name || "", phone: phone || "", source: source || null, notes: notes || null };
+      return { full_name: full_name || "", phone: phone || "", source: normalizeSource(source ?? null), notes: notes || null };
     })
     .filter((row) => row.full_name && row.phone);
 }
@@ -64,7 +80,7 @@ async function parseFile(file: File): Promise<LeadImportRow[]> {
     .map((r) => ({
       full_name: String(r[0] ?? "").trim(),
       phone: String(r[1] ?? "").trim(),
-      source: r[2] ? String(r[2]).trim() : null,
+      source: normalizeSource(r[2] ? String(r[2]).trim() : null),
       notes: r[3] ? String(r[3]).trim() : null,
     }))
     .filter((row) => row.full_name && row.phone);
@@ -219,7 +235,7 @@ export function LeadImportPanel({ onDone }: { onDone: () => void }) {
             <Select value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}>
               <option value="">إسناد الكل إلى (اختياري)</option>
               {(users ?? []).map((u) => (
-                <option key={u.id} value={u.id}>{u.full_name || u.email}</option>
+                <option key={u.id} value={u.id}>{u.full_name ? `${u.full_name} — ${u.email}` : u.email}</option>
               ))}
             </Select>
           </div>

@@ -24,6 +24,7 @@ from app.modules.crm.leads.schemas import (
     LeadCreateRequest,
     LeadDetailResponse,
     LeadLoseRequest,
+    LeadNotInterestedRequest,
     LeadReassignRequest,
     LeadRescheduleRequest,
     LeadResponse,
@@ -312,6 +313,19 @@ async def lose_lead(
 ):
     service = LeadService(db)
     return await service.mark_lost(lead_id=lead_id, payload=payload, user_id=user.id)
+
+
+@router.post("/{lead_id}/not-interested", response_model=LeadResponse)
+async def not_interested_lead(
+    lead_id: uuid.UUID,
+    payload: LeadNotInterestedRequest,
+    user: CurrentUser = Depends(require_permission(CRM_LEAD_MANAGE)),
+    db: AsyncSession = Depends(get_db),
+):
+    """غير مهتم: closes a lead directly from the booking-status dropdown in
+    group 1, without ever booking a slot."""
+    service = LeadService(db)
+    return await service.mark_not_interested(lead_id=lead_id, payload=payload, user_id=user.id)
 
 
 @router.post("/{lead_id}/reassign", response_model=LeadResponse)

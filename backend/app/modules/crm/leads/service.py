@@ -40,6 +40,7 @@ from app.modules.crm.leads.schemas import (
     LeadCreateRequest,
     LeadDetailResponse,
     LeadLoseRequest,
+    LeadNotInterestedRequest,
     LeadReassignRequest,
     LeadResponse,
     LeadStageEventResponse,
@@ -100,6 +101,7 @@ class LeadService:
             is_lost=lead.is_lost,
             lost_reason=lead.lost_reason,
             notes=lead.notes,
+            follow_up_count=lead.follow_up_count,
             assigned_to=lead.assigned_to,
             assigned_to_name=assigned_user.full_name if assigned_user else None,
             created_by=lead.created_by,
@@ -138,20 +140,20 @@ class LeadService:
         return LeadDetailResponse(**base.model_dump(), stage_events=events, call_attempts=call_attempts)
 
     # ---- Call attempts (repeatable, happen while stage is in the "leads"
-    # group: NEW / NOT_ANSWERED / UNREACHABLE) ----
+    # group: NEW / CONTACTED / NOT_ANSWERED) ----
     async def log_call_attempt(self, *, lead_id: uuid.UUID, payload: LeadCallAttemptRequest, user_id: uuid.UUID) -> LeadResponse:
         """
-        Logs a call attempt AND moves the lead's stage to match the
-        outcome (connected leads stay wherever they are - connecting is
-        the trigger to book, not a stage of its own; not_answered /
-        unreachable become the lead's new stage so it's visible under the
-        right bucket). Repeatable.
+        Logs a call attempt AND always moves the lead's stage to match the
+        outcome, so the leads table shows the lead's real status
+        (جديد / تم الاتصال / لم يتم الرد) rather than staying stuck at
+        whatever it started as. Repeatable - logging another attempt later
+        (e.g. re-confirming contact) just updates the stage again.
         """
         lead = await self.repo.get_by_id(lead_id)
         ensure_found(lead, "Lead")
         self._record_call_attempt(lead=lead, outcome=payload.outcome, user_id=user_id, note=payload.note)
-        if payload.outcome in (LeadStage.NOT_ANSWERED.value, LeadStage.UNREACHABLE.value):
-            lead.stage = payload.outcome
+        lead.stage = payload.outcome
+        self._record_stage_event(lead=lead, stage=payload.outcome, user_id=user_id, note=payload.note)
         await self.db.commit()
         lead = await self.repo.get_by_id(lead_id)
         return await self._to_response(lead)
@@ -278,7 +280,11 @@ class LeadService:
         return await self._advance(lead_id=lead_id, target_stage=LeadStage.CONFIRMED_WHATSAPP.value, user_id=user_id, note=note)
 
     async def confirm_call(self, *, lead_id: uuid.UUID, user_id: uuid.UUID, note: str | None) -> LeadResponse:
-        return await self._advance(lead_id=lead_id, target_stage=LeadStage.CONFIRMED_CALL.value, user_id=user_id, note=note)
+        """Confirming by phone moves straight to zoom_sent - the Zoom link
+        is already applied automatically from the teacher's fixed link at
+        booking time (see book_slot), so there is no separate manual
+        "send Zoom" step for staff to do."""
+        return await self._advance(lead_id=lead_id, target_stage=LeadStage.ZOOM_SENT.value, user_id=user_id, note=note)
 
     async def send_zoom(self, *, lead_id: uuid.UUID, zoom_link: str, user_id: uuid.UUID, note: str | None) -> LeadResponse:
         lead = await self.repo.get_by_id(lead_id)
@@ -319,10 +325,13 @@ class LeadService:
         Unlike the other stages, follow-up can be logged multiple times -
         each call just appends another stage_event without necessarily
         needing lead.stage to change (it may already be "follow_up").
+        follow_up_count increments every call, which the UI uses to
+        require confirmation before closing a lead after 3+ attempts.
         """
         lead = await self.repo.get_by_id(lead_id)
         ensure_found(lead, "Lead")
         lead.stage = LeadStage.FOLLOW_UP.value
+        lead.follow_up_count += 1
         self._record_stage_event(lead=lead, stage=LeadStage.FOLLOW_UP.value, user_id=user_id, note=note)
         await self.db.commit()
         lead = await self.repo.get_by_id(lead_id)
@@ -348,6 +357,23 @@ class LeadService:
         lead.stage = LeadStage.LOST.value
         self._record_stage_event(lead=lead, stage=LeadStage.LOST.value, user_id=user_id, note=payload.reason)
         await self.audit.record(user_id=user_id, action="crm_lead.lost", resource_type="Lead", resource_id=str(lead.id))
+        await self.db.commit()
+        lead = await self.repo.get_by_id(lead_id)
+        return await self._to_response(lead)
+
+    async def mark_not_interested(self, *, lead_id: uuid.UUID, payload: LeadNotInterestedRequest, user_id: uuid.UUID) -> LeadResponse:
+        """غير مهتم: closes a lead straight from group 1, chosen from the
+        booking-status dropdown instead of proceeding to book a slot.
+        Reuses is_lost/lost_reason (same terminal-outcome bookkeeping as
+        mark_lost) but a distinct stage/audit action so reporting can tell
+        "never booked" apart from "booked, attended, but didn't convert"."""
+        lead = await self.repo.get_by_id(lead_id)
+        ensure_found(lead, "Lead")
+        lead.is_lost = True
+        lead.lost_reason = payload.reason
+        lead.stage = LeadStage.NOT_INTERESTED.value
+        self._record_stage_event(lead=lead, stage=LeadStage.NOT_INTERESTED.value, user_id=user_id, note=payload.reason)
+        await self.audit.record(user_id=user_id, action="crm_lead.not_interested", resource_type="Lead", resource_id=str(lead.id))
         await self.db.commit()
         lead = await self.repo.get_by_id(lead_id)
         return await self._to_response(lead)

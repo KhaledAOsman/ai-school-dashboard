@@ -14,12 +14,26 @@ from app.modules.crm.teachers.schemas import (
     CRMTeacherResponse,
     CRMTeacherUpdateRequest,
     CRMTeacherWithSlotsResponse,
+    TeacherScheduleResponse,
     TeacherSlotCreateRequest,
     TeacherSlotResponse,
 )
 from app.modules.crm.teachers.service import CRMTeacherService
 
 router = APIRouter(prefix="/crm/teachers", tags=["crm-teachers"])
+
+
+@router.get("/schedule", response_model=list[TeacherScheduleResponse])
+async def get_full_schedule(
+    user: CurrentUser = Depends(require_permission(CRM_TEACHER_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Professional schedule grid: every active teacher with every slot
+    (booked and available), so customer service can see all teachers'
+    availability at a glance before booking a lead - not just one
+    teacher's free times in a dropdown."""
+    service = CRMTeacherService(db)
+    return await service.get_full_schedule()
 
 
 @router.get("", response_model=list[CRMTeacherWithSlotsResponse])

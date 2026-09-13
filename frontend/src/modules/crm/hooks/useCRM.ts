@@ -15,6 +15,15 @@ export function useCRMTeachers(includeInactive = false) {
   });
 }
 
+/** Full schedule grid (every teacher, every slot booked or not) - powers
+ * the professional schedule view used to pick a booking slot. */
+export function useTeacherSchedule() {
+  return useQuery({
+    queryKey: ["crm-teacher-schedule"],
+    queryFn: () => crmTeacherApi.schedule(),
+  });
+}
+
 export function useCreateCRMTeacher() {
   const qc = useQueryClient();
   return useMutation({
@@ -94,6 +103,7 @@ function useInvalidateLead(id: string) {
     qc.invalidateQueries({ queryKey: ["crm-leads"] });
     qc.invalidateQueries({ queryKey: ["crm-leads-search"] });
     qc.invalidateQueries({ queryKey: ["crm-teachers"] }); // slot availability may have changed
+    qc.invalidateQueries({ queryKey: ["crm-teacher-schedule"] });
   };
 }
 
@@ -215,6 +225,11 @@ export function useConvertLead(id: string) {
 export function useLoseLead(id: string) {
   const invalidate = useInvalidateLead(id);
   return useMutation({ mutationFn: (reason: string) => crmLeadApi.lose(id, reason), onSuccess: invalidate });
+}
+
+export function useNotInterestedLead(id: string) {
+  const invalidate = useInvalidateLead(id);
+  return useMutation({ mutationFn: (reason?: string) => crmLeadApi.notInterested(id, reason), onSuccess: invalidate });
 }
 
 export function useReassignLead(id: string) {
