@@ -1,14 +1,19 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "@/auth/AuthContext";
 import { ProtectedRoute } from "@/auth/ProtectedRoute";
+import { HomeRedirect } from "@/auth/HomeRedirect";
 import { LoginPage } from "@/auth/LoginPage";
 import { AppLayout } from "@/layouts/AppLayout";
 import { DashboardPage } from "@/dashboard/DashboardPage";
 import { FinanceSectionPage } from "@/modules/finance/pages/FinanceSectionPage";
 import { LeadsListPage } from "@/modules/crm/pages/LeadsListPage";
+import { BookingsPage } from "@/modules/crm/pages/BookingsPage";
+import { InterestedPage } from "@/modules/crm/pages/InterestedPage";
 import { LeadDetailPage } from "@/modules/crm/pages/LeadDetailPage";
 import { CRMTeachersPage } from "@/modules/crm/pages/CRMTeachersPage";
+import { CRMDashboardPage } from "@/modules/crm/pages/CRMDashboardPage";
+import { SchedulePage } from "@/modules/crm/pages/SchedulePage";
 import { UsersPage } from "@/modules/finance/pages/UsersPage";
 import { RolesPage } from "@/modules/finance/pages/RolesPage";
 import { AuditLogPage } from "@/modules/finance/pages/AuditLogPage";
@@ -42,14 +47,6 @@ export function App() {
               }
             />
 
-            {/*
-              Every /finance/* path (expenses, budget-lines, categories,
-              chart-of-accounts, staff, reports) is now handled inside
-              FinanceSectionPage itself via its own nested <Routes>, so the
-              sidebar only needs a single "الماليات" entry pointing at
-              /finance/expenses (see AppLayout) instead of one item per
-              sub-page.
-            */}
             <Route
               path="/finance/*"
               element={
@@ -62,11 +59,51 @@ export function App() {
             />
 
             <Route
+              path="/crm/dashboard"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <CRMDashboardPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/crm/leads"
               element={
                 <ProtectedRoute>
                   <AppLayout>
                     <LeadsListPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/crm/bookings"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <BookingsPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/crm/interested"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <InterestedPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/crm/schedule"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <SchedulePage />
                   </AppLayout>
                 </ProtectedRoute>
               }
@@ -133,8 +170,22 @@ export function App() {
               }
             />
 
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <HomeRedirect />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="*"
+              element={
+                <ProtectedRoute>
+                  <HomeRedirect />
+                </ProtectedRoute>
+              }
+            />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

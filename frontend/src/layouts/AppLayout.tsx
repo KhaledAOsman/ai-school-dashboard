@@ -23,6 +23,9 @@ import {
   GraduationCap,
   Users,
   UserPlus,
+  CalendarCheck,
+  Star,
+  Calendar,
   ShieldCheck,
   ScrollText,
   Lock,
@@ -216,7 +219,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
               onToggle={() => setOpenGroup((prev) => (prev === "crm" ? null : "crm"))}
               isActive={isCRMRoute}
             >
+              {canViewLeads && <NavItem indented to="/crm/dashboard" icon={LayoutDashboard} label="لوحة التحكم" />}
               {canViewLeads && <NavItem indented to="/crm/leads" icon={UserPlus} label="العملاء المحتملون" />}
+              {canViewLeads && <NavItem indented to="/crm/bookings" icon={CalendarCheck} label="الحجوزات" />}
+              {canViewLeads && <NavItem indented to="/crm/interested" icon={Star} label="عملاء مهتمون" />}
+              {canViewLeads && <NavItem indented to="/crm/schedule" icon={Calendar} label="جدول المواعيد" />}
               {canViewCRMTeachers && <NavItem indented to="/crm/teachers" icon={GraduationCap} label="المعلمين والمواعيد" />}
             </NavGroup>
           )}

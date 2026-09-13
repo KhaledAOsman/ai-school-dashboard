@@ -49,8 +49,8 @@ from app.database.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 class LeadStage(str, enum.Enum):
     # Group 1: leads
     NEW = "new"  # جديد - لسة ما تم التواصل
+    CONTACTED = "contacted"  # تم الاتصال (محادثة ناجحة، لسة ما اتحجز)
     NOT_ANSWERED = "not_answered"  # لم يتم الرد (بعد محاولة اتصال واحدة أو أكثر)
-    UNREACHABLE = "unreachable"  # لم يتم الاتصال (رقم خاطئ/غير متاح)
 
     # Group 2: bookings
     BOOKED = "booked"  # تم حجز الموعد
@@ -68,7 +68,7 @@ class LeadStage(str, enum.Enum):
 
 # Which UI section/page a lead belongs in, given its current stage. Used by
 # the repository to filter each of the three list endpoints.
-LEADS_GROUP_STAGES: list[str] = [LeadStage.NEW.value, LeadStage.NOT_ANSWERED.value, LeadStage.UNREACHABLE.value]
+LEADS_GROUP_STAGES: list[str] = [LeadStage.NEW.value, LeadStage.CONTACTED.value, LeadStage.NOT_ANSWERED.value]
 BOOKINGS_GROUP_STAGES: list[str] = [
     LeadStage.BOOKED.value,
     LeadStage.CONFIRMED_WHATSAPP.value,
@@ -97,11 +97,12 @@ STAGE_ORDER: list[str] = [
 
 class CallOutcome(str, enum.Enum):
     """Outcome of a single call attempt made while a lead sits in group 1,
-    before a slot is booked. A lead can accumulate many attempts (e.g. two
-    no-answers before finally connecting) - see LeadCallAttempt below."""
-    CONNECTED = "connected"  # تم الاتصال
+    before a slot is booked. Maps directly onto lead.stage now (unlike an
+    earlier version where 'connected' didn't change stage) - the customer
+    service table needs all three outcomes visible as the lead's actual
+    status, not just logged as history."""
+    CONNECTED = "contacted"  # تم الاتصال
     NOT_ANSWERED = "not_answered"  # لم يتم الرد
-    UNREACHABLE = "unreachable"  # لم يتم الاتصال (رقم خاطئ/غير متاح)
 
 
 class Lead(Base, UUIDPrimaryKeyMixin, TimestampMixin):
