@@ -1,0 +1,16 @@
+{
+  "name": "whatsapp-service",
+  "version": "1.0.0",
+  "description": "Standalone WhatsApp bridge (whatsapp-web.js) used by the CRM backend to send templated messages - lecture booking confirmations, etc. Not an official WhatsApp API integration; see README.md for the operational risks of this approach.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "whatsapp-web.js": "^1.26.0",
+    "qrcode": "^1.5.4",
+    "express": "^4.21.2",
+    "body-parser": "^1.20.3"
+  }
+}

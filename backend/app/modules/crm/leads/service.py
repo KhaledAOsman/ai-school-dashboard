@@ -240,6 +240,17 @@ class LeadService:
         self._record_stage_event(lead=lead, stage=LeadStage.BOOKED.value, user_id=user_id, note=note)
         await self.db.commit()
         lead = await self.repo.get_by_id(lead_id)
+
+        # Best-effort automatic WhatsApp notification - never lets a
+        # WhatsApp failure (bridge down, no active template, number not
+        # linked, etc.) fail or roll back the booking itself, since the
+        # booking succeeding is what actually matters here.
+        try:
+            from app.modules.whatsapp.service import WhatsAppService
+            await WhatsAppService(self.db).send_lecture_booked_notification(lead=lead, user_id=user_id)
+        except Exception:  # noqa: BLE001
+            pass
+
         return await self._to_response(lead)
 
     async def reschedule(self, *, lead_id: uuid.UUID, teacher_slot_id: uuid.UUID, user_id: uuid.UUID, note: str | None) -> LeadResponse:

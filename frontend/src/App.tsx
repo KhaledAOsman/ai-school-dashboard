@@ -15,6 +15,8 @@ import { CRMTeachersPage } from "@/modules/crm/pages/CRMTeachersPage";
 import { CRMDashboardPage } from "@/modules/crm/pages/CRMDashboardPage";
 import { AllLeadsOverviewPage } from "@/modules/crm/pages/AllLeadsOverviewPage";
 import { SchedulePage } from "@/modules/crm/pages/SchedulePage";
+import { WhatsAppConnectionPage } from "@/modules/whatsapp/pages/WhatsAppConnectionPage";
+import { TemplatesPage } from "@/modules/whatsapp/pages/TemplatesPage";
 import { UsersPage } from "@/modules/finance/pages/UsersPage";
 import { RolesPage } from "@/modules/finance/pages/RolesPage";
 import { AuditLogPage } from "@/modules/finance/pages/AuditLogPage";
@@ -135,6 +137,26 @@ export function App() {
                 <ProtectedRoute>
                   <AppLayout>
                     <CRMTeachersPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/crm/whatsapp"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <WhatsAppConnectionPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/crm/whatsapp/templates"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <TemplatesPage />
                   </AppLayout>
                 </ProtectedRoute>
               }

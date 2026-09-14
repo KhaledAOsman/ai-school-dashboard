@@ -26,6 +26,7 @@ import {
   CalendarCheck,
   Star,
   Calendar,
+  MessageCircle,
   ShieldCheck,
   ScrollText,
   Lock,
@@ -226,6 +227,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
               {canViewLeads && <NavItem indented to="/crm/interested" icon={Star} label="عملاء مهتمون" />}
               {canViewLeads && <NavItem indented to="/crm/schedule" icon={Calendar} label="جدول المواعيد" />}
               {canViewCRMTeachers && <NavItem indented to="/crm/teachers" icon={GraduationCap} label="المعلمين والمواعيد" />}
+              {canViewLeads && <NavItem indented to="/crm/whatsapp" icon={MessageCircle} label="واتساب" />}
+              {canViewLeads && <NavItem indented to="/crm/whatsapp/templates" icon={MessageCircle} label="قوالب الرسائل" />}
             </NavGroup>
           )}
 

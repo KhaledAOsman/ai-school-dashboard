@@ -57,6 +57,7 @@ services:
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
       SEED_ADMIN_FULL_NAME: "System Administrator"
+      WHATSAPP_SERVICE_URL: http://whatsapp-service:3001
     volumes:
       - attachments_storage:/app/storage/attachments
     networks:
@@ -72,6 +73,23 @@ services:
       start_period: 20s
     # No "ports:" mapping - only nginx talks to the backend, over the
     # internal network. Nothing here is directly internet-facing.
+
+  # WhatsApp bridge - see whatsapp-service/server.js for the full
+  # rationale/risk notes. Internal-only (no published port): the Python
+  # backend is the only caller, over the internal docker network.
+  whatsapp-service:
+    build:
+      context: ./whatsapp-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    volumes:
+      - whatsapp_session:/app/wwebjs_auth
+    networks:
+      - internal
+    # No healthcheck - whatsapp-web.js can legitimately sit in
+    # "qr_pending" (unlinked) for long periods without that being a
+    # failure; the /status endpoint is polled by the backend/frontend
+    # instead of Docker's own healthcheck semantics.
 
   frontend:
     build:
@@ -284,3 +302,4 @@ volumes:
   attachments_storage:
   certbot_certs:
   certbot_www:
+  whatsapp_session:

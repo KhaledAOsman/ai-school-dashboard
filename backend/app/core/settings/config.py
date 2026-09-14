@@ -132,6 +132,9 @@ class Settings(BaseSettings):
     # ---- Currency ----
     DEFAULT_CURRENCY: str = "SAR"
 
+    # ---- WhatsApp bridge (whatsapp-service) ----
+    WHATSAPP_SERVICE_URL: str = "http://whatsapp-service:3001"
+
 
 @lru_cache
 def get_settings() -> Settings:

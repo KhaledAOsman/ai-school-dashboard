@@ -35,6 +35,7 @@ from app.modules.finance.staff.routes import router as finance_staff_router
 from app.modules.crm.leads.routes import router as crm_leads_router
 from app.modules.crm.teachers.routes import router as crm_teachers_router
 from app.modules.crm.dashboard import router as crm_dashboard_router
+from app.modules.whatsapp.routes import router as whatsapp_router
 
 settings = get_settings()
 
@@ -95,6 +96,7 @@ app.include_router(finance_staff_router, prefix=API_PREFIX)
 app.include_router(crm_leads_router, prefix=API_PREFIX)
 app.include_router(crm_teachers_router, prefix=API_PREFIX)
 app.include_router(crm_dashboard_router, prefix=API_PREFIX)
+app.include_router(whatsapp_router, prefix=API_PREFIX)
 
 
 @app.get("/", include_in_schema=False)

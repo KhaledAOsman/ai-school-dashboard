@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowRight, Phone, PhoneMissed, Calendar, CalendarClock, CheckCircle2, XCircle, Send, User } from "lucide-react";
+import { ArrowRight, Phone, PhoneMissed, Calendar, CalendarClock, CheckCircle2, XCircle, Send, User, MessageCircle } from "lucide-react";
 import { translate } from "@/i18n";
 import {
   useLead,
@@ -15,6 +15,7 @@ import {
   useLogCallAttempt,
   useRescheduleLead,
 } from "@/modules/crm/hooks/useCRM";
+import { useMessageTemplates, useSendWhatsAppToLead } from "@/modules/whatsapp/hooks/useWhatsApp";
 import type { CallOutcome } from "@/modules/crm/services/crmApi";
 import { STAGE_LABEL, STAGE_TONE } from "@/modules/crm/pages/LeadsListPage";
 import { TeacherScheduleModal } from "@/modules/crm/pages/TeacherScheduleModal";
@@ -23,7 +24,7 @@ import { PERMISSIONS } from "@/permissions/constants";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { Input, Textarea } from "@/components/ui/Field";
+import { Input, Select, Textarea } from "@/components/ui/Field";
 
 const CALL_OUTCOME_LABEL: Record<CallOutcome, string> = {
   contacted: "تم الاتصال",
@@ -110,6 +111,67 @@ function ReschedulePanel({ leadId }: { leadId: string }) {
   );
 }
 
+function SendWhatsAppPanel({ leadId }: { leadId: string }) {
+  const { data: templates } = useMessageTemplates();
+  const sendMessage = useSendWhatsAppToLead(leadId);
+  const [expanded, setExpanded] = useState(false);
+  const [templateId, setTemplateId] = useState("");
+  const [rawMessage, setRawMessage] = useState("");
+  const [result, setResult] = useState<{ success: boolean; error: string | null } | null>(null);
+
+  const manualTemplates = (templates ?? []).filter((t) => t.trigger === "manual");
+
+  async function handleSend() {
+    const payload = templateId ? { template_id: templateId } : { raw_message: rawMessage };
+    const log = await sendMessage.mutateAsync(payload);
+    setResult({ success: log.success, error: log.error });
+  }
+
+  if (!expanded) {
+    return (
+      <Button variant="outline" onClick={() => setExpanded(true)}>
+        <MessageCircle size={15} />
+        إرسال رسالة واتساب
+      </Button>
+    );
+  }
+
+  return (
+    <Card className="animate-scale-in">
+      <CardHeader>
+        <CardTitle>إرسال رسالة واتساب</CardTitle>
+      </CardHeader>
+      <div className="space-y-3">
+        <Select value={templateId} onChange={(e) => { setTemplateId(e.target.value); setRawMessage(""); }}>
+          <option value="">رسالة حرة (بدون قالب)...</option>
+          {manualTemplates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </Select>
+        {!templateId && (
+          <Textarea value={rawMessage} onChange={(e) => setRawMessage(e.target.value)} rows={3} placeholder="نص الرسالة" />
+        )}
+        {result && (
+          <p className={`text-xs ${result.success ? "text-success-600" : "text-danger-600"}`}>
+            {result.success ? "تم الإرسال بنجاح" : `فشل الإرسال: ${result.error}`}
+          </p>
+        )}
+        <div className="flex gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={!templateId && !rawMessage.trim()}
+            isLoading={sendMessage.isPending}
+            onClick={handleSend}
+          >
+            <Send size={14} />
+            إرسال
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setExpanded(false)}>إغلاق</Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -153,6 +215,7 @@ export function LeadDetailPage() {
           </div>
           <p className="ltr-content mt-1 text-sm text-ink-500">{lead.phone}</p>
         </div>
+        {canManage && <SendWhatsAppPanel leadId={lead.id} />}
       </div>
 
       {isTerminal ? (
