@@ -120,30 +120,30 @@ export function BookingsPage() {
           <EmptyState icon={Calendar} title="لا توجد حجوزات حاليًا" />
         ) : (
           <>
-            <div className="grid grid-cols-12 gap-4 border-b border-ink-100 bg-ink-50/70 px-6 py-3 text-center text-[13px] font-semibold text-ink-500">
+            <div className="grid grid-cols-16 gap-3 border-b border-ink-100 bg-ink-50/70 px-6 py-3 text-center text-[13px] font-semibold text-ink-500">
               <div className="col-span-2">التاريخ واليوم</div>
               <div className="col-span-1">الوقت</div>
               <div className="col-span-2 text-start">الاسم</div>
-              <div className="col-span-1">الهاتف</div>
+              <div className="col-span-2">الهاتف</div>
               <div className="col-span-1">المدرّس</div>
-              <div className="col-span-2">الحضور</div>
+              <div className="col-span-3">الحضور</div>
               <div className="col-span-2">التقرير</div>
-              <div className="col-span-1">ملاحظات</div>
+              <div className="col-span-3">ملاحظات</div>
             </div>
             <div className="divide-y divide-ink-100">
               {sorted.map((lead) => (
-                <div key={lead.id} className="grid grid-cols-12 items-center gap-4 px-6 py-3 text-center text-sm transition-colors hover:bg-ink-50/70">
+                <div key={lead.id} className="grid grid-cols-16 items-center gap-3 px-6 py-3 text-center text-sm transition-colors hover:bg-ink-50/70">
                   <div className="col-span-2 flex flex-col items-center">
                     <span className="text-sm font-semibold text-ink-800">{formatDayLabel(lead.lecture_date)}</span>
                     <span className="ltr-content text-xs text-ink-400">{lead.lecture_date || "—"}</span>
                   </div>
                   <div className="ltr-content col-span-1 text-sm font-semibold text-ink-700">{lead.lecture_time?.slice(0, 5) || "—"}</div>
                   <Link to={`/crm/leads/${lead.id}`} className="col-span-2 truncate text-start text-[15px] font-medium text-ink-900 hover:text-brand-600">{lead.full_name}</Link>
-                  <div className="ltr-content col-span-1 truncate text-sm text-ink-500">{lead.phone}</div>
+                  <div className="ltr-content col-span-2 truncate text-sm text-ink-500" title={lead.phone}>{lead.phone}</div>
                   <div className="col-span-1 truncate text-sm text-ink-600">{lead.teacher_name || "—"}</div>
-                  <div className="col-span-2">{canManage ? <AttendanceDropdown leadId={lead.id} /> : <Badge tone={STAGE_TONE[lead.stage]} dot={false}>{STAGE_LABEL[lead.stage]}</Badge>}</div>
+                  <div className="col-span-3">{canManage ? <AttendanceDropdown leadId={lead.id} /> : <Badge tone={STAGE_TONE[lead.stage]} dot={false}>{STAGE_LABEL[lead.stage]}</Badge>}</div>
                   <div className="col-span-2">{canManage ? <ReportButton leadId={lead.id} stage={lead.stage} attended={lead.attended} /> : null}</div>
-                  <div className="col-span-1"><InlineNoteEdit leadId={lead.id} currentNote={lead.notes} /></div>
+                  <div className="col-span-3"><InlineNoteEdit leadId={lead.id} currentNote={lead.notes} /></div>
                 </div>
               ))}
             </div>

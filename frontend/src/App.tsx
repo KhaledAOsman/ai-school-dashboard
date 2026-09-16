@@ -17,6 +17,7 @@ import { AllLeadsOverviewPage } from "@/modules/crm/pages/AllLeadsOverviewPage";
 import { SchedulePage } from "@/modules/crm/pages/SchedulePage";
 import { WhatsAppConnectionPage } from "@/modules/whatsapp/pages/WhatsAppConnectionPage";
 import { TemplatesPage } from "@/modules/whatsapp/pages/TemplatesPage";
+import { KpiDashboardPage } from "@/modules/kpi/pages/KpiDashboardPage";
 import { UsersPage } from "@/modules/finance/pages/UsersPage";
 import { RolesPage } from "@/modules/finance/pages/RolesPage";
 import { AuditLogPage } from "@/modules/finance/pages/AuditLogPage";
@@ -45,6 +46,17 @@ export function App() {
                 <ProtectedRoute>
                   <AppLayout>
                     <DashboardPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/kpi-dashboard"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <KpiDashboardPage />
                   </AppLayout>
                 </ProtectedRoute>
               }

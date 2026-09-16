@@ -304,27 +304,27 @@ export function LeadsListPage() {
           <EmptyState icon={Users} title="لا يوجد عملاء محتملون بمطابقة هذا البحث" />
         ) : (
           <>
-            <div className={`grid grid-cols-12 gap-4 border-b border-ink-100 bg-ink-50/70 px-6 py-3 text-center text-[13px] font-semibold text-ink-500 ${isFetching ? "opacity-60" : ""}`}>
+            <div className={`grid grid-cols-16 gap-3 border-b border-ink-100 bg-ink-50/70 px-6 py-3 text-center text-[13px] font-semibold text-ink-500 ${isFetching ? "opacity-60" : ""}`}>
               {canViewAll && <div className="col-span-1 flex items-center justify-center"><input type="checkbox" checked={allOnPageSelected} onChange={toggleSelectAll} className="rounded" /></div>}
               <div className={`${canViewAll ? "col-span-2" : "col-span-3"} text-start`}>الاسم</div>
-              <div className="col-span-1">الهاتف</div>
+              <div className="col-span-2">الهاتف</div>
               <div className="col-span-2">الحالة</div>
-              <div className="col-span-2">حالة الحجز</div>
+              <div className="col-span-3">حالة الحجز</div>
               <div className="col-span-1">المصدر</div>
-              <div className="col-span-2">ملاحظات</div>
-              <div className="col-span-1">المسؤول</div>
+              <div className="col-span-3">ملاحظات</div>
+              <div className="col-span-2">المسؤول</div>
             </div>
             <div className="divide-y divide-ink-100">
               {data.items.map((lead) => (
-                <div key={lead.id} className="grid grid-cols-12 items-center gap-4 px-6 py-3 text-center text-sm transition-colors hover:bg-ink-50/70">
+                <div key={lead.id} className="grid grid-cols-16 items-center gap-3 px-6 py-3 text-center text-sm transition-colors hover:bg-ink-50/70">
                   {canViewAll && <div className="col-span-1 flex items-center justify-center"><input type="checkbox" checked={selectedIds.has(lead.id)} onChange={() => toggleSelect(lead.id)} className="rounded" /></div>}
                   <Link to={`/crm/leads/${lead.id}`} className={`${canViewAll ? "col-span-2" : "col-span-3"} truncate text-start text-[15px] font-medium text-ink-900 hover:text-brand-600`}>{lead.full_name}</Link>
-                  <div className="ltr-content col-span-1 truncate text-center text-sm text-ink-600">{lead.phone}</div>
+                  <div className="ltr-content col-span-2 truncate text-center text-sm text-ink-600" title={lead.phone}>{lead.phone}</div>
                   <div className="col-span-2"><StatusDropdown leadId={lead.id} currentStage={lead.stage} /></div>
-                  <div className="col-span-2"><BookingStatusDropdown leadId={lead.id} /></div>
+                  <div className="col-span-3"><BookingStatusDropdown leadId={lead.id} /></div>
                   <div className="col-span-1 flex justify-center"><SourceIconPicker leadId={lead.id} currentSource={lead.source} /></div>
-                  <div className="col-span-2"><InlineNoteEdit leadId={lead.id} currentNote={lead.notes} /></div>
-                  <div className="col-span-1">
+                  <div className="col-span-3"><InlineNoteEdit leadId={lead.id} currentNote={lead.notes} /></div>
+                  <div className="col-span-2">
                     {canViewAll ? <InlineAssignSelect leadId={lead.id} currentAssignedTo={lead.assigned_to} users={users ?? []} /> : <span className="truncate text-xs text-ink-400">{lead.assigned_to_name || "—"}</span>}
                   </div>
                 </div>

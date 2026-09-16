@@ -152,8 +152,11 @@ export interface CRMDashboardStats {
   attended: number;
   not_attended: number;
   not_answered: number;
+  not_interested: number;
+  currently_booked: number;
   active_teachers: number;
   available_slots: number;
+  leads_without_bookings: number;
   sales_reps_count: number;
 }
 

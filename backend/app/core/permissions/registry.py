@@ -101,6 +101,7 @@ PERMISSIONS_VIEW = "permissions.view"
 # ---- Dashboards ----
 DASHBOARDS_VIEW = "dashboards.view"
 DASHBOARDS_MANAGE = "dashboards.manage"
+DASHBOARDS_KPI_VIEW = "dashboards.kpi.view"  # summary KPI cards only (CRM + finance), for managers who shouldn't get full module access
 
 # ---- Audit / Security ----
 AUDIT_VIEW = "audit.view"
@@ -156,6 +157,7 @@ SEED_PERMISSIONS: list[PermissionDef] = [
     PermissionDef(PERMISSIONS_VIEW, "View permissions", "permissions"),
     PermissionDef(DASHBOARDS_VIEW, "View dashboards", "dashboards"),
     PermissionDef(DASHBOARDS_MANAGE, "Manage dashboard widget configuration", "dashboards"),
+    PermissionDef(DASHBOARDS_KPI_VIEW, "View KPI dashboard (CRM + finance summary cards, read-only)", "dashboards"),
     PermissionDef(AUDIT_VIEW, "View audit logs", "audit"),
     PermissionDef(SECURITY_LOGS_VIEW, "View security logs", "security"),
     PermissionDef(SETTINGS_VIEW, "View system settings", "settings"),

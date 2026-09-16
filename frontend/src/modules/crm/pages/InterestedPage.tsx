@@ -83,9 +83,9 @@ function InterestedRow({ lead, canManage }: {
   const source = lead.source as LeadSource | null;
 
   return (
-    <div className="grid grid-cols-12 items-center gap-3 px-6 py-3 text-sm transition-colors hover:bg-ink-50/70">
+    <div className="grid grid-cols-16 items-center gap-3 px-6 py-3 text-sm transition-colors hover:bg-ink-50/70">
       <Link to={`/crm/leads/${lead.id}`} className="col-span-2 truncate text-[15px] font-medium text-ink-900 hover:text-brand-600">{lead.full_name}</Link>
-      <div className="ltr-content col-span-1 truncate text-center text-xs text-ink-500">{lead.phone}</div>
+      <div className="ltr-content col-span-2 truncate text-center text-xs text-ink-500" title={lead.phone}>{lead.phone}</div>
       <div className="col-span-1 truncate text-center text-xs text-ink-600">{lead.teacher_name || "—"}</div>
       <div className="col-span-1 flex justify-center">
         {source && SOURCE_ICON[source] ? (
@@ -98,8 +98,8 @@ function InterestedRow({ lead, canManage }: {
         <Badge tone={lead.follow_up_count >= 3 ? "warning" : "neutral"} dot={false}>{lead.follow_up_count} محاولة</Badge>
       </div>
       <div className="col-span-1 truncate text-center text-xs text-ink-400">{lead.assigned_to_name || "—"}</div>
-      <div className="col-span-1"><Badge tone={STAGE_TONE[lead.stage as keyof typeof STAGE_TONE]} dot={false}>{STAGE_LABEL[lead.stage as keyof typeof STAGE_LABEL]}</Badge></div>
-      <div className="col-span-4">
+      <div className="col-span-2"><Badge tone={STAGE_TONE[lead.stage as keyof typeof STAGE_TONE]} dot={false}>{STAGE_LABEL[lead.stage as keyof typeof STAGE_LABEL]}</Badge></div>
+      <div className="col-span-6">
         {isTerminal ? (
           <span className="text-xs text-ink-400">{lead.is_converted ? "تم التحويل" : "مفقود"}</span>
         ) : canManage ? (
@@ -167,15 +167,15 @@ export function InterestedPage() {
           <div className="p-10 text-center text-sm text-ink-400">لا يوجد عملاء مهتمون حاليًا</div>
         ) : (
           <>
-            <div className="grid grid-cols-12 gap-3 border-b border-ink-100 bg-ink-50/70 px-6 py-3 text-center text-[13px] font-semibold text-ink-500">
+            <div className="grid grid-cols-16 gap-3 border-b border-ink-100 bg-ink-50/70 px-6 py-3 text-center text-[13px] font-semibold text-ink-500">
               <div className="col-span-2 text-start">الاسم</div>
-              <div className="col-span-1">الهاتف</div>
+              <div className="col-span-2">الهاتف</div>
               <div className="col-span-1">المدرّس</div>
               <div className="col-span-1">المصدر</div>
               <div className="col-span-1">المحاولات</div>
               <div className="col-span-1">المسؤول</div>
-              <div className="col-span-1">الحالة</div>
-              <div className="col-span-4">إجراء</div>
+              <div className="col-span-2">الحالة</div>
+              <div className="col-span-6">إجراء</div>
             </div>
             <div className="divide-y divide-ink-100">
               {items.map((lead) => <InterestedRow key={lead.id} lead={lead} canManage={canManage} />)}

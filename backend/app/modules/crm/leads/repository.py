@@ -7,7 +7,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.modules.crm.leads.models import Lead, LeadCallAttempt, LeadStage, LeadStageEvent
+from app.modules.crm.leads.models import Lead, LeadCallAttempt, LeadStage, LeadStageEvent, LEADS_GROUP_STAGES, BOOKINGS_GROUP_STAGES
 
 
 class LeadRepository:
@@ -177,3 +177,30 @@ class LeadRepository:
             "not_attended": not_attended,
             "not_answered": not_answered,
         }
+
+    async def count_without_bookings(self) -> int:
+        """Leads still in the pre-booking group (جديد / تم الاتصال /
+        لم يتم الرد) - i.e. no teacher slot has ever been booked for them yet.
+        Distinct from the bookings-group / interested-group leads, whose
+        stage has moved on past booking regardless of how that booking
+        later turned out."""
+        result = await self.db.execute(select(func.count(Lead.id)).where(Lead.stage.in_(LEADS_GROUP_STAGES)))
+        return result.scalar_one()
+
+    async def count_not_interested(self) -> int:
+        """Leads closed directly as غير مهتم from the leads-group booking-
+        status dropdown (lives in the interested-clients group, same
+        terminal-outcome bookkeeping as LOST, but a distinct stage so the
+        dashboard can report it separately)."""
+        result = await self.db.execute(
+            select(func.count(Lead.id)).where(Lead.stage == LeadStage.NOT_INTERESTED.value)
+        )
+        return result.scalar_one()
+
+    async def count_currently_booked(self) -> int:
+        """Leads currently sitting anywhere in the bookings group (تم الحجز
+        الموعد الموعد حتى تسجيل الحضور) - i.e. currently in the
+        الحجوزات table, regardless of how far along the confirm/zoom/attendance
+        steps they've gotten."""
+        result = await self.db.execute(select(func.count(Lead.id)).where(Lead.stage.in_(BOOKINGS_GROUP_STAGES)))
+        return result.scalar_one()

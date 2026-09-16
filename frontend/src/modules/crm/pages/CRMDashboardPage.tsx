@@ -3,7 +3,7 @@
  * vs did-not-attend, not-answered calls, headcount of active customer-
  * service reps, and count of registered teachers/available slots.
  */
-import { Users, CheckCircle2, XCircle, PhoneMissed, UserPlus, GraduationCap, CalendarClock } from "lucide-react";
+import { Users, CheckCircle2, XCircle, PhoneMissed, UserPlus, GraduationCap, CalendarClock, UserX, CalendarCheck, Ban } from "lucide-react";
 import { translate } from "@/i18n";
 import { useCRMDashboardStats } from "@/modules/crm/hooks/useCRM";
 import { Card } from "@/components/ui/Card";
@@ -60,9 +60,18 @@ export function CRMDashboardPage() {
             <h2 className="mb-3 text-sm font-semibold text-ink-700">العملاء المحتملون</h2>
             <div className="grid grid-cols-4 gap-4">
               <StatCard icon={Users} label="إجمالي العملاء" value={stats.total_leads} tone="brand" />
+              <StatCard icon={UserX} label="عملاء بدون حجوزات" value={stats.leads_without_bookings} tone="neutral" />
+              <StatCard icon={PhoneMissed} label="لم يتم الرد" value={stats.not_answered} tone="warning" />
+              <StatCard icon={Ban} label="غير مهتم" value={stats.not_interested} tone="danger" />
+            </div>
+          </div>
+
+          <div>
+            <h2 className="mb-3 text-sm font-semibold text-ink-700">الحجوزات والمحاضرات</h2>
+            <div className="grid grid-cols-3 gap-4">
+              <StatCard icon={CalendarCheck} label="عملاء تم الحجز لهم" value={stats.currently_booked} tone="brand" />
               <StatCard icon={CheckCircle2} label="حضروا المحاضرة" value={stats.attended} tone="success" />
               <StatCard icon={XCircle} label="لم يحضروا المحاضرة" value={stats.not_attended} tone="danger" />
-              <StatCard icon={PhoneMissed} label="لم يتم الرد" value={stats.not_answered} tone="warning" />
             </div>
           </div>
 

@@ -147,6 +147,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const canViewSecurityLogs = usePermission(PERMISSIONS.SECURITY_LOGS_VIEW);
   const canViewSettings = usePermission(PERMISSIONS.SETTINGS_VIEW);
   const canViewDashboard = useAnyPermission([PERMISSIONS.DASHBOARDS_VIEW, PERMISSIONS.FINANCE_REPORT_VIEW]);
+  const canViewKpiDashboard = usePermission(PERMISSIONS.DASHBOARDS_KPI_VIEW);
   const canViewAdminSection = canViewUsers || canViewRoles || canViewAudit || canViewSecurityLogs || canViewSettings;
 
   const isFinanceRoute = location.pathname.startsWith("/finance");
@@ -190,6 +191,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <>
               <NavSectionLabel>عام</NavSectionLabel>
               <NavItem to="/dashboard" icon={LayoutDashboard} label={translate("ar", "nav_dashboard")} />
+            </>
+          )}
+          {!canViewDashboard && canViewKpiDashboard && (
+            <>
+              <NavSectionLabel>عام</NavSectionLabel>
+              <NavItem to="/kpi-dashboard" icon={LayoutDashboard} label="لوحة تحكم KPI" />
             </>
           )}
 

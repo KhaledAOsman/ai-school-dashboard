@@ -27,8 +27,11 @@ class CRMDashboardStats(BaseModel):
     attended: int
     not_attended: int
     not_answered: int
+    not_interested: int
+    currently_booked: int
     active_teachers: int
     available_slots: int
+    leads_without_bookings: int
     sales_reps_count: int
 
 
@@ -43,7 +46,10 @@ async def get_dashboard_stats(
 
     lead_counts = await lead_repo.get_dashboard_counts()
     active_teachers = await teacher_repo.count_active()
-    available_slots = await slot_repo.count_all()
+    available_slots = await slot_repo.count_available()
+    leads_without_bookings = await lead_repo.count_without_bookings()
+    not_interested = await lead_repo.count_not_interested()
+    currently_booked = await lead_repo.count_currently_booked()
 
     # Count active users holding any role whose permission set includes
     # crm.lead.manage - i.e. customer-service/sales reps, regardless of
@@ -67,7 +73,10 @@ async def get_dashboard_stats(
         attended=lead_counts["attended"],
         not_attended=lead_counts["not_attended"],
         not_answered=lead_counts["not_answered"],
+        not_interested=not_interested,
+        currently_booked=currently_booked,
         active_teachers=active_teachers,
         available_slots=available_slots,
+        leads_without_bookings=leads_without_bookings,
         sales_reps_count=sales_reps_count,
     )

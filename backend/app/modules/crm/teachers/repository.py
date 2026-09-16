@@ -70,3 +70,10 @@ class TeacherSlotRepository:
     async def count_all(self) -> int:
         result = await self.db.execute(select(func.count(TeacherSlot.id)))
         return result.scalar_one()
+
+    async def count_available(self) -> int:
+        """Slots not yet booked - what the dashboard's مواعيد متاحة حاليًا
+        card should actually show, as opposed to every slot ever created
+        (booked or not)."""
+        result = await self.db.execute(select(func.count(TeacherSlot.id)).where(TeacherSlot.is_booked.is_(False)))
+        return result.scalar_one()

@@ -16,6 +16,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core.auth.routes import router as auth_router
 from app.core.audit.routes import router as audit_router
 from app.core.dashboards.routes import router as dashboards_router
+from app.core.dashboards.kpi_routes import router as kpi_dashboard_router
 from app.core.notifications.routes import router as notifications_router
 from app.core.permissions.routes import router as permissions_router
 from app.core.roles.routes import router as roles_router
@@ -84,6 +85,7 @@ app.include_router(users_router, prefix=API_PREFIX)
 app.include_router(roles_router, prefix=API_PREFIX)
 app.include_router(permissions_router, prefix=API_PREFIX)
 app.include_router(dashboards_router, prefix=API_PREFIX)
+app.include_router(kpi_dashboard_router, prefix=API_PREFIX)
 app.include_router(notifications_router, prefix=API_PREFIX)
 app.include_router(audit_router, prefix=API_PREFIX)
 app.include_router(security_logs_router, prefix=API_PREFIX)
