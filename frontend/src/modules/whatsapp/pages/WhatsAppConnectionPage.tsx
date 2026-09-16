@@ -5,7 +5,7 @@
  */
 import { MessageCircle, Smartphone, LogOut, AlertTriangle } from "lucide-react";
 import { useWhatsAppStatus, useWhatsAppQr, useWhatsAppLogout } from "@/modules/whatsapp/hooks/useWhatsApp";
-import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 

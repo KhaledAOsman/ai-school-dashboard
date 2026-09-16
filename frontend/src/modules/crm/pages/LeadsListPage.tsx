@@ -112,7 +112,7 @@ function BookingStatusDropdown({ leadId }: { leadId: string }) {
         onChange={(e) => {
           const value = e.target.value;
           if (value === "not_interested") notInterested.mutate(undefined);
-          else if (value === "booked" || value === "postponed") setShowSchedule(true);
+          else if (value === "booked") setShowSchedule(true);
         }}
         disabled={notInterested.isPending}
         className="w-full cursor-pointer rounded-lg border-2 px-2.5 py-2 text-sm font-semibold outline-none transition-colors bg-ink-50 border-ink-200 text-ink-700 hover:border-brand-300 focus:border-brand-400 focus:ring-1 focus:ring-brand-400"
@@ -120,7 +120,6 @@ function BookingStatusDropdown({ leadId }: { leadId: string }) {
         <option value="">تحديد حالة الحجز...</option>
         <option value="not_interested">غير مهتم</option>
         <option value="booked">تم الحجز</option>
-        <option value="postponed">تأجيل</option>
       </select>
       {showSchedule && (
         <TeacherScheduleModal onClose={() => setShowSchedule(false)} isBooking={bookSlot.isPending} onConfirm={(slotId) => bookSlot.mutateAsync(slotId)} />
