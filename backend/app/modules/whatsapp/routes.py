@@ -16,6 +16,7 @@ from app.modules.whatsapp.schemas import (
     MessageTemplateResponse,
     MessageTemplateUpdateRequest,
     SendMessageRequest,
+    TestSendRequest,
     WhatsAppMessageLogResponse,
     WhatsAppQrResponse,
     WhatsAppStatusResponse,
@@ -81,6 +82,22 @@ async def update_template(
 ):
     service = WhatsAppService(db)
     return await service.update_template(template_id=template_id, payload=payload)
+
+
+@router.post("/test-send", response_model=WhatsAppMessageLogResponse)
+async def test_send(
+    payload: TestSendRequest,
+    user: CurrentUser = Depends(require_permission(CRM_LEAD_MANAGE)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Send a template (rendered with sample placeholder values) or raw
+    text to an arbitrary phone number - not tied to any lead. Used from
+    the templates page to test the connection/wording before relying on
+    a template in a real trigger."""
+    service = WhatsAppService(db)
+    return await service.test_send(
+        phone=payload.phone, template_id=payload.template_id, raw_message=payload.raw_message, user_id=user.id
+    )
 
 
 @router.post("/leads/{lead_id}/send", response_model=WhatsAppMessageLogResponse)

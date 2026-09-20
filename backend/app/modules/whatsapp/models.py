@@ -21,9 +21,20 @@ from app.database.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 class TemplateTrigger(str, enum.Enum):
     """When a template is used automatically. MANUAL templates are never
-    auto-sent - only usable from the "send message" action on a lead."""
+    auto-sent - only usable from the "send message" action on a lead.
+    Every other value maps to exactly one button/stage-transition in the
+    CRM lead pipeline (see crm.leads.service) - staff pick, per trigger,
+    which template (if any) should auto-send when that action happens.
+    Only one active template per trigger actually fires (see
+    MessageTemplateRepository.get_active_for_trigger)."""
     MANUAL = "manual"
-    LECTURE_BOOKED = "lecture_booked"  # sent automatically right after book_slot
+    LECTURE_BOOKED = "lecture_booked"  # book_slot - "تأكيد الحجز"
+    CONFIRMED_WHATSAPP = "confirmed_whatsapp"  # confirm_whatsapp button
+    CONFIRMED_CALL = "confirmed_call"  # confirm_call button
+    REPORT_SENT = "report_sent"  # send_report - "تم إرسال التقرير"
+    CONVERTED = "converted"  # convert - تحويل لعميل فعلي
+    LOST = "lost"  # mark_lost - إغلاق كمفقود
+    NOT_INTERESTED = "not_interested"  # mark_not_interested
 
 
 class MessageTemplate(Base, UUIDPrimaryKeyMixin, TimestampMixin):

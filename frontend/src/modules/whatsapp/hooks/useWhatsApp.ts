@@ -56,3 +56,9 @@ export function useSendWhatsAppToLead(leadId: string) {
     mutationFn: (payload: { template_id?: string; raw_message?: string }) => whatsappApi.sendToLead(leadId, payload),
   });
 }
+
+export function useTestSendWhatsApp() {
+  return useMutation({
+    mutationFn: (payload: { phone: string; template_id?: string; raw_message?: string }) => whatsappApi.testSend(payload),
+  });
+}

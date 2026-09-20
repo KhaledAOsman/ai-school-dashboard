@@ -73,6 +73,20 @@ class LeadService:
         )
         self.repo.add_stage_event(event)
 
+    async def _notify_whatsapp(self, *, trigger: str, lead: Lead, user_id: uuid.UUID) -> None:
+        """Best-effort automatic WhatsApp notification for a pipeline
+        trigger - never lets a WhatsApp failure (bridge down, no active
+        template configured for this trigger, number not linked, etc.)
+        fail or roll back the pipeline action itself, since that action
+        succeeding is what actually matters. Staff configure which
+        template (if any) fires for which trigger from the templates
+        page - nothing here is hardcoded to a specific template."""
+        try:
+            from app.modules.whatsapp.service import WhatsAppService
+            await WhatsAppService(self.db).send_trigger_notification(trigger=trigger, lead=lead, user_id=user_id)
+        except Exception:  # noqa: BLE001
+            pass
+
     def _record_call_attempt(self, *, lead: Lead, outcome: str, user_id: uuid.UUID, note: str | None) -> None:
         attempt = LeadCallAttempt(
             lead_id=lead.id,
@@ -241,15 +255,7 @@ class LeadService:
         await self.db.commit()
         lead = await self.repo.get_by_id(lead_id)
 
-        # Best-effort automatic WhatsApp notification - never lets a
-        # WhatsApp failure (bridge down, no active template, number not
-        # linked, etc.) fail or roll back the booking itself, since the
-        # booking succeeding is what actually matters here.
-        try:
-            from app.modules.whatsapp.service import WhatsAppService
-            await WhatsAppService(self.db).send_lecture_booked_notification(lead=lead, user_id=user_id)
-        except Exception:  # noqa: BLE001
-            pass
+        await self._notify_whatsapp(trigger="lecture_booked", lead=lead, user_id=user_id)
 
         return await self._to_response(lead)
 
@@ -278,24 +284,34 @@ class LeadService:
         return await self.book_slot(lead_id=lead_id, teacher_slot_id=teacher_slot_id, user_id=user_id, reschedule_note=note)
 
     # ---- Stages 3, 4, 5: simple linear advances within group 2 ----
-    async def _advance(self, *, lead_id: uuid.UUID, target_stage: str, user_id: uuid.UUID, note: str | None) -> LeadResponse:
+    async def _advance(
+        self, *, lead_id: uuid.UUID, target_stage: str, user_id: uuid.UUID, note: str | None, whatsapp_trigger: str | None = None
+    ) -> LeadResponse:
         lead = await self.repo.get_by_id(lead_id)
         ensure_found(lead, "Lead")
         lead.stage = target_stage
         self._record_stage_event(lead=lead, stage=target_stage, user_id=user_id, note=note)
         await self.db.commit()
         lead = await self.repo.get_by_id(lead_id)
+        if whatsapp_trigger:
+            await self._notify_whatsapp(trigger=whatsapp_trigger, lead=lead, user_id=user_id)
         return await self._to_response(lead)
 
     async def confirm_whatsapp(self, *, lead_id: uuid.UUID, user_id: uuid.UUID, note: str | None) -> LeadResponse:
-        return await self._advance(lead_id=lead_id, target_stage=LeadStage.CONFIRMED_WHATSAPP.value, user_id=user_id, note=note)
+        return await self._advance(
+            lead_id=lead_id, target_stage=LeadStage.CONFIRMED_WHATSAPP.value, user_id=user_id, note=note,
+            whatsapp_trigger="confirmed_whatsapp",
+        )
 
     async def confirm_call(self, *, lead_id: uuid.UUID, user_id: uuid.UUID, note: str | None) -> LeadResponse:
         """Confirming by phone moves straight to zoom_sent - the Zoom link
         is already applied automatically from the teacher's fixed link at
         booking time (see book_slot), so there is no separate manual
         "send Zoom" step for staff to do."""
-        return await self._advance(lead_id=lead_id, target_stage=LeadStage.ZOOM_SENT.value, user_id=user_id, note=note)
+        return await self._advance(
+            lead_id=lead_id, target_stage=LeadStage.ZOOM_SENT.value, user_id=user_id, note=note,
+            whatsapp_trigger="confirmed_call",
+        )
 
     async def send_zoom(self, *, lead_id: uuid.UUID, zoom_link: str, user_id: uuid.UUID, note: str | None) -> LeadResponse:
         lead = await self.repo.get_by_id(lead_id)
@@ -328,7 +344,10 @@ class LeadService:
         the lead attended - the UI hides this action otherwise, but it
         isn't hard-blocked server-side since a report might legitimately
         be sent for other reasons."""
-        return await self._advance(lead_id=lead_id, target_stage=LeadStage.REPORT_SENT.value, user_id=user_id, note=note)
+        return await self._advance(
+            lead_id=lead_id, target_stage=LeadStage.REPORT_SENT.value, user_id=user_id, note=note,
+            whatsapp_trigger="report_sent",
+        )
 
     # ---- Group 3: follow-up (repeatable) ----
     async def log_follow_up(self, *, lead_id: uuid.UUID, user_id: uuid.UUID, note: str | None) -> LeadResponse:
@@ -358,6 +377,7 @@ class LeadService:
         await self.audit.record(user_id=user_id, action="crm_lead.converted", resource_type="Lead", resource_id=str(lead.id))
         await self.db.commit()
         lead = await self.repo.get_by_id(lead_id)
+        await self._notify_whatsapp(trigger="converted", lead=lead, user_id=user_id)
         return await self._to_response(lead)
 
     async def mark_lost(self, *, lead_id: uuid.UUID, payload: LeadLoseRequest, user_id: uuid.UUID) -> LeadResponse:
@@ -370,6 +390,7 @@ class LeadService:
         await self.audit.record(user_id=user_id, action="crm_lead.lost", resource_type="Lead", resource_id=str(lead.id))
         await self.db.commit()
         lead = await self.repo.get_by_id(lead_id)
+        await self._notify_whatsapp(trigger="lost", lead=lead, user_id=user_id)
         return await self._to_response(lead)
 
     async def mark_not_interested(self, *, lead_id: uuid.UUID, payload: LeadNotInterestedRequest, user_id: uuid.UUID) -> LeadResponse:
@@ -387,6 +408,7 @@ class LeadService:
         await self.audit.record(user_id=user_id, action="crm_lead.not_interested", resource_type="Lead", resource_id=str(lead.id))
         await self.db.commit()
         lead = await self.repo.get_by_id(lead_id)
+        await self._notify_whatsapp(trigger="not_interested", lead=lead, user_id=user_id)
         return await self._to_response(lead)
 
     # ---- Reassignment ----

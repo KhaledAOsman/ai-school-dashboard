@@ -20,7 +20,7 @@ from fastapi import HTTPException, status
 
 from app.core.settings.config import get_settings
 from app.core.permissions.object_policy import ensure_found
-from app.modules.whatsapp.models import MessageTemplate, TemplateTrigger, WhatsAppMessageLog
+from app.modules.whatsapp.models import MessageTemplate, WhatsAppMessageLog
 from app.modules.whatsapp.repository import MessageTemplateRepository, WhatsAppMessageLogRepository
 from app.modules.whatsapp.schemas import (
     MessageTemplateCreateRequest,
@@ -30,6 +30,19 @@ from app.modules.whatsapp.schemas import (
     WhatsAppStatusResponse,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
+class _SampleLead:
+    """Stand-in for a real Lead when rendering a template with no actual
+    lead attached (test-send from the templates page). Carries the same
+    attributes render_template() reads, filled with obviously-fake sample
+    values so a rendered preview is still readable."""
+    full_name = "أحمد محمد (مثال)"
+    phone = "201000000000"
+    teacher_name = "أ. سارة"
+    lecture_date = "2026-01-15"
+    lecture_time = "17:00"
+    zoom_link = "https://zoom.us/j/000000000"
 
 
 def _utcnow() -> datetime:
@@ -150,16 +163,18 @@ class WhatsAppService:
         await self.db.commit()
         return log
 
-    async def send_lecture_booked_notification(self, *, lead, user_id: uuid.UUID | None) -> None:
+    async def send_trigger_notification(self, *, trigger: str, lead, user_id: uuid.UUID | None) -> None:
         """
-        Called automatically right after a lead books a slot (see
-        crm.leads.service.book_slot). Looks up the active
-        lecture_booked-trigger template and sends it - silently does
-        nothing if no such template is configured or active, since this
-        is a best-effort notification, not a required step in the booking
-        flow (a missing/misconfigured template must never block booking).
+        Called automatically right after a lead pipeline action happens
+        (booking, confirming, report sent, converted, lost, etc - see the
+        call sites in crm.leads.service). Looks up whichever template
+        staff have set as the active one for this trigger (via the
+        templates page) and sends it - silently does nothing if no
+        template is configured/active for this trigger, since this is a
+        best-effort notification and a missing/misconfigured template
+        must never block the underlying pipeline action.
         """
-        template = await self.templates.get_active_for_trigger(TemplateTrigger.LECTURE_BOOKED.value)
+        template = await self.templates.get_active_for_trigger(trigger)
         if not template:
             return
         body = self.render_template(template.body, lead=lead)
@@ -170,3 +185,27 @@ class WhatsAppService:
         )
         self.logs.add(log)
         await self.db.commit()
+
+    async def test_send(self, *, phone: str, template_id: uuid.UUID | None, raw_message: str | None, user_id: uuid.UUID | None) -> WhatsAppMessageLog:
+        """Manual test send to an arbitrary phone number, not tied to any
+        lead - lets staff verify the WhatsApp connection and a template's
+        rendering (against sample placeholder values) before relying on
+        it for a real trigger."""
+        body = raw_message
+        resolved_template_id = None
+        if template_id:
+            template = await self.templates.get_by_id(template_id)
+            ensure_found(template, "Template")
+            body = self.render_template(template.body, lead=_SampleLead())
+            resolved_template_id = template.id
+        if not body:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Either template_id or raw_message is required")
+
+        success, error = await self._send_raw(phone=phone, message=body)
+        log = WhatsAppMessageLog(
+            lead_id=None, template_id=resolved_template_id, phone=phone, rendered_body=body,
+            success=success, error=error, sent_by=user_id, created_at=_utcnow(),
+        )
+        self.logs.add(log)
+        await self.db.commit()
+        return log

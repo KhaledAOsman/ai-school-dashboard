@@ -6,11 +6,21 @@ export interface WhatsAppStatus {
   last_error: string | null;
 }
 
+export type TemplateTrigger =
+  | "manual"
+  | "lecture_booked"
+  | "confirmed_whatsapp"
+  | "confirmed_call"
+  | "report_sent"
+  | "converted"
+  | "lost"
+  | "not_interested";
+
 export interface MessageTemplate {
   id: string;
   name: string;
   body: string;
-  trigger: "manual" | "lecture_booked";
+  trigger: TemplateTrigger;
   is_active: boolean;
   created_at: string;
 }
@@ -51,6 +61,10 @@ export const whatsappApi = {
   },
   sendToLead: async (leadId: string, payload: { template_id?: string; raw_message?: string }): Promise<WhatsAppMessageLog> => {
     const { data } = await api.post(`/whatsapp/leads/${leadId}/send`, payload);
+    return data;
+  },
+  testSend: async (payload: { phone: string; template_id?: string; raw_message?: string }): Promise<WhatsAppMessageLog> => {
+    const { data } = await api.post("/whatsapp/test-send", payload);
     return data;
   },
 };

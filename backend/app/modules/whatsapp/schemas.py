@@ -17,16 +17,19 @@ class WhatsAppQrResponse(BaseModel):
     qr_data_url: str
 
 
+_TRIGGER_PATTERN = "^(manual|lecture_booked|confirmed_whatsapp|confirmed_call|report_sent|converted|lost|not_interested)$"
+
+
 class MessageTemplateCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=150)
     body: str = Field(min_length=1)
-    trigger: str = Field(default="manual", pattern="^(manual|lecture_booked)$")
+    trigger: str = Field(default="manual", pattern=_TRIGGER_PATTERN)
 
 
 class MessageTemplateUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=150)
     body: str | None = Field(default=None, min_length=1)
-    trigger: str | None = Field(default=None, pattern="^(manual|lecture_booked)$")
+    trigger: str | None = Field(default=None, pattern=_TRIGGER_PATTERN)
     is_active: bool | None = None
 
 
@@ -43,6 +46,16 @@ class MessageTemplateResponse(BaseModel):
 
 class SendMessageRequest(BaseModel):
     """Manually send a template (or raw text) to a lead."""
+    template_id: uuid.UUID | None = None
+    raw_message: str | None = None
+
+
+class TestSendRequest(BaseModel):
+    """Send a template (rendered against sample placeholder values) or a
+    raw message to an arbitrary phone number, not tied to any lead - used
+    to test the WhatsApp connection/templates from the templates page
+    before relying on them in real triggers."""
+    phone: str = Field(min_length=5, max_length=30)
     template_id: uuid.UUID | None = None
     raw_message: str | None = None
 
