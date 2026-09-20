@@ -112,21 +112,32 @@ app.post("/send", async (req, res) => {
   if (state.status !== "connected") {
     return res.status(409).json({ error: "WhatsApp is not connected" });
   }
+  const digitsOnly = String(phone).replace(/\D/g, "");
+
+  // WhatsApp's "LID" (linked identity) rollout broke whatsapp-web.js's
+  // internal contact/number resolution for a lot of numbers - both
+  // getNumberId() AND a hand-built "<digits>@c.us" chat id can now throw
+  // or fail with "No LID for user" depending on the number, and which
+  // approach works is inconsistent (this is an open upstream bug in the
+  // library itself, not something fixable from our side - see
+  // https://github.com/wwebjs/whatsapp-web.js/issues/3834). So: try the
+  // proper resolution first (it also validates the number actually
+  // exists on WhatsApp), and fall back to the plain @c.us id if that
+  // throws, instead of hard-failing on either one alone.
+  let chatId = `${digitsOnly}@c.us`;
   try {
-    // Strip any non-digit characters from the phone number, then resolve
-    // it through WhatsApp itself via getNumberId() rather than guessing a
-    // "<digits>@c.us" chat id by hand. WhatsApp's newer "LID" (linked
-    // identity) system means the actual serialized id for a number isn't
-    // always the raw phone-number-based @c.us id anymore - sending to a
-    // hand-built id fails with "No LID for user" for many numbers.
-    // getNumberId() also doubles as an existence check: it returns null
-    // if the number isn't a valid/reachable WhatsApp account.
-    const digitsOnly = String(phone).replace(/\D/g, "");
     const numberId = await client.getNumberId(digitsOnly);
-    if (!numberId) {
-      return res.status(422).json({ error: `${digitsOnly} is not a valid/reachable WhatsApp number` });
+    if (numberId) {
+      chatId = numberId._serialized;
+    } else {
+      console.warn(`getNumberId found no WhatsApp account for ${digitsOnly} - trying raw chat id anyway`);
     }
-    await client.sendMessage(numberId._serialized, message);
+  } catch (err) {
+    console.warn(`getNumberId failed for ${digitsOnly} (${err}) - falling back to raw chat id`);
+  }
+
+  try {
+    await client.sendMessage(chatId, message);
     res.json({ ok: true });
   } catch (err) {
     console.error("Send failed:", err);
