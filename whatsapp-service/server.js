@@ -113,11 +113,20 @@ app.post("/send", async (req, res) => {
     return res.status(409).json({ error: "WhatsApp is not connected" });
   }
   try {
-    // whatsapp-web.js expects a chat id like "9665XXXXXXXX@c.us" - strip
-    // any non-digit characters from the phone number before building it.
+    // Strip any non-digit characters from the phone number, then resolve
+    // it through WhatsApp itself via getNumberId() rather than guessing a
+    // "<digits>@c.us" chat id by hand. WhatsApp's newer "LID" (linked
+    // identity) system means the actual serialized id for a number isn't
+    // always the raw phone-number-based @c.us id anymore - sending to a
+    // hand-built id fails with "No LID for user" for many numbers.
+    // getNumberId() also doubles as an existence check: it returns null
+    // if the number isn't a valid/reachable WhatsApp account.
     const digitsOnly = String(phone).replace(/\D/g, "");
-    const chatId = `${digitsOnly}@c.us`;
-    await client.sendMessage(chatId, message);
+    const numberId = await client.getNumberId(digitsOnly);
+    if (!numberId) {
+      return res.status(422).json({ error: `${digitsOnly} is not a valid/reachable WhatsApp number` });
+    }
+    await client.sendMessage(numberId._serialized, message);
     res.json({ ok: true });
   } catch (err) {
     console.error("Send failed:", err);
