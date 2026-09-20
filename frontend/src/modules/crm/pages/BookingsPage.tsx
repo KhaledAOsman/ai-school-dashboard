@@ -29,7 +29,7 @@ function AttendanceDropdown({ leadId }: { leadId: string }) {
           else if (e.target.value === "postpone") setShowSchedule(true);
         }}
         disabled={recordAttendance.isPending}
-        className="w-full cursor-pointer rounded-lg border border-ink-200 bg-white px-2.5 py-2 text-sm font-medium text-ink-800 outline-none transition-colors hover:border-brand-300 focus:border-brand-400 focus:ring-1 focus:ring-brand-400"
+        className="w-full cursor-pointer whitespace-nowrap rounded-lg border border-ink-200 bg-white px-2 py-2 text-[13px] font-medium text-ink-800 outline-none transition-colors hover:border-brand-300 focus:border-brand-400 focus:ring-1 focus:ring-brand-400"
       >
         <option value="">تحديد الحضور...</option>
         <option value="attended">تم الحضور</option>
@@ -51,8 +51,8 @@ function ReportButton({ leadId, stage, attended }: { leadId: string; stage: stri
   const sendReport = useSendReport(leadId);
   if (stage !== "attendance_recorded" || attended !== true) return <span className="text-xs text-ink-300">—</span>;
   return (
-    <Button size="sm" variant="primary" isLoading={sendReport.isPending} onClick={() => sendReport.mutate(undefined)}>
-      <Send size={13} />تم إرسال التقرير
+    <Button size="sm" variant="primary" isLoading={sendReport.isPending} onClick={() => sendReport.mutate(undefined)} className="w-full whitespace-nowrap !px-2 !text-[12px]">
+      <Send size={12} />إرسال التقرير
     </Button>
   );
 }
@@ -72,11 +72,11 @@ function InlineNoteEdit({ leadId, currentNote }: { leadId: string; currentNote: 
     return (
       <input autoFocus value={value} onChange={(e) => setValue(e.target.value)} onBlur={save}
         onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") { setValue(currentNote ?? ""); setEditing(false); } }}
-        className="w-full rounded-lg border border-brand-300 bg-white px-2.5 py-2 text-sm text-ink-800 outline-none ring-1 ring-brand-400" />
+        className="w-full rounded-lg border border-brand-300 bg-white px-2.5 py-2 text-[13px] text-ink-800 outline-none ring-1 ring-brand-400" />
     );
   }
   return (
-    <button onClick={() => setEditing(true)} className="w-full truncate rounded-lg px-2.5 py-2 text-start text-sm text-ink-600 transition-colors hover:bg-ink-100" title="اضغط للتعديل">
+    <button onClick={() => setEditing(true)} className="w-full whitespace-normal break-words rounded-lg px-2.5 py-2 text-start text-[13px] leading-snug text-ink-600 transition-colors hover:bg-ink-100" title="اضغط للتعديل">
       {currentNote || <span className="text-ink-300">إضافة ملاحظة...</span>}
     </button>
   );
@@ -120,30 +120,28 @@ export function BookingsPage() {
           <EmptyState icon={Calendar} title="لا توجد حجوزات حاليًا" />
         ) : (
           <>
-            <div className="grid grid-cols-16 gap-3 border-b border-ink-100 bg-ink-50/70 px-6 py-3 text-center text-[13px] font-semibold text-ink-500">
-              <div className="col-span-2">التاريخ واليوم</div>
-              <div className="col-span-1">الوقت</div>
+            <div className="grid grid-cols-12 gap-2 border-b border-ink-100 bg-ink-50/70 px-4 py-3 text-center text-[13px] font-semibold text-ink-500">
+              <div className="col-span-1">الموعد</div>
               <div className="col-span-2 text-start">الاسم</div>
-              <div className="col-span-2">الهاتف</div>
+              <div className="col-span-1">الهاتف</div>
               <div className="col-span-1">المدرّس</div>
               <div className="col-span-3">الحضور</div>
+              <div className="col-span-2">ملاحظات</div>
               <div className="col-span-2">التقرير</div>
-              <div className="col-span-3">ملاحظات</div>
             </div>
             <div className="divide-y divide-ink-100">
               {sorted.map((lead) => (
-                <div key={lead.id} className="grid grid-cols-16 items-center gap-3 px-6 py-3 text-center text-sm transition-colors hover:bg-ink-50/70">
-                  <div className="col-span-2 flex flex-col items-center">
-                    <span className="text-sm font-semibold text-ink-800">{formatDayLabel(lead.lecture_date)}</span>
-                    <span className="ltr-content text-xs text-ink-400">{lead.lecture_date || "—"}</span>
+                <div key={lead.id} className="grid grid-cols-12 items-center gap-2 px-4 py-2.5 text-center text-sm transition-colors hover:bg-ink-50/70">
+                  <div className="col-span-1 flex flex-col items-center leading-tight">
+                    <span className="text-[12.5px] font-semibold text-ink-800">{formatDayLabel(lead.lecture_date)}</span>
+                    <span className="ltr-content text-[11px] text-ink-400">{lead.lecture_time?.slice(0, 5) || "—"}</span>
                   </div>
-                  <div className="ltr-content col-span-1 text-sm font-semibold text-ink-700">{lead.lecture_time?.slice(0, 5) || "—"}</div>
-                  <Link to={`/crm/leads/${lead.id}`} className="col-span-2 truncate text-start text-[15px] font-medium text-ink-900 hover:text-brand-600">{lead.full_name}</Link>
-                  <div className="ltr-content col-span-2 truncate text-sm text-ink-500" title={lead.phone}>{lead.phone}</div>
-                  <div className="col-span-1 truncate text-sm text-ink-600">{lead.teacher_name || "—"}</div>
+                  <Link to={`/crm/leads/${lead.id}`} className="col-span-2 truncate text-start text-[14px] font-medium text-ink-900 hover:text-brand-600">{lead.full_name}</Link>
+                  <div className="ltr-content col-span-1 text-[11.5px] leading-tight text-ink-500 break-all" title={lead.phone}>{lead.phone}</div>
+                  <div className="col-span-1 truncate text-[13px] text-ink-600" title={lead.teacher_name || ""}>{lead.teacher_name || "—"}</div>
                   <div className="col-span-3">{canManage ? <AttendanceDropdown leadId={lead.id} /> : <Badge tone={STAGE_TONE[lead.stage]} dot={false}>{STAGE_LABEL[lead.stage]}</Badge>}</div>
+                  <div className="col-span-2"><InlineNoteEdit leadId={lead.id} currentNote={lead.notes} /></div>
                   <div className="col-span-2">{canManage ? <ReportButton leadId={lead.id} stage={lead.stage} attended={lead.attended} /> : null}</div>
-                  <div className="col-span-3"><InlineNoteEdit leadId={lead.id} currentNote={lead.notes} /></div>
                 </div>
               ))}
             </div>

@@ -91,7 +91,7 @@ function StatusDropdown({ leadId, currentStage }: { leadId: string; currentStage
         if (value === "contacted" || value === "not_answered") logCallAttempt.mutate({ outcome: value });
       }}
       disabled={logCallAttempt.isPending}
-      className={`w-full cursor-pointer rounded-lg border-2 px-2.5 py-2 text-center text-sm font-semibold outline-none transition-colors ${colorClass}`}
+      className={`w-full cursor-pointer whitespace-nowrap rounded-lg border-2 px-2 py-2 text-center text-[12.5px] font-semibold outline-none transition-colors ${colorClass}`}
     >
       <option value="new" disabled={currentStage !== "new"}>جديد</option>
       <option value="contacted">تم الاتصال</option>
@@ -115,9 +115,9 @@ function BookingStatusDropdown({ leadId }: { leadId: string }) {
           else if (value === "booked") setShowSchedule(true);
         }}
         disabled={notInterested.isPending}
-        className="w-full cursor-pointer rounded-lg border-2 px-2.5 py-2 text-sm font-semibold outline-none transition-colors bg-ink-50 border-ink-200 text-ink-700 hover:border-brand-300 focus:border-brand-400 focus:ring-1 focus:ring-brand-400"
+        className="w-full cursor-pointer whitespace-nowrap rounded-lg border-2 px-2 py-2 text-[12.5px] font-semibold outline-none transition-colors bg-ink-50 border-ink-200 text-ink-700 hover:border-brand-300 focus:border-brand-400 focus:ring-1 focus:ring-brand-400"
       >
-        <option value="">تحديد حالة الحجز...</option>
+        <option value="">تحديد الحجز...</option>
         <option value="not_interested">غير مهتم</option>
         <option value="booked">تم الحجز</option>
       </select>
@@ -173,11 +173,11 @@ function InlineNoteEdit({ leadId, currentNote }: { leadId: string; currentNote: 
     return (
       <input autoFocus value={value} onChange={(e) => setValue(e.target.value)} onBlur={save}
         onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") { setValue(currentNote ?? ""); setEditing(false); } }}
-        className="w-full rounded-lg border border-brand-300 bg-white px-2.5 py-2 text-sm text-ink-800 outline-none ring-1 ring-brand-400" />
+        className="w-full rounded-lg border border-brand-300 bg-white px-2.5 py-2 text-[13px] text-ink-800 outline-none ring-1 ring-brand-400" />
     );
   }
   return (
-    <button onClick={() => setEditing(true)} className="w-full truncate rounded-lg px-2.5 py-2 text-start text-sm text-ink-600 transition-colors hover:bg-ink-100" title="اضغط للتعديل">
+    <button onClick={() => setEditing(true)} className="w-full whitespace-normal break-words rounded-lg px-2.5 py-2 text-start text-[13px] leading-snug text-ink-600 transition-colors hover:bg-ink-100" title="اضغط للتعديل">
       {currentNote || <span className="text-ink-300">إضافة ملاحظة...</span>}
     </button>
   );
@@ -187,7 +187,7 @@ function InlineAssignSelect({ leadId, currentAssignedTo, users }: { leadId: stri
   const reassign = useReassignLead(leadId);
   return (
     <select value={currentAssignedTo ?? ""} onChange={(e) => e.target.value && reassign.mutate(e.target.value)} disabled={reassign.isPending}
-      className="w-full cursor-pointer rounded-lg border border-ink-200 bg-white px-2.5 py-2 text-sm text-ink-700 outline-none transition-colors hover:border-brand-300 focus:border-brand-400 focus:ring-1 focus:ring-brand-400">
+      className="w-full cursor-pointer truncate rounded-lg border border-ink-200 bg-white px-1.5 py-2 text-[13px] text-ink-700 outline-none transition-colors hover:border-brand-300 focus:border-brand-400 focus:ring-1 focus:ring-brand-400">
       <option value="">بدون إسناد</option>
       {users.map((u) => <option key={u.id} value={u.id}>{userLabel(u)}</option>)}
     </select>
@@ -304,28 +304,29 @@ export function LeadsListPage() {
           <EmptyState icon={Users} title="لا يوجد عملاء محتملون بمطابقة هذا البحث" />
         ) : (
           <>
-            <div className={`grid grid-cols-16 gap-3 border-b border-ink-100 bg-ink-50/70 px-6 py-3 text-center text-[13px] font-semibold text-ink-500 ${isFetching ? "opacity-60" : ""}`}>
+            <div className={`grid grid-cols-12 gap-2 border-b border-ink-100 bg-ink-50/70 px-4 py-3 text-center text-[13px] font-semibold text-ink-500 ${isFetching ? "opacity-60" : ""}`}>
               {canViewAll && <div className="col-span-1 flex items-center justify-center"><input type="checkbox" checked={allOnPageSelected} onChange={toggleSelectAll} className="rounded" /></div>}
-              <div className={`${canViewAll ? "col-span-2" : "col-span-3"} text-start`}>الاسم</div>
+              <div className={`${canViewAll ? "col-span-2" : "col-span-2"} text-start`}>الاسم</div>
               <div className="col-span-2">الهاتف</div>
               <div className="col-span-2">الحالة</div>
-              <div className="col-span-3">حالة الحجز</div>
-              <div className="col-span-1">المصدر</div>
-              <div className="col-span-3">ملاحظات</div>
-              <div className="col-span-2">المسؤول</div>
+              <div className="col-span-2">حالة الحجز</div>
+              <div className="col-span-2">ملاحظات</div>
+              <div className="col-span-1">المسؤول</div>
             </div>
             <div className="divide-y divide-ink-100">
               {data.items.map((lead) => (
-                <div key={lead.id} className="grid grid-cols-16 items-center gap-3 px-6 py-3 text-center text-sm transition-colors hover:bg-ink-50/70">
+                <div key={lead.id} className="grid grid-cols-12 items-center gap-2 px-4 py-2.5 text-center text-sm transition-colors hover:bg-ink-50/70">
                   {canViewAll && <div className="col-span-1 flex items-center justify-center"><input type="checkbox" checked={selectedIds.has(lead.id)} onChange={() => toggleSelect(lead.id)} className="rounded" /></div>}
-                  <Link to={`/crm/leads/${lead.id}`} className={`${canViewAll ? "col-span-2" : "col-span-3"} truncate text-start text-[15px] font-medium text-ink-900 hover:text-brand-600`}>{lead.full_name}</Link>
-                  <div className="ltr-content col-span-2 truncate text-center text-sm text-ink-600" title={lead.phone}>{lead.phone}</div>
+                  <div className={`${canViewAll ? "col-span-2" : "col-span-2"} flex items-center gap-1.5 overflow-hidden text-start`}>
+                    <div className="shrink-0"><SourceIconPicker leadId={lead.id} currentSource={lead.source} /></div>
+                    <Link to={`/crm/leads/${lead.id}`} className="truncate text-[14px] font-medium text-ink-900 hover:text-brand-600">{lead.full_name}</Link>
+                  </div>
+                  <div className="ltr-content col-span-2 text-center text-[13px] leading-tight text-ink-600 break-all" title={lead.phone}>{lead.phone}</div>
                   <div className="col-span-2"><StatusDropdown leadId={lead.id} currentStage={lead.stage} /></div>
-                  <div className="col-span-3"><BookingStatusDropdown leadId={lead.id} /></div>
-                  <div className="col-span-1 flex justify-center"><SourceIconPicker leadId={lead.id} currentSource={lead.source} /></div>
-                  <div className="col-span-3"><InlineNoteEdit leadId={lead.id} currentNote={lead.notes} /></div>
-                  <div className="col-span-2">
-                    {canViewAll ? <InlineAssignSelect leadId={lead.id} currentAssignedTo={lead.assigned_to} users={users ?? []} /> : <span className="truncate text-xs text-ink-400">{lead.assigned_to_name || "—"}</span>}
+                  <div className="col-span-2"><BookingStatusDropdown leadId={lead.id} /></div>
+                  <div className="col-span-2"><InlineNoteEdit leadId={lead.id} currentNote={lead.notes} /></div>
+                  <div className="col-span-1">
+                    {canViewAll ? <InlineAssignSelect leadId={lead.id} currentAssignedTo={lead.assigned_to} users={users ?? []} /> : <span className="block truncate text-xs text-ink-400" title={lead.assigned_to_name || ""}>{lead.assigned_to_name || "—"}</span>}
                   </div>
                 </div>
               ))}
