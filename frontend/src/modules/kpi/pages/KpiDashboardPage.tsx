@@ -40,7 +40,7 @@ function Delta({ current, previous, lowerIsBetter = false }: { current: number |
   return (
     <span className={"inline-flex items-center gap-0.5 text-xs font-medium " + (good ? "text-success-600" : "text-danger-600")}>
       <Icon size={13} />
-      <span className="ltr-content">{Math.abs(pct).toFixed(0)}%</span>
+      <span className="ltr-content">{Math.abs(pct).toLocaleString("ar-SA", { maximumFractionDigits: 0 })}٪</span>
       <span className="text-ink-400">عن النصف السابق</span>
     </span>
   );
@@ -62,7 +62,7 @@ function KpiCard({
 }
 
 const num = (v: string | number | null | undefined): number | null => (v === null || v === undefined ? null : Number(v));
-const pct = (v: number | null) => (v === null ? "—" : `${v.toFixed(1)}٪`);
+const pct = (v: number | null) => (v === null ? "—" : `${v.toLocaleString("ar-SA", { maximumFractionDigits: 1 })}٪`);
 
 function PhaseMap({ phases }: { phases: Phases }) {
   const canManage = usePermission(PERMISSIONS.DASHBOARDS_MANAGE);
@@ -101,7 +101,7 @@ function PhaseMap({ phases }: { phases: Phases }) {
       icon: Rocket,
       title: "الضخ الفعلي",
       desc: "يبدأ مع إجازة الصيف",
-      range: phases.full_launch_date ? `من ${phases.full_launch_date}` : "لم يُحدَّد تاريخ الانطلاق",
+      range: phases.full_launch_date ? `${phases.full_launch_date} ←` : "لم يُحدَّد تاريخ الانطلاق",
       active: phases.current_phase === "full_launch",
     },
   ];
@@ -237,7 +237,7 @@ function PlatformTable({ cur }: { cur: PeriodMetrics }) {
               <tr key={p.platform}>
                 <td className="py-3 font-medium text-ink-900">{PLATFORM_LABELS[p.platform]}</td>
                 <td className="ltr-content py-3 font-semibold text-ink-900">{formatSAR(p.spend)}</td>
-                <td className="ltr-content py-3 text-ink-600">{total > 0 ? `${((Number(p.spend) / total) * 100).toFixed(0)}٪` : "—"}</td>
+                <td className="ltr-content py-3 text-ink-600">{total > 0 ? pct((Number(p.spend) / total) * 100) : "—"}</td>
                 <td className="ltr-content py-3 text-ink-700">{formatNumber(p.leads)}</td>
                 <td className="ltr-content py-3 text-ink-700">{p.cost_per_lead ? formatSAR(p.cost_per_lead) : "—"}</td>
               </tr>
@@ -303,7 +303,7 @@ export function KpiDashboardPage() {
               current={num(cur.marketing.cac)} previous={num(prev.marketing.cac)} lowerIsBetter
             />
             <KpiCard
-              label="العائد على الإنفاق (ROAS)" value={cur.marketing.roas === null ? "—" : cur.marketing.roas.toFixed(2)}
+              label="العائد على الإنفاق (ROAS)" value={cur.marketing.roas === null ? "—" : cur.marketing.roas.toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               hint="الإيراد المحصَّل ÷ الإنفاق الإعلاني"
               current={cur.marketing.roas} previous={prev.marketing.roas}
             />

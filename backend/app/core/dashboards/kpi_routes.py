@@ -50,11 +50,11 @@ async def get_kpi_settings(
     return build_phases(await KpiService(db).get_settings())
 
 
-@router.put("/settings")
+@router.patch("/settings")
 async def update_kpi_settings(
     payload: KpiSettingsRequest,
     user: CurrentUser = Depends(require_permission(DASHBOARDS_MANAGE)),
     db: AsyncSession = Depends(get_db),
 ):
-    values = {k: (v.isoformat() if v else None) for k, v in payload.model_dump().items()}
+    values = {k: (v.isoformat() if v else None) for k, v in payload.model_dump(exclude_unset=True).items()}  # PATCH: untouched dates stay as they are
     return build_phases(await KpiService(db).update_settings(values))

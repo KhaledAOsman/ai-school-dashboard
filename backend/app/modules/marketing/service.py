@@ -200,7 +200,14 @@ def previous_period(year: int, half: int) -> tuple[int, int]:
 
 
 def _ratio(a: int | Decimal, b: int | Decimal) -> float | None:
-    return round(float(a) / float(b) * 100, 1) if b else None
+    """Percentage a/b, or None when undefined. A step can never convert more
+    than 100% of the previous one; a higher figure only means the two counts
+    come from different cohorts (e.g. subscriptions entered for people who
+    were never logged as leads), so we report no rate instead of a wrong one."""
+    if not b:
+        return None
+    value = float(a) / float(b) * 100
+    return round(value, 1) if value <= 100 else None
 
 
 class KpiService:

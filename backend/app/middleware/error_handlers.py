@@ -10,6 +10,7 @@ import traceback
 import uuid
 
 import structlog
+from fastapi.encoders import jsonable_encoder
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from fastapi.responses import JSONResponse
@@ -46,7 +47,10 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "error": {
                     "message": "Validation failed",
                     "status_code": 422,
-                    "details": exc.errors(),
+                    # errors() can carry non-JSON values in "ctx" (Decimal limits,
+                    # the raw ValueError from a validator) - encode them safely
+                    # instead of crashing into a 500.
+                    "details": jsonable_encoder(exc.errors(), custom_encoder={Exception: str}),
                 }
             },
         )

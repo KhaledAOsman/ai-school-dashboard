@@ -84,7 +84,7 @@ async def test_kpi_summary_cac_and_platforms(client, db_session):
 @pytest.mark.asyncio
 async def test_settings_and_permissions(client, db_session):
     h = await _admin_headers(client, db_session)
-    r = await client.put("/api/kpi-dashboard/settings", json={"project_start_date": "2026-04-01", "full_launch_date": "2026-10-01"}, headers=h)
+    r = await client.patch("/api/kpi-dashboard/settings", json={"project_start_date": "2026-04-01", "full_launch_date": "2026-10-01"}, headers=h)
     assert r.status_code == 200 and r.json()["configured"] is True
     assert r.json()["test_end_date"] == "2026-10-01"
     # no-permission user is rejected
@@ -99,3 +99,21 @@ async def test_user_without_permission_is_rejected(client, db_session):
     h = {"Authorization": f"Bearer {r.json()['access_token']}"}
     for path in ("/api/subscriptions", "/api/campaigns", "/api/kpi-dashboard/summary"):
         assert (await client.get(path, headers=h)).status_code == 403
+
+
+def test_ratio_never_exceeds_100():
+    from app.modules.marketing.service import _ratio
+    assert _ratio(5, 10) == 50.0
+    assert _ratio(10, 8) is None  # more subscribers than attendees: cohorts differ
+    assert _ratio(1, 0) is None
+
+
+@pytest.mark.asyncio
+async def test_patch_settings_keeps_untouched_date(client, db_session):
+    h = await _admin_headers(client, db_session)
+    await client.patch("/api/kpi-dashboard/settings", json={"project_start_date": "2026-04-01", "full_launch_date": "2026-10-01"}, headers=h)
+    r = await client.patch("/api/kpi-dashboard/settings", json={"project_start_date": "2026-05-01"}, headers=h)
+    assert r.json()["project_start_date"] == "2026-05-01"
+    assert r.json()["full_launch_date"] == "2026-10-01"  # not wiped by the partial update
+    r = await client.patch("/api/kpi-dashboard/settings", json={"full_launch_date": None}, headers=h)
+    assert r.json()["full_launch_date"] is None  # explicit null still clears it

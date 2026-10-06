@@ -59,5 +59,5 @@ export const kpiApi = {
   summary: async (period?: string): Promise<KpiSummary> =>
     (await api.get("/kpi-dashboard/summary", { params: period ? { period } : {} })).data,
   updateSettings: async (payload: { project_start_date: string | null; full_launch_date: string | null }): Promise<Phases> =>
-    (await api.put("/kpi-dashboard/settings", payload)).data,
+    (await api.patch("/kpi-dashboard/settings", payload)).data,
 };

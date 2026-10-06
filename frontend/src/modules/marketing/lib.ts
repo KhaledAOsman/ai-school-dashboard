@@ -27,7 +27,7 @@ export function apiErrorMessage(err: unknown, fallback = "حدث خطأ غير �
   if (!e) return fallback;
   if (e.status_code === 422 && Array.isArray(e.details) && e.details.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return "تأكد من صحة البيانات: " + e.details.map((d: any) => d.msg).join(" — ");
+    return "تأكد من صحة البيانات: " + e.details.map((d: any) => String(d.msg).replace(/^Value error, /, "")).join(" — ");
   }
   if (typeof e.message === "string") return e.message;
   if (Array.isArray(e.message?.errors)) return e.message.errors.join(" — ");
