@@ -191,7 +191,7 @@ export function ExpenseDetailPage() {
           <CardHeader>
             <CardTitle>{translate("ar", "expense_attachments")}</CardTitle>
             {canUpload && (
-              <label className="link-underline cursor-pointer text-[13px] font-medium text-brand-600">
+              <label className="link-underline cursor-pointer text-[14px] font-medium text-brand-600">
                 {translate("ar", "expense_upload_attachment")}
                 <input type="file" className="hidden" onChange={handleFileChange} accept=".pdf,.png,.jpg,.jpeg,.webp" />
               </label>

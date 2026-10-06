@@ -11,13 +11,13 @@ import { StatusBadge } from "@/modules/finance/components/StatusBadge";
 import { Card, CardHeader, CardTitle, CardSubtitle } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 
-const PIE_COLORS = ["#6d3af2", "#9f70ff", "#bea3ff", "#d9ccff", "#ff8a3d", "#ffcfa1", "#5a26d6", "#e7e0ff"];
+const PIE_COLORS = ["#6d3af2", "#9f70ff", "#bea3ff", "#d9ccff", "#ff8a3d", "#ffcfa1", "#5a26d6", "#ebe4ff"];
 
 function SummaryCard({ label, value, trend }: { label: string; value: string; trend?: string }) {
   return (
     <Card className="relative overflow-hidden p-5">
       <div className="pointer-events-none absolute -left-6 -top-6 h-24 w-24 rounded-full bg-brand-50/70 blur-2xl" />
-      <p className="relative text-[13px] font-medium text-ink-500">{label}</p>
+      <p className="relative text-[14px] font-medium text-ink-500">{label}</p>
       <p className="ltr-content relative mt-2 text-[28px] font-bold tracking-tight text-ink-900">{value}</p>
       {trend && (
         <div className="relative mt-2 flex items-center gap-1 text-xs font-medium text-success-600">
@@ -65,7 +65,7 @@ export function FinanceOverviewPage() {
             <CardTitle>{translate("ar", "dashboard_category_breakdown")}</CardTitle>
             <CardSubtitle>حسب إجمالي المصروفات المعتمدة والمعلّقة</CardSubtitle>
           </div>
-          <Link to="/finance/chart-of-accounts" className="link-underline flex items-center gap-1 text-[13px] font-medium text-brand-600">
+          <Link to="/finance/chart-of-accounts" className="link-underline flex items-center gap-1 text-[14px] font-medium text-brand-600">
             <FolderTree size={14} />
             شجرة الحسابات
             <ArrowUpRight size={14} />
@@ -101,14 +101,14 @@ export function FinanceOverviewPage() {
                         className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-ink-50"
                       >
                         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
-                        <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-ink-800">{row.category_name}</span>
+                        <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-ink-800">{row.category_name}</span>
                         <div className="flex w-32 items-center gap-2">
                           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-ink-100">
                             <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
                           </div>
                           <span className="ltr-content w-9 shrink-0 text-xs text-ink-500">{pct.toFixed(0)}%</span>
                         </div>
-                        <span className="ltr-content w-24 shrink-0 text-left text-[13.5px] font-semibold text-ink-900">{formatSAR(row.total)}</span>
+                        <span className="ltr-content w-24 shrink-0 text-left text-[15px] font-semibold text-ink-900">{formatSAR(row.total)}</span>
                       </Link>
                     );
                   })}
@@ -127,7 +127,7 @@ export function FinanceOverviewPage() {
       <Card className="mt-5">
         <CardHeader>
           <CardTitle>{translate("ar", "dashboard_recent_expenses")}</CardTitle>
-          <Link to="/finance/expenses" className="link-underline flex items-center gap-1 text-[13px] font-medium text-brand-600">
+          <Link to="/finance/expenses" className="link-underline flex items-center gap-1 text-[14px] font-medium text-brand-600">
             عرض الكل
             <ArrowUpRight size={14} />
           </Link>
@@ -140,7 +140,7 @@ export function FinanceOverviewPage() {
               className="-mx-2 flex items-center justify-between rounded-lg px-2 py-3 transition-colors hover:bg-ink-50"
             >
               <div>
-                <p className="text-[13.5px] font-medium text-ink-900">{expense.vendor ?? expense.description ?? "—"}</p>
+                <p className="text-[15px] font-medium text-ink-900">{expense.vendor ?? expense.description ?? "—"}</p>
                 <p className="ltr-content text-xs text-ink-500">{expense.expense_date}</p>
               </div>
               <div className="flex items-center gap-3">

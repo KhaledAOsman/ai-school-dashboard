@@ -79,7 +79,7 @@ function BudgetLineCard({ line }: { line: BudgetLineWithSpend }) {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-[15px] font-semibold text-ink-900">{line.name}</h3>
+            <h3 className="text-[16px] font-semibold text-ink-900">{line.name}</h3>
             <Badge tone={STATUS_TONE[line.status]}>{STATUS_LABEL[line.status]}</Badge>
             <Badge tone="brand" dot={false}>{KIND_LABEL[line.kind]}</Badge>
             <Badge tone="neutral" dot={false}>{PERIOD_LABEL[line.period]}</Badge>

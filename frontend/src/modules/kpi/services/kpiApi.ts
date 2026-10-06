@@ -5,12 +5,15 @@ export interface FunnelCounts {
   leads: number;
   booked: number;
   attended: number;
+  not_attended: number;
+  pending_attendance: number;
   subscribers: number;
 }
 
 export interface FunnelRates {
   lead_to_booked: number | null;
   booked_to_attended: number | null;
+  booked_to_not_attended: number | null;
   attended_to_subscriber: number | null;
   overall: number | null;
 }
@@ -49,10 +52,28 @@ export interface Phases {
   configured: boolean;
 }
 
+export interface TestPhase {
+  configured: boolean;
+  start: string;
+  end_inclusive: string;
+  includes_cumulative: boolean;
+  targets: { subscribers: number; max_cac: number; min_conversion: number; min_attendance: number };
+  metrics: {
+    subscribers: number;
+    cac: string | null;
+    total_spend: string;
+    conversion: number | null;
+    attendance_rate: number | null;
+    attended: number;
+    booked: number;
+  };
+}
+
 export interface KpiSummary {
   current: PeriodMetrics;
   previous: PeriodMetrics;
   phases: Phases;
+  test_phase: TestPhase;
 }
 
 export const kpiApi = {

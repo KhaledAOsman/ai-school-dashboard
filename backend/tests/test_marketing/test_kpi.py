@@ -117,3 +117,31 @@ async def test_patch_settings_keeps_untouched_date(client, db_session):
     assert r.json()["full_launch_date"] == "2026-10-01"  # not wiped by the partial update
     r = await client.patch("/api/kpi-dashboard/settings", json={"full_launch_date": None}, headers=h)
     assert r.json()["full_launch_date"] is None  # explicit null still clears it
+
+
+def test_funnel_rates_include_no_show():
+    from app.modules.marketing.service import KpiService
+
+    rates = KpiService._funnel_rates(
+        {"leads": 40, "booked": 12, "attended": 8, "not_attended": 3, "pending_attendance": 1, "subscribers": 5}
+    )
+    assert rates["booked_to_attended"] == pytest_approx(66.7)
+    assert rates["booked_to_not_attended"] == 25.0
+
+
+def pytest_approx(v):
+    import pytest
+
+    return pytest.approx(v, abs=0.1)
+
+
+@pytest.mark.asyncio
+async def test_summary_has_test_phase_targets(client, db_session):
+    h = await _admin_headers(client, db_session)
+    r = await client.get("/api/kpi-dashboard/summary?period=2026-H2", headers=h)
+    assert r.status_code == 200
+    tp = r.json()["test_phase"]
+    assert tp["targets"] == {"subscribers": 100, "max_cac": 1500, "min_conversion": 15, "min_attendance": 60}
+    for k in ("subscribers", "cac", "conversion", "attendance_rate", "attended", "booked"):
+        assert k in tp["metrics"]
+    assert tp["configured"] is False

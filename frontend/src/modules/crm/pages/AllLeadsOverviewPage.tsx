@@ -56,7 +56,7 @@ export function AllLeadsOverviewPage() {
           <EmptyState icon={Users} title="لا يوجد عملاء بمطابقة هذا البحث" />
         ) : (
           <>
-            <div className="grid grid-cols-12 gap-4 border-b border-ink-100 bg-ink-50/70 px-6 py-3 text-center text-[13px] font-semibold text-ink-500">
+            <div className="grid grid-cols-12 gap-4 border-b border-ink-100 bg-ink-50/70 px-6 py-3 text-center text-[14px] font-semibold text-ink-500">
               <div className="col-span-3 text-start">الاسم</div>
               <div className="col-span-2">الهاتف</div>
               <div className="col-span-2">الحالة</div>

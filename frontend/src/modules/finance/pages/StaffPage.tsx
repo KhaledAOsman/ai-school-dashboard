@@ -62,7 +62,7 @@ function DepartmentSection({
     <Card className="p-5">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-[15px] font-semibold text-ink-900">{departmentName}</h3>
+          <h3 className="text-[16px] font-semibold text-ink-900">{departmentName}</h3>
           <p className="mt-0.5 text-xs text-ink-500">{memberCount} فرد</p>
         </div>
         <div className="text-left">

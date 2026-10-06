@@ -3,7 +3,7 @@ import clsx from "clsx";
 import { ChevronDown } from "lucide-react";
 
 const fieldBase =
-  "w-full rounded-lg bg-white px-3.5 py-2.5 text-sm text-ink-900 placeholder:text-ink-400 shadow-xs ring-1 ring-inset ring-ink-200 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-ink-50 disabled:text-ink-400 disabled:ring-ink-150";
+  "w-full rounded-xl bg-white px-4 py-3 text-[15px] text-ink-900 placeholder:text-ink-500/70 ring-1 ring-inset ring-ink-400 transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-brand-600 disabled:bg-ink-50 disabled:text-ink-400 disabled:ring-ink-150";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   ({ className, ...props }, ref) => (
@@ -36,7 +36,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
 Textarea.displayName = "Textarea";
 
 export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) {
-  return <label className={clsx("mb-1.5 block text-[13px] font-medium text-ink-700", className)} {...props} />;
+  return <label className={clsx("mb-2 block text-[14px] font-semibold text-ink-900", className)} {...props} />;
 }
 
 export function FormField({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
@@ -44,7 +44,7 @@ export function FormField({ label, hint, children }: { label: string; hint?: str
     <div>
       <Label>{label}</Label>
       {children}
-      {hint && <p className="mt-1 text-xs text-ink-400">{hint}</p>}
+      {hint && <p className="mt-1.5 text-[13px] text-ink-600">{hint}</p>}
     </div>
   );
 }

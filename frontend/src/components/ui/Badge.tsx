@@ -4,7 +4,7 @@ type BadgeTone = "neutral" | "brand" | "accent" | "success" | "warning" | "dange
 
 const toneStyles: Record<BadgeTone, string> = {
   neutral: "bg-ink-100 text-ink-700 ring-1 ring-inset ring-ink-200/70",
-  brand: "bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-100",
+  brand: "bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-200/70",
   accent: "bg-accent-50 text-accent-700 ring-1 ring-inset ring-accent-100",
   success: "bg-success-50 text-success-700 ring-1 ring-inset ring-success-100",
   warning: "bg-warning-50 text-warning-700 ring-1 ring-inset ring-warning-100",
@@ -34,7 +34,7 @@ export function Badge({
   return (
     <span
       className={clsx(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium",
+        "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-semibold",
         toneStyles[tone],
         className
       )}

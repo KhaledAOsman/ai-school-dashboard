@@ -48,17 +48,17 @@ function NavItem({ to, icon: Icon, label, indented = false }: { to: string; icon
       to={to}
       className={({ isActive }) =>
         clsx(
-          "group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[14px] font-medium transition-all duration-150",
-          indented && "py-2 text-[13px]",
-          isActive ? "bg-brand-50 font-semibold text-brand-800" : "text-ink-700 hover:bg-ink-50 hover:text-ink-900"
+          "group relative flex items-center gap-3 rounded-full px-4 py-3 text-[16px] font-medium transition-all duration-150",
+          indented && "py-2.5 text-[15px]",
+          isActive ? "bg-brand-100 font-semibold text-brand-900" : "text-ink-700 hover:bg-ink-50 hover:text-ink-900"
         )
       }
     >
       {({ isActive }) => (
         <>
-          {isActive && <span className="absolute right-0 top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-brand-600" />}
+          
           <Icon
-            size={indented ? 16 : 18}
+            size={indented ? 18 : 21}
             strokeWidth={isActive ? 2.25 : 2}
             className={isActive ? "text-brand-600" : "text-ink-500 transition-colors group-hover:text-ink-700"}
           />
@@ -71,7 +71,7 @@ function NavItem({ to, icon: Icon, label, indented = false }: { to: string; icon
 
 function NavSectionLabel({ children }: { children: ReactNode }) {
   return (
-    <p className="px-3.5 pb-2 pt-6 text-[11.5px] font-bold tracking-wide text-ink-500 first:pt-2">
+    <p className="px-3.5 pb-2 pt-6 text-[13px] font-bold tracking-wide text-ink-500 first:pt-2">
       {children}
     </p>
   );
@@ -102,13 +102,13 @@ function NavGroup({
       <button
         onClick={onToggle}
         className={clsx(
-          "group relative flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-[14px] font-medium transition-all duration-150",
-          isActive && !isOpen ? "bg-brand-50 font-semibold text-brand-800" : "text-ink-700 hover:bg-ink-50 hover:text-ink-900"
+          "group relative flex w-full items-center gap-3 rounded-full px-4 py-3 text-[16px] font-medium transition-all duration-150",
+          isActive && !isOpen ? "bg-brand-100 font-semibold text-brand-900" : "text-ink-700 hover:bg-ink-50 hover:text-ink-900"
         )}
       >
-        {isActive && !isOpen && <span className="absolute right-0 top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-brand-600" />}
+        
         <Icon
-          size={18}
+          size={21}
           strokeWidth={isActive ? 2.25 : 2}
           className={isActive && !isOpen ? "text-brand-600" : "text-ink-500 transition-colors group-hover:text-ink-700"}
         />
@@ -188,10 +188,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
     .toUpperCase();
 
   return (
-    <div className="flex min-h-screen bg-[#f4f6fb]" dir="rtl">
-      <aside className="sticky top-0 flex h-screen w-[280px] shrink-0 flex-col border-e border-[#e6e9f2] bg-white">
-        <div className="flex h-[72px] items-center border-b border-[#eef0f6] px-6">
-          <img src="/logo.png" alt="AiSchool" className="h-8 w-auto object-contain" />
+    <div className="flex min-h-screen bg-[#f1f3f9]" dir="rtl">
+      <aside className="sticky top-0 flex h-screen w-[300px] shrink-0 flex-col border-e border-[#dcdfeb] bg-white">
+        <div className="flex h-[80px] items-center border-b border-ink-100 px-6">
+          <img src="/logo.png" alt="AiSchool" className="h-10 w-auto object-contain" />
         </div>
 
         <nav className="thin-scrollbar flex-1 overflow-y-auto px-3 pb-4">
@@ -267,17 +267,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
           )}
         </nav>
 
-        <div className="border-t border-[#eef0f6] p-3">
+        <div className="border-t border-ink-100 p-3">
           <button
             onClick={handleLogout}
             className="group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-start transition-colors hover:bg-ink-100"
           >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-[13px] font-semibold text-white shadow-sm">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-600 to-brand-800 text-[14px] font-semibold text-white shadow-sm">
               {initials}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[13px] font-semibold text-ink-800">{user?.full_name}</span>
-              <span className="block truncate text-xs text-ink-600">{user?.email}</span>
+              <span className="block truncate text-[15px] font-bold text-ink-900">{user?.full_name}</span>
+              <span className="block truncate text-[13px] text-ink-600">{user?.email}</span>
             </span>
             <LogOut size={15} className="shrink-0 text-ink-400 transition-colors group-hover:text-danger-500" />
           </button>

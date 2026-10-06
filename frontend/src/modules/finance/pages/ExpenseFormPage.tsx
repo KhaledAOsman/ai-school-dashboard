@@ -133,7 +133,7 @@ export function ExpenseFormPage() {
           </FormField>
 
           {selectedBudgetLine && (
-            <div className="flex items-center gap-2 rounded-lg bg-brand-50 px-3.5 py-2.5 text-xs text-brand-700 ring-1 ring-inset ring-brand-100">
+            <div className="flex items-center gap-2 rounded-lg bg-brand-50 px-3.5 py-2.5 text-xs text-brand-700 ring-1 ring-inset ring-brand-200/70">
               <Wallet size={14} className="shrink-0" />
               هذا المصروف سيُخصم من ميزانية "{selectedBudgetLine.name}" — المتبقي حاليًا {formatSAR(selectedBudgetLine.remaining_amount)}
             </div>

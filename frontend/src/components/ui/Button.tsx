@@ -12,23 +12,24 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantStyles: Record<Variant, string> = {
   primary:
-    "bg-brand-600 text-white shadow-sm hover:bg-brand-700 hover:shadow-md active:bg-brand-800 active:scale-[0.98] disabled:bg-ink-200 disabled:text-ink-400 disabled:shadow-none disabled:active:scale-100",
+    "bg-brand-600 text-white hover:bg-brand-700 hover:shadow-md active:bg-brand-800 disabled:bg-ink-200 disabled:text-ink-400 disabled:shadow-none",
   secondary:
-    "bg-brand-50 text-brand-700 hover:bg-brand-100 active:bg-brand-200 active:scale-[0.98] disabled:bg-ink-100 disabled:text-ink-400",
+    "bg-brand-100 text-brand-900 hover:bg-brand-200 active:bg-brand-200 disabled:bg-ink-100 disabled:text-ink-400",
   outline:
-    "bg-white text-ink-700 shadow-xs ring-1 ring-inset ring-ink-200 hover:bg-ink-50 hover:ring-ink-300 active:bg-ink-100 active:scale-[0.98] disabled:text-ink-300",
+    "bg-transparent text-brand-600 ring-1 ring-inset ring-brand-600 hover:bg-brand-50 active:bg-brand-100 disabled:text-ink-300 disabled:ring-ink-200",
   ghost:
-    "bg-transparent text-ink-600 hover:bg-ink-100 active:bg-ink-200 active:scale-[0.98] disabled:text-ink-300",
+    "bg-transparent text-ink-700 hover:bg-ink-100 active:bg-ink-200 disabled:text-ink-300",
   danger:
-    "bg-danger-500 text-white shadow-sm hover:bg-danger-600 hover:shadow-md active:bg-danger-700 active:scale-[0.98] disabled:bg-ink-200 disabled:text-ink-400 disabled:shadow-none",
+    "bg-danger-600 text-white hover:bg-danger-700 hover:shadow-md active:bg-danger-700 disabled:bg-ink-200 disabled:text-ink-400 disabled:shadow-none",
   success:
-    "bg-success-500 text-white shadow-sm hover:bg-success-600 hover:shadow-md active:bg-success-700 active:scale-[0.98] disabled:bg-ink-200 disabled:text-ink-400 disabled:shadow-none",
+    "bg-success-600 text-white hover:bg-success-700 hover:shadow-md active:bg-success-700 disabled:bg-ink-200 disabled:text-ink-400 disabled:shadow-none",
 };
 
+// Pill buttons, 14/20 semibold with 0.1px tracking (SaasAble / Material 3 label style).
 const sizeStyles: Record<Size, string> = {
-  sm: "text-xs px-3 py-1.5 gap-1.5 rounded-lg",
-  md: "text-sm px-4 py-2.5 gap-2 rounded-lg",
-  lg: "text-[15px] px-5 py-3 gap-2 rounded-xl",
+  sm: "h-10 px-4 text-[14px] gap-2 rounded-full",
+  md: "h-11 px-6 text-[15px] gap-2 rounded-full",
+  lg: "h-14 px-8 text-[16px] gap-2 rounded-full",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -38,7 +39,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || isLoading}
         className={clsx(
-          "inline-flex items-center justify-center font-medium transition-all duration-150 ease-out-expo focus:outline-none disabled:cursor-not-allowed",
+          "inline-flex items-center justify-center font-semibold tracking-[0.1px] transition-all duration-150 ease-out-expo focus:outline-none disabled:cursor-not-allowed",
           variantStyles[variant],
           sizeStyles[size],
           className

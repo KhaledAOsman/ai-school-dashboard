@@ -175,7 +175,7 @@ export function CRMTeachersPage() {
           {(teachers ?? []).map((t) => (
             <Card key={t.id} className="p-5">
               <div className="flex items-center justify-between">
-                <h3 className="text-[15px] font-semibold text-ink-900">{t.full_name}</h3>
+                <h3 className="text-[16px] font-semibold text-ink-900">{t.full_name}</h3>
                 {canManage && <AddSlotInline teacherId={t.id} />}
               </div>
               <div className="mt-2.5">

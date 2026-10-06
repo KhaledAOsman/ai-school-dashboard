@@ -39,17 +39,17 @@ export default {
         // rather than flat/generic Bootstrap-style grays.
         ink: {
           25: "#fcfcfd",
-          50: "#f8f9fc",
-          100: "#eef0f6",
-          200: "#dfe2ec",
-          300: "#c6cadb",
-          400: "#8087a8",
+          50: "#f6f7fb",
+          100: "#eceef5",
+          200: "#dcdfeb",
+          300: "#c3c8da",
+          400: "#9399b5",
           500: "#555b7a",
           600: "#40455f",
           700: "#2d3149",
           800: "#1d2034",
           900: "#10121f",
-          950: "#0c0d16",
+          950: "#0a0b14",
         },
         success: {
           50: "#eefcf4",
@@ -76,28 +76,37 @@ export default {
       fontFamily: {
         // Brand typeface: DIN Next W1G (Latin + digits, self-hosted from
         // /public/fonts). It has no Arabic glyphs, so Arabic text falls back
-        // to IBM Plex Sans Arabic, the closest geometric match.
+        // to Tajawal, a DIN-like Arabic face.
         sans: [
           '"DIN Next W1G"',
-          '"IBM Plex Sans Arabic"',
+          '"Tajawal"',
           '"Segoe UI"',
           "system-ui",
           "sans-serif",
         ],
       },
+      // Larger, clearer type scale (SaasAble-style): body 15px, labels 14px.
       fontSize: {
-        "2xs": ["0.6875rem", { lineHeight: "1rem" }],
+        "2xs": ["0.75rem", { lineHeight: "1.1rem" }],
+        xs: ["0.8125rem", { lineHeight: "1.2rem" }],
+        sm: ["0.9375rem", { lineHeight: "1.45rem" }],
+        base: ["1rem", { lineHeight: "1.6rem" }],
+        lg: ["1.125rem", { lineHeight: "1.7rem" }],
+        xl: ["1.25rem", { lineHeight: "1.8rem" }],
+        "2xl": ["1.625rem", { lineHeight: "2.1rem" }],
+        "3xl": ["2rem", { lineHeight: "2.5rem" }],
       },
       boxShadow: {
         // Multi-layer, low-opacity elevation system - soft and cool-toned,
         // tuned for a light UI (each tier stacks a tight + a diffuse shadow).
-        xs: "0 1px 2px 0 rgba(23,25,41,0.04)",
-        sm: "0 1px 3px 0 rgba(23,25,41,0.06), 0 1px 2px -1px rgba(23,25,41,0.05)",
-        md: "0 4px 8px -2px rgba(23,25,41,0.07), 0 2px 4px -2px rgba(23,25,41,0.05)",
-        lg: "0 12px 20px -6px rgba(23,25,41,0.10), 0 4px 6px -4px rgba(23,25,41,0.06)",
-        xl: "0 24px 40px -8px rgba(23,25,41,0.14), 0 8px 16px -8px rgba(23,25,41,0.08)",
-        "glow-brand": "0 0 0 4px rgba(109,58,242,0.12)",
-        "inner-hairline": "inset 0 0 0 1px rgba(23,25,41,0.06)",
+        xs: "0 1px 2px 0 rgba(29,27,32,0.04)",
+        sm: "0 1px 3px 0 rgba(29,27,32,0.06), 0 1px 2px -1px rgba(29,27,32,0.05)",
+        md: "0 4px 8px -2px rgba(29,27,32,0.07), 0 2px 4px -2px rgba(29,27,32,0.05)",
+        lg: "0 12px 20px -6px rgba(29,27,32,0.10), 0 4px 6px -4px rgba(29,27,32,0.06)",
+        xl: "0 24px 40px -8px rgba(29,27,32,0.14), 0 8px 16px -8px rgba(29,27,32,0.08)",
+        "glow-brand": "0 0 0 4px rgba(109,58,242,0.14)",
+        "card": "0 1px 2px rgba(16,18,31,0.05), 0 4px 12px -4px rgba(16,18,31,0.06)",
+        "inner-hairline": "inset 0 0 0 1px rgba(29,27,32,0.06)",
       },
       borderRadius: {
         xl2: "1rem",
@@ -118,9 +127,9 @@ export default {
         "scale-in": "scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
       },
       backgroundImage: {
-        "brand-gradient": "linear-gradient(135deg, #6d3af2 0%, #8341f7 60%, #9f70ff 100%)",
+        "brand-gradient": "linear-gradient(135deg, #6d3af2 0%, #5a26d6 100%)",
         "mesh-glow":
-          "radial-gradient(ellipse 80% 50% at 20% -10%, rgba(109,58,242,0.15), transparent), radial-gradient(ellipse 60% 50% at 100% 10%, rgba(255,138,61,0.10), transparent)",
+          "radial-gradient(ellipse 80% 50% at 20% -10%, rgba(109,58,242,0.12), transparent), radial-gradient(ellipse 60% 50% at 100% 10%, rgba(255,138,61,0.10), transparent)",
       },
     },
   },

@@ -178,7 +178,7 @@ export function LeadImportPanel({ onDone }: { onDone: () => void }) {
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileChange} />
 
             <div>
-              <div className="mb-1.5 flex items-center gap-1.5 text-[13px] font-medium text-ink-700">
+              <div className="mb-1.5 flex items-center gap-1.5 text-[14px] font-medium text-ink-700">
                 <ClipboardPaste size={14} />
                 أو الصق مباشرة من جوجل شيت / إكسل
               </div>

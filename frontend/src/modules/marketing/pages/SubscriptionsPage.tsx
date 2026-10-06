@@ -32,7 +32,7 @@ const EMPTY: FormState = { full_name: "", phone: "", amount_paid: "", discount_a
 function SummaryTile({ label, value }: { label: string; value: string }) {
   return (
     <Card className="p-5">
-      <p className="text-[13px] font-medium text-ink-500">{label}</p>
+      <p className="text-[14px] font-medium text-ink-500">{label}</p>
       <p className="ltr-content mt-2 text-[24px] font-bold tracking-tight text-ink-900">{value}</p>
     </Card>
   );

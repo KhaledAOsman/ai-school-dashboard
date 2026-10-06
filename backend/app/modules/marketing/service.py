@@ -199,6 +199,15 @@ def previous_period(year: int, half: int) -> tuple[int, int]:
     return (year, 1) if half == 2 else (year - 1, 2)
 
 
+# Management targets for the 6-month test phase.
+TEST_PHASE_TARGETS = {
+    "subscribers": 100,        # customers (paid subscribers) to reach
+    "max_cac": 1500,           # acquisition cost per customer must stay below (SAR)
+    "min_conversion": 15,      # % of those who ATTENDED the lecture that subscribe
+    "min_attendance": 60,      # % of booked leads that attend the lecture
+}
+
+
 def _ratio(a: int | Decimal, b: int | Decimal) -> float | None:
     """Percentage a/b, or None when undefined. A step can never convert more
     than 100% of the previous one; a higher figure only means the two counts
@@ -233,6 +242,12 @@ class KpiService:
 
     async def _period_metrics(self, year: int, half: int) -> dict:
         start, end = period_bounds(year, half)
+        data = await self._range_metrics(start, end)
+        data.update({"year": year, "half": half, "period": f"{year}-H{half}"})
+        return data
+
+    async def _range_metrics(self, start: date, end: date, include_undated: bool | None = None) -> dict:
+        """Funnel / revenue / marketing metrics for [start, end)."""
         start_dt = datetime(start.year, start.month, start.day, tzinfo=timezone.utc)
         end_dt = datetime(end.year, end.month, end.day, tzinfo=timezone.utc)
 
@@ -249,6 +264,12 @@ class KpiService:
         attended = (
             await self.db.execute(select(func.count(Lead.id)).where(*in_period, Lead.attended.is_(True)))
         ).scalar_one()
+        # attended=False is an explicit "did not attend" record; NULL on a
+        # booked lead means attendance was not recorded yet (or postponed).
+        not_attended = (
+            await self.db.execute(select(func.count(Lead.id)).where(*in_period, Lead.attended.is_(False)))
+        ).scalar_one()
+        pending_attendance = max(booked - attended - not_attended, 0)
 
         # ---- Subscribers & revenue
         sub_row = (
@@ -266,7 +287,7 @@ class KpiService:
         # overlap; undated (lifetime) campaigns belong to the CURRENT half
         # only - we never guess a historical split.
         today = date.today()
-        is_current = start <= today < end
+        is_current = (start <= today < end) if include_undated is None else include_undated
         campaigns = (await self.db.execute(select(AdCampaign))).scalars().all()
         used, cumulative = [], False
         for c in campaigns:
@@ -284,12 +305,16 @@ class KpiService:
         reported_leads = sum(p.leads for p in platforms)
 
         return {
-            "year": year,
-            "half": half,
-            "period": f"{year}-H{half}",
             "start": start,
             "end_inclusive": date.fromordinal(end.toordinal() - 1),
-            "funnel": {"leads": leads, "booked": booked, "attended": attended, "subscribers": subscribers},
+            "funnel": {
+                "leads": leads,
+                "booked": booked,
+                "attended": attended,
+                "not_attended": not_attended,
+                "pending_attendance": pending_attendance,
+                "subscribers": subscribers,
+            },
             "revenue": {
                 "subscribers": subscribers,
                 "total_paid": revenue,
@@ -313,6 +338,7 @@ class KpiService:
         return {
             "lead_to_booked": _ratio(f["booked"], f["leads"]),
             "booked_to_attended": _ratio(f["attended"], f["booked"]),
+            "booked_to_not_attended": _ratio(f["not_attended"], f["booked"]),
             "attended_to_subscriber": _ratio(f["subscribers"], f["attended"]),
             "overall": _ratio(f["subscribers"], f["leads"]),
         }
@@ -326,10 +352,41 @@ class KpiService:
         previous["funnel_rates"] = self._funnel_rates(previous["funnel"])
 
         settings = await self.get_settings()
+        phases = build_phases(settings)
         return {
             "current": current,
             "previous": previous,
-            "phases": build_phases(settings),
+            "phases": phases,
+            "test_phase": await self._test_phase(phases, (year, half)),
+        }
+
+    async def _test_phase(self, phases: dict, selected: tuple[int, int]) -> dict:
+        """Cumulative results over the whole test phase vs. management targets.
+        Uses project_start_date .. +6 months; when the start date is not set
+        yet it falls back to the selected half-year and says so."""
+        start, end = phases["project_start_date"], phases["test_end_date"]
+        configured = bool(start and end)
+        if not configured:
+            start, end = period_bounds(*selected)
+        today = date.today()
+        m = await self._range_metrics(start, end, include_undated=start <= today)
+        rates = self._funnel_rates(m["funnel"])
+        f = m["funnel"]
+        return {
+            "configured": configured,
+            "start": start,
+            "end_inclusive": date.fromordinal(end.toordinal() - 1),
+            "includes_cumulative": m["marketing"]["includes_cumulative"],
+            "targets": TEST_PHASE_TARGETS,
+            "metrics": {
+                "subscribers": f["subscribers"],
+                "cac": m["marketing"]["cac"],
+                "total_spend": m["marketing"]["total_spend"],
+                "conversion": rates["attended_to_subscriber"],  # subscribers / attended
+                "attendance_rate": rates["booked_to_attended"],  # attended / booked
+                "attended": f["attended"],
+                "booked": f["booked"],
+            },
         }
 
 

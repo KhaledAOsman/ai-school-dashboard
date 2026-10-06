@@ -84,8 +84,8 @@ function InterestedRow({ lead, canManage }: {
 
   return (
     <div className="grid grid-cols-12 items-center gap-2 px-4 py-2.5 text-sm transition-colors hover:bg-ink-50/70">
-      <Link to={`/crm/leads/${lead.id}`} className="col-span-2 truncate text-[14px] font-medium text-ink-900 hover:text-brand-600">{lead.full_name}</Link>
-      <div className="ltr-content col-span-1 text-center text-[11.5px] leading-tight text-ink-500 break-all" title={lead.phone}>{lead.phone}</div>
+      <Link to={`/crm/leads/${lead.id}`} className="col-span-2 truncate text-[15px] font-medium text-ink-900 hover:text-brand-600">{lead.full_name}</Link>
+      <div className="ltr-content col-span-1 text-center text-[13px] leading-tight text-ink-500 break-all" title={lead.phone}>{lead.phone}</div>
       <div className="col-span-1 truncate text-center text-xs text-ink-600" title={lead.teacher_name || ""}>{lead.teacher_name || "—"}</div>
       <div className="col-span-1 flex justify-center">
         {source && SOURCE_ICON[source] ? (
@@ -167,7 +167,7 @@ export function InterestedPage() {
           <div className="p-10 text-center text-sm text-ink-400">لا يوجد عملاء مهتمون حاليًا</div>
         ) : (
           <>
-            <div className="grid grid-cols-12 gap-2 border-b border-ink-100 bg-ink-50/70 px-4 py-3 text-center text-[13px] font-semibold text-ink-500">
+            <div className="grid grid-cols-12 gap-2 border-b border-ink-100 bg-ink-50/70 px-4 py-3 text-center text-[14px] font-semibold text-ink-500">
               <div className="col-span-2 text-start">الاسم</div>
               <div className="col-span-1">الهاتف</div>
               <div className="col-span-1">المدرّس</div>

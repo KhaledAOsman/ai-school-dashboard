@@ -17,7 +17,7 @@ function ExpenseLeafRow({ expense }: { expense: Expense }) {
   return (
     <Link
       to={`/finance/expenses/${expense.id}`}
-      className="-mx-2 flex items-center justify-between rounded-lg px-2 py-2 pr-3 text-[13px] transition-colors hover:bg-ink-50"
+      className="-mx-2 flex items-center justify-between rounded-lg px-2 py-2 pr-3 text-[14px] transition-colors hover:bg-ink-50"
     >
       <div className="flex min-w-0 items-center gap-2.5">
         <Receipt size={13} className="shrink-0 text-ink-300" />
@@ -59,7 +59,7 @@ function CategoryNode({ category, depth, highlightId }: { category: Category; de
           <span className={depth === 0 ? "text-[14.5px] font-semibold text-ink-900" : "text-sm font-medium text-ink-800"}>
             {category.name}
           </span>
-          {count > 0 && <span className="rounded-full bg-ink-100 px-2 py-0.5 text-[11px] font-medium text-ink-500">{count}</span>}
+          {count > 0 && <span className="rounded-full bg-ink-100 px-2 py-0.5 text-[13px] font-medium text-ink-500">{count}</span>}
         </div>
         <span className="ltr-content text-sm font-semibold text-ink-800">{formatSAR(total)}</span>
       </button>

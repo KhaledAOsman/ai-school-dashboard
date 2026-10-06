@@ -2,7 +2,7 @@ import type { HTMLAttributes } from "react";
 import clsx from "clsx";
 
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={clsx("surface animate-slide-up p-6", className)} {...props} />;
+  return <div className={clsx("surface animate-slide-up p-7", className)} {...props} />;
 }
 
 export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
@@ -10,9 +10,9 @@ export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElemen
 }
 
 export function CardTitle({ className, ...props }: HTMLAttributes<HTMLHeadingElement>) {
-  return <h2 className={clsx("text-[15px] font-semibold text-ink-900", className)} {...props} />;
+  return <h2 className={clsx("text-[18px] font-bold text-ink-900", className)} {...props} />;
 }
 
 export function CardSubtitle({ className, ...props }: HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={clsx("mt-0.5 text-xs text-ink-500", className)} {...props} />;
+  return <p className={clsx("mt-1 text-[14px] text-ink-600", className)} {...props} />;
 }

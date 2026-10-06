@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 
-const BAR_COLORS = ["#6d3af2", "#9f70ff", "#bea3ff", "#d9ccff", "#ff8a3d", "#ffcfa1", "#5a26d6", "#e7e0ff"];
+const BAR_COLORS = ["#6d3af2", "#9f70ff", "#bea3ff", "#d9ccff", "#ff8a3d", "#ffcfa1", "#5a26d6", "#ebe4ff"];
 
 function formatSAR(value: number): string {
   return `${Number(value).toLocaleString("ar-SA-u-nu-latn", { maximumFractionDigits: 2 })} ر.س`;
@@ -58,7 +58,7 @@ export function ReportsPage() {
               return (
                 <div key={row.category_id} className="flex items-center gap-3">
                   <span className="ltr-content w-6 shrink-0 text-xs font-semibold text-ink-400">{i + 1}</span>
-                  <span className="w-32 shrink-0 truncate text-[13.5px] font-medium text-ink-800">{row.category_name}</span>
+                  <span className="w-32 shrink-0 truncate text-[15px] font-medium text-ink-800">{row.category_name}</span>
                   <div className="h-2 flex-1 overflow-hidden rounded-full bg-ink-100">
                     <div
                       className="h-full rounded-full transition-all duration-500 ease-out-expo"

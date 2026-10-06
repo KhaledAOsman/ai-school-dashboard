@@ -140,7 +140,7 @@ export function CampaignsPage() {
         {(data?.platforms ?? []).map((p) => (
           <Card key={p.platform} className="p-5">
             <div className="flex items-center justify-between">
-              <p className="text-[13px] font-medium text-ink-500">{PLATFORM_LABELS[p.platform]}</p>
+              <p className="text-[14px] font-medium text-ink-500">{PLATFORM_LABELS[p.platform]}</p>
               <Badge tone="neutral" dot={false}>{p.campaigns} حملة</Badge>
             </div>
             <p className="ltr-content mt-2 text-[24px] font-bold tracking-tight text-ink-900">{formatSAR(p.spend)}</p>
