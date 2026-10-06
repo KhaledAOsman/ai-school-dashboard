@@ -18,7 +18,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 
 function formatSAR(value: string | number | null): string {
   if (value === null) return "—";
-  return `${Number(value).toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س`;
+  return `${Number(value).toLocaleString("ar-SA-u-nu-latn", { maximumFractionDigits: 2 })} ر.س`;
 }
 
 function StaffRow({ id, fullName, salary, active, canUpdate }: { id: string; fullName: string; salary: string | null; active: boolean; canUpdate: boolean }) {

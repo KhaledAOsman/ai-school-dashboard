@@ -31,7 +31,7 @@ function SummaryCard({ label, value, trend }: { label: string; value: string; tr
 
 function formatSAR(value: number | string | undefined): string {
   const num = Number(value ?? 0);
-  return `${num.toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س`;
+  return `${num.toLocaleString("ar-SA-u-nu-latn", { maximumFractionDigits: 2 })} ر.س`;
 }
 
 export function FinanceOverviewPage() {

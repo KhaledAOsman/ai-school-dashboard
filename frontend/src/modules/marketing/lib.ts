@@ -1,12 +1,12 @@
 /** Shared formatting helpers for the marketing / KPI pages. */
 export function formatSAR(value: number | string | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";
-  return `${Number(value).toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س`;
+  return `${Number(value).toLocaleString("ar-SA-u-nu-latn", { maximumFractionDigits: 2 })} ر.س`;
 }
 
 export function formatNumber(value: number | string | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";
-  return Number(value).toLocaleString("ar-SA", { maximumFractionDigits: 2 });
+  return Number(value).toLocaleString("ar-SA-u-nu-latn", { maximumFractionDigits: 2 });
 }
 
 export const PLATFORM_LABELS: Record<string, string> = {

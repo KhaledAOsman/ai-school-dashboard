@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import type { Category, Expense } from "@/modules/finance/services/financeApi";
 
 function formatSAR(value: string | number): string {
-  return `${Number(value).toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س`;
+  return `${Number(value).toLocaleString("ar-SA-u-nu-latn", { maximumFractionDigits: 2 })} ر.س`;
 }
 
 /** Leaf row: a single expense line under its owning category. */

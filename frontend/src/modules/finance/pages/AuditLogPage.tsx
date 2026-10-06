@@ -24,7 +24,7 @@ export function AuditLogPage() {
             <tbody className="divide-y divide-gray-100">
               {(logs ?? []).map((log) => (
                 <tr key={log.id}>
-                  <td className="px-4 py-3 ltr-content text-xs">{new Date(log.timestamp).toLocaleString("ar-SA")}</td>
+                  <td className="px-4 py-3 ltr-content text-xs">{new Date(log.timestamp).toLocaleString("ar-SA-u-nu-latn")}</td>
                   <td className="px-4 py-3 ltr-content">{log.action}</td>
                   <td className="px-4 py-3">{log.resource_type}</td>
                   <td className="px-4 py-3 ltr-content text-xs truncate max-w-[160px]">{log.resource_id}</td>

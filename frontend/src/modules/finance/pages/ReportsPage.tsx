@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 const BAR_COLORS = ["#6d3af2", "#9f70ff", "#bea3ff", "#d9ccff", "#ff8a3d", "#ffcfa1", "#5a26d6", "#e7e0ff"];
 
 function formatSAR(value: number): string {
-  return `${Number(value).toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س`;
+  return `${Number(value).toLocaleString("ar-SA-u-nu-latn", { maximumFractionDigits: 2 })} ر.س`;
 }
 
 export function ReportsPage() {

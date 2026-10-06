@@ -48,9 +48,9 @@ function NavItem({ to, icon: Icon, label, indented = false }: { to: string; icon
       to={to}
       className={({ isActive }) =>
         clsx(
-          "group relative flex items-center gap-3 rounded-lg px-3.5 py-2.5 text-[13.5px] font-medium transition-all duration-150",
+          "group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[14px] font-medium transition-all duration-150",
           indented && "py-2 text-[13px]",
-          isActive ? "bg-brand-50 text-brand-700 shadow-glow-brand" : "text-ink-600 hover:bg-ink-100 hover:text-ink-900"
+          isActive ? "bg-brand-50 font-semibold text-brand-800" : "text-ink-700 hover:bg-ink-50 hover:text-ink-900"
         )
       }
     >
@@ -60,7 +60,7 @@ function NavItem({ to, icon: Icon, label, indented = false }: { to: string; icon
           <Icon
             size={indented ? 16 : 18}
             strokeWidth={isActive ? 2.25 : 2}
-            className={isActive ? "text-brand-600" : "text-ink-400 transition-colors group-hover:text-ink-600"}
+            className={isActive ? "text-brand-600" : "text-ink-500 transition-colors group-hover:text-ink-700"}
           />
           <span>{label}</span>
         </>
@@ -71,7 +71,7 @@ function NavItem({ to, icon: Icon, label, indented = false }: { to: string; icon
 
 function NavSectionLabel({ children }: { children: ReactNode }) {
   return (
-    <p className="px-3.5 pb-2 pt-6 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-400 first:pt-2">
+    <p className="px-3.5 pb-2 pt-6 text-[11.5px] font-bold tracking-wide text-ink-500 first:pt-2">
       {children}
     </p>
   );
@@ -102,15 +102,15 @@ function NavGroup({
       <button
         onClick={onToggle}
         className={clsx(
-          "group relative flex w-full items-center gap-3 rounded-lg px-3.5 py-2.5 text-[13.5px] font-medium transition-all duration-150",
-          isActive && !isOpen ? "bg-brand-50 text-brand-700 shadow-glow-brand" : "text-ink-600 hover:bg-ink-100 hover:text-ink-900"
+          "group relative flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-[14px] font-medium transition-all duration-150",
+          isActive && !isOpen ? "bg-brand-50 font-semibold text-brand-800" : "text-ink-700 hover:bg-ink-50 hover:text-ink-900"
         )}
       >
         {isActive && !isOpen && <span className="absolute right-0 top-1/2 h-4 w-1 -translate-y-1/2 rounded-full bg-brand-600" />}
         <Icon
           size={18}
           strokeWidth={isActive ? 2.25 : 2}
-          className={isActive && !isOpen ? "text-brand-600" : "text-ink-400 transition-colors group-hover:text-ink-600"}
+          className={isActive && !isOpen ? "text-brand-600" : "text-ink-500 transition-colors group-hover:text-ink-700"}
         />
         <span className="flex-1 text-start">{label}</span>
         <ChevronDown size={15} className={clsx("text-ink-400 transition-transform duration-200", isOpen && "rotate-180")} />
@@ -188,9 +188,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
     .toUpperCase();
 
   return (
-    <div className="flex min-h-screen bg-ink-50" dir="rtl">
-      <aside className="flex w-[272px] flex-col bg-white shadow-[1px_0_0_0_rgba(23,25,41,0.06)]">
-        <div className="flex h-[68px] items-center px-5">
+    <div className="flex min-h-screen bg-[#f4f6fb]" dir="rtl">
+      <aside className="sticky top-0 flex h-screen w-[280px] shrink-0 flex-col border-e border-[#e6e9f2] bg-white">
+        <div className="flex h-[72px] items-center border-b border-[#eef0f6] px-6">
           <img src="/logo.png" alt="AiSchool" className="h-8 w-auto object-contain" />
         </div>
 
@@ -267,7 +267,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           )}
         </nav>
 
-        <div className="p-3 shadow-[0_-1px_0_0_rgba(23,25,41,0.06)]">
+        <div className="border-t border-[#eef0f6] p-3">
           <button
             onClick={handleLogout}
             className="group flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-start transition-colors hover:bg-ink-100"
@@ -277,7 +277,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[13px] font-semibold text-ink-800">{user?.full_name}</span>
-              <span className="block truncate text-xs text-ink-500">{user?.email}</span>
+              <span className="block truncate text-xs text-ink-600">{user?.email}</span>
             </span>
             <LogOut size={15} className="shrink-0 text-ink-400 transition-colors group-hover:text-danger-500" />
           </button>
@@ -285,7 +285,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="thin-scrollbar flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-6xl px-8 py-9">{children}</div>
+        <div className="mx-auto max-w-[1360px] px-6 py-8 lg:px-10">{children}</div>
       </main>
     </div>
   );

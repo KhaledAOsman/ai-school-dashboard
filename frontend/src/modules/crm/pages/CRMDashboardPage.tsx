@@ -34,7 +34,7 @@ function StatCard({
           <Icon size={20} />
         </span>
         <div>
-          <p className="text-2xl font-bold tracking-tight text-ink-900">{value.toLocaleString("ar-SA")}</p>
+          <p className="text-2xl font-bold tracking-tight text-ink-900">{value.toLocaleString("ar-SA-u-nu-latn")}</p>
           <p className="text-xs text-ink-500">{label}</p>
         </div>
       </div>

@@ -103,14 +103,14 @@ export function BookingsPage() {
     const isSameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
     if (isSameDay(date, today)) return "اليوم";
     if (isSameDay(date, tomorrow)) return "غدًا";
-    return date.toLocaleDateString("ar-SA", { weekday: "long" });
+    return date.toLocaleDateString("ar-SA-u-nu-latn", { weekday: "long" });
   }
 
   return (
     <div className="max-w-none">
       <div className="mb-6">
         <h1 className="text-[26px] font-bold tracking-tight text-ink-900">الحجوزات</h1>
-        <p className="mt-1 text-sm text-ink-500">{data ? `${data.total.toLocaleString("ar-SA")} محاضرة محجوزة` : "المحاضرات المحجوزة بانتظار الحضور والتقرير، مرتبة من الأقرب للأبعد"}</p>
+        <p className="mt-1 text-sm text-ink-500">{data ? `${data.total.toLocaleString("ar-SA-u-nu-latn")} محاضرة محجوزة` : "المحاضرات المحجوزة بانتظار الحضور والتقرير، مرتبة من الأقرب للأبعد"}</p>
       </div>
 
       <Card className="overflow-hidden p-0">

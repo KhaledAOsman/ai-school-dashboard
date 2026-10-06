@@ -43,12 +43,12 @@ export default {
           100: "#eef0f6",
           200: "#dfe2ec",
           300: "#c6cadb",
-          400: "#9ba0bb",
-          500: "#767c9c",
-          600: "#5a5f7d",
-          700: "#434761",
-          800: "#2b2e42",
-          900: "#171929",
+          400: "#8087a8",
+          500: "#555b7a",
+          600: "#40455f",
+          700: "#2d3149",
+          800: "#1d2034",
+          900: "#10121f",
           950: "#0c0d16",
         },
         success: {
@@ -74,12 +74,11 @@ export default {
         },
       },
       fontFamily: {
-        // Inter/IBM Plex Sans Arabic pairing - the closest professional,
-        // freely-licensed match to LinDIN/DIN's geometric, technical
-        // character (LinDIN itself is a commercial Linotype face and can't
-        // be bundled here). Falls back gracefully.
+        // Brand typeface: DIN Next W1G (Latin + digits, self-hosted from
+        // /public/fonts). It has no Arabic glyphs, so Arabic text falls back
+        // to IBM Plex Sans Arabic, the closest geometric match.
         sans: [
-          '"Inter"',
+          '"DIN Next W1G"',
           '"IBM Plex Sans Arabic"',
           '"Segoe UI"',
           "system-ui",
@@ -102,6 +101,7 @@ export default {
       },
       borderRadius: {
         xl2: "1rem",
+        card: "1.25rem",
         xl3: "1.5rem",
       },
       transitionTimingFunction: {

@@ -24,7 +24,7 @@ import { Textarea } from "@/components/ui/Field";
 import { EmptyState } from "@/components/ui/EmptyState";
 
 function formatSAR(value: string | number): string {
-  return `${Number(value).toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س`;
+  return `${Number(value).toLocaleString("ar-SA-u-nu-latn", { maximumFractionDigits: 2 })} ر.س`;
 }
 
 function DetailRow({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: React.ReactNode }) {

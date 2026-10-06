@@ -238,7 +238,7 @@ export function LeadsListPage() {
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-[26px] font-bold tracking-tight text-ink-900">العملاء المحتملون</h1>
-          <p className="mt-1 text-sm text-ink-500">{data ? `${data.total.toLocaleString("ar-SA")} عميل بانتظار الحجز` : "عملاء لم يتم حجز موعد لهم بعد"}</p>
+          <p className="mt-1 text-sm text-ink-500">{data ? `${data.total.toLocaleString("ar-SA-u-nu-latn")} عميل بانتظار الحجز` : "عملاء لم يتم حجز موعد لهم بعد"}</p>
         </div>
         {canCreate && (
           <div className="flex gap-2">
@@ -332,7 +332,7 @@ export function LeadsListPage() {
               ))}
             </div>
             <div className="flex items-center justify-between border-t border-ink-100 px-6 py-3.5">
-              <p className="text-xs text-ink-500">صفحة {data.page.toLocaleString("ar-SA")} من {data.total_pages.toLocaleString("ar-SA")} — {data.total.toLocaleString("ar-SA")} عميل</p>
+              <p className="text-xs text-ink-500">صفحة {data.page.toLocaleString("ar-SA-u-nu-latn")} من {data.total_pages.toLocaleString("ar-SA-u-nu-latn")} — {data.total.toLocaleString("ar-SA-u-nu-latn")} عميل</p>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}><ChevronRight size={14} />السابق</Button>
                 <Button size="sm" variant="outline" disabled={page >= data.total_pages} onClick={() => setPage((p) => p + 1)}>التالي<ChevronLeft size={14} /></Button>

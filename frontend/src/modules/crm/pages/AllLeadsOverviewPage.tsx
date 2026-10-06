@@ -31,7 +31,7 @@ export function AllLeadsOverviewPage() {
     <div className="max-w-none">
       <div className="mb-6">
         <h1 className="text-[26px] font-bold tracking-tight text-ink-900">كل العملاء</h1>
-        <p className="mt-1 text-sm text-ink-500">{data ? `${data.total.toLocaleString("ar-SA")} عميل بكل الحالات` : "نظرة عامة على جميع العملاء بكل الحالات (للعرض فقط)"}</p>
+        <p className="mt-1 text-sm text-ink-500">{data ? `${data.total.toLocaleString("ar-SA-u-nu-latn")} عميل بكل الحالات` : "نظرة عامة على جميع العملاء بكل الحالات (للعرض فقط)"}</p>
       </div>
 
       <Card className="mb-4 p-4">
@@ -77,7 +77,7 @@ export function AllLeadsOverviewPage() {
               ))}
             </div>
             <div className="flex items-center justify-between border-t border-ink-100 px-6 py-3.5">
-              <p className="text-xs text-ink-500">صفحة {data.page.toLocaleString("ar-SA")} من {data.total_pages.toLocaleString("ar-SA")} — {data.total.toLocaleString("ar-SA")} عميل</p>
+              <p className="text-xs text-ink-500">صفحة {data.page.toLocaleString("ar-SA-u-nu-latn")} من {data.total_pages.toLocaleString("ar-SA-u-nu-latn")} — {data.total.toLocaleString("ar-SA-u-nu-latn")} عميل</p>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}><ChevronRight size={14} />السابق</Button>
                 <Button size="sm" variant="outline" disabled={page >= data.total_pages} onClick={() => setPage((p) => p + 1)}>التالي<ChevronLeft size={14} /></Button>

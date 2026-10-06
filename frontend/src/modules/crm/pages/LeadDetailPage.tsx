@@ -32,7 +32,7 @@ const CALL_OUTCOME_LABEL: Record<CallOutcome, string> = {
 };
 
 function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("ar-SA", { dateStyle: "medium", timeStyle: "short" });
+  return new Date(iso).toLocaleString("ar-SA-u-nu-latn", { dateStyle: "medium", timeStyle: "short" });
 }
 
 function CallAttemptPanel({ leadId }: { leadId: string }) {

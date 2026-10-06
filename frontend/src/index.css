@@ -1,20 +1,55 @@
+@font-face {
+  font-family: "DIN Next W1G";
+  src: url("/fonts/DINNextW1G-UltraLight.otf") format("opentype");
+  font-weight: 200 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "DIN Next W1G";
+  src: url("/fonts/DINNextW1G-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "DIN Next W1G";
+  src: url("/fonts/DINNextW1G-Medium.otf") format("opentype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "DIN Next W1G";
+  src: url("/fonts/DINNextW1G-Heavy.otf") format("opentype");
+  font-weight: 600 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "DIN Next W1G";
+  src: url("/fonts/DINNextW1G-Black.otf") format("opentype");
+  font-weight: 800 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   html {
-    font-family: "Inter", "IBM Plex Sans Arabic", "Segoe UI", system-ui, sans-serif;
+    font-family: "DIN Next W1G", "IBM Plex Sans Arabic", "Segoe UI", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-  }
+      }
   html[dir="rtl"] body {
     text-align: right;
   }
   body {
-    @apply bg-ink-50 text-ink-900;
+    @apply bg-[#f4f6fb] text-ink-900;
     font-variant-numeric: tabular-nums;
   }
   ::selection {
@@ -45,14 +80,15 @@
      border plus a soft shadow, matching modern SaaS product chrome rather
      than flat, undifferentiated boxes. */
   .surface {
-    @apply bg-white rounded-xl2 shadow-sm;
-    box-shadow: 0 1px 3px 0 rgba(23,25,41,0.06), 0 1px 2px -1px rgba(23,25,41,0.05), inset 0 0 0 1px rgba(23,25,41,0.06);
+    @apply bg-white rounded-card border border-[#e6e9f2];
+    box-shadow: 0 1px 2px 0 rgba(23,25,41,0.04);
   }
   .surface-interactive {
     @apply surface transition-all duration-200 ease-out-expo;
   }
   .surface-interactive:hover {
-    box-shadow: 0 4px 8px -2px rgba(23,25,41,0.08), 0 2px 4px -2px rgba(23,25,41,0.05), inset 0 0 0 1px rgba(23,25,41,0.08);
+    box-shadow: 0 10px 24px -8px rgba(60,40,140,0.14);
+    border-color: theme("colors.brand.200");
     transform: translateY(-1px);
   }
 
@@ -90,4 +126,16 @@
 }
 .thin-scrollbar::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Skeleton shimmer (SaasAble "Skeleton" asset): soft blocks #dce2ed / #e9edf5 */
+.skeleton {
+  background: linear-gradient(90deg, #e9edf5 25%, #f4f6fb 50%, #e9edf5 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+  border-radius: 13px;
+}
+@keyframes skeleton-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
 }

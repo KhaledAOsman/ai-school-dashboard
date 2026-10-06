@@ -21,7 +21,7 @@ function formatDayHeading(dateStr: string): string {
 
   if (isSameDay(date, today)) return "اليوم";
   if (isSameDay(date, tomorrow)) return "غدًا";
-  return date.toLocaleDateString("ar-SA", { weekday: "long", day: "numeric", month: "long" });
+  return date.toLocaleDateString("ar-SA-u-nu-latn", { weekday: "long", day: "numeric", month: "long" });
 }
 
 export function SchedulePage() {

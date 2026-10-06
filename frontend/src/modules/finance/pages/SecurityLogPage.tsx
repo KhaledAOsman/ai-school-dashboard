@@ -35,7 +35,7 @@ export function SecurityLogPage() {
             <tbody className="divide-y divide-gray-100">
               {(logs ?? []).map((log) => (
                 <tr key={log.id}>
-                  <td className="px-4 py-3 ltr-content text-xs">{new Date(log.timestamp).toLocaleString("ar-SA")}</td>
+                  <td className="px-4 py-3 ltr-content text-xs">{new Date(log.timestamp).toLocaleString("ar-SA-u-nu-latn")}</td>
                   <td className={clsx("px-4 py-3 ltr-content font-medium", EVENT_COLOR[log.event_type] ?? "text-gray-700")}>
                     {log.event_type}
                   </td>
