@@ -33,9 +33,11 @@ import {
   Settings,
   LogOut,
   ChevronDown,
+  Megaphone,
+  BadgeCheck,
 } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
-import { usePermission, useAnyPermission } from "@/permissions/usePermission";
+import { usePermission } from "@/permissions/usePermission";
 import { PERMISSIONS } from "@/permissions/constants";
 import { translate } from "@/i18n";
 import clsx from "clsx";
@@ -146,24 +148,30 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const canViewAudit = usePermission(PERMISSIONS.AUDIT_VIEW);
   const canViewSecurityLogs = usePermission(PERMISSIONS.SECURITY_LOGS_VIEW);
   const canViewSettings = usePermission(PERMISSIONS.SETTINGS_VIEW);
-  const canViewDashboard = useAnyPermission([PERMISSIONS.DASHBOARDS_VIEW, PERMISSIONS.FINANCE_REPORT_VIEW]);
-  const canViewKpiDashboard = usePermission(PERMISSIONS.DASHBOARDS_KPI_VIEW);
+  // The main dashboard now shows the half-yearly project KPIs (no finance
+  // figures - those live in the Finance section's overview page).
+  const canViewDashboard = usePermission(PERMISSIONS.DASHBOARDS_KPI_VIEW);
+  const canViewSubscriptions = usePermission(PERMISSIONS.SUBSCRIPTIONS_VIEW);
+  const canViewCampaigns = usePermission(PERMISSIONS.CAMPAIGNS_VIEW);
+  const canViewMarketingSection = canViewSubscriptions || canViewCampaigns;
   const canViewAdminSection = canViewUsers || canViewRoles || canViewAudit || canViewSecurityLogs || canViewSettings;
 
   const isFinanceRoute = location.pathname.startsWith("/finance");
   const isCRMRoute = location.pathname.startsWith("/crm");
+  const isMarketingRoute = location.pathname.startsWith("/marketing");
 
   // Only one group open at a time. Defaults to whichever section the
   // current route belongs to, so landing on e.g. /finance/expenses
   // directly (a refresh, a bookmark) opens "الشؤون المالية" automatically
   // instead of requiring an extra click.
-  const [openGroup, setOpenGroup] = useState<"finance" | "crm" | null>(
-    isFinanceRoute ? "finance" : isCRMRoute ? "crm" : null
+  const [openGroup, setOpenGroup] = useState<"finance" | "crm" | "marketing" | null>(
+    isFinanceRoute ? "finance" : isCRMRoute ? "crm" : isMarketingRoute ? "marketing" : null
   );
 
   useEffect(() => {
     if (isFinanceRoute) setOpenGroup("finance");
     else if (isCRMRoute) setOpenGroup("crm");
+    else if (isMarketingRoute) setOpenGroup("marketing");
   }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleLogout() {
@@ -193,14 +201,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <NavItem to="/dashboard" icon={LayoutDashboard} label={translate("ar", "nav_dashboard")} />
             </>
           )}
-          {!canViewDashboard && canViewKpiDashboard && (
-            <>
-              <NavSectionLabel>عام</NavSectionLabel>
-              <NavItem to="/kpi-dashboard" icon={LayoutDashboard} label="لوحة تحكم KPI" />
-            </>
-          )}
 
-          {(canViewFinanceSection || canViewCRMSection) && <NavSectionLabel>الأقسام</NavSectionLabel>}
+          {(canViewFinanceSection || canViewCRMSection || canViewMarketingSection) && <NavSectionLabel>الأقسام</NavSectionLabel>}
 
           {canViewFinanceSection && (
             <NavGroup
@@ -210,12 +212,26 @@ export function AppLayout({ children }: { children: ReactNode }) {
               onToggle={() => setOpenGroup((prev) => (prev === "finance" ? null : "finance"))}
               isActive={isFinanceRoute}
             >
+              {canViewReports && <NavItem indented to="/finance/overview" icon={LayoutDashboard} label="نظرة عامة" />}
               {canViewExpenses && <NavItem indented to="/finance/expenses" icon={Receipt} label={translate("ar", "nav_expenses")} />}
               {canViewBudget && <NavItem indented to="/finance/budget-lines" icon={Wallet} label="بنود الميزانية" />}
               {canViewCategories && <NavItem indented to="/finance/categories" icon={FolderTree} label={translate("ar", "nav_categories")} />}
               {canViewCategories && <NavItem indented to="/finance/chart-of-accounts" icon={GitBranch} label="شجرة الحسابات" />}
               {canViewStaff && <NavItem indented to="/finance/staff" icon={GraduationCap} label="الموظفين" />}
               {canViewReports && <NavItem indented to="/finance/reports" icon={BarChart3} label={translate("ar", "nav_reports")} />}
+            </NavGroup>
+          )}
+
+          {canViewMarketingSection && (
+            <NavGroup
+              icon={Megaphone}
+              label="المشتركون والتسويق"
+              isOpen={openGroup === "marketing"}
+              onToggle={() => setOpenGroup((prev) => (prev === "marketing" ? null : "marketing"))}
+              isActive={isMarketingRoute}
+            >
+              {canViewSubscriptions && <NavItem indented to="/marketing/subscriptions" icon={BadgeCheck} label="الاشتراكات" />}
+              {canViewCampaigns && <NavItem indented to="/marketing/campaigns" icon={Megaphone} label="الحملات الإعلانية" />}
             </NavGroup>
           )}
 

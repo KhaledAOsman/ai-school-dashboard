@@ -103,6 +103,12 @@ DASHBOARDS_VIEW = "dashboards.view"
 DASHBOARDS_MANAGE = "dashboards.manage"
 DASHBOARDS_KPI_VIEW = "dashboards.kpi.view"  # summary KPI cards only (CRM + finance), for managers who shouldn't get full module access
 
+# ---- Marketing: subscriptions & ad campaigns (feed the KPI dashboard) ----
+SUBSCRIPTIONS_VIEW = "subscriptions.view"
+SUBSCRIPTIONS_MANAGE = "subscriptions.manage"  # create / edit / delete
+CAMPAIGNS_VIEW = "campaigns.view"
+CAMPAIGNS_MANAGE = "campaigns.manage"  # create / edit / delete
+
 # ---- Audit / Security ----
 AUDIT_VIEW = "audit.view"
 SECURITY_LOGS_VIEW = "security_logs.view"
@@ -157,7 +163,11 @@ SEED_PERMISSIONS: list[PermissionDef] = [
     PermissionDef(PERMISSIONS_VIEW, "View permissions", "permissions"),
     PermissionDef(DASHBOARDS_VIEW, "View dashboards", "dashboards"),
     PermissionDef(DASHBOARDS_MANAGE, "Manage dashboard widget configuration", "dashboards"),
-    PermissionDef(DASHBOARDS_KPI_VIEW, "View KPI dashboard (CRM + finance summary cards, read-only)", "dashboards"),
+    PermissionDef(DASHBOARDS_KPI_VIEW, "View the half-yearly project KPI dashboard (read-only)", "dashboards"),
+    PermissionDef(SUBSCRIPTIONS_VIEW, "View paid subscriptions", "marketing"),
+    PermissionDef(SUBSCRIPTIONS_MANAGE, "Create, edit and delete paid subscriptions", "marketing"),
+    PermissionDef(CAMPAIGNS_VIEW, "View ad campaigns and spend", "marketing"),
+    PermissionDef(CAMPAIGNS_MANAGE, "Create, edit and delete ad campaigns", "marketing"),
     PermissionDef(AUDIT_VIEW, "View audit logs", "audit"),
     PermissionDef(SECURITY_LOGS_VIEW, "View security logs", "security"),
     PermissionDef(SETTINGS_VIEW, "View system settings", "settings"),

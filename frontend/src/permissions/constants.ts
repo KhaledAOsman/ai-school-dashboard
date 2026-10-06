@@ -61,6 +61,11 @@ export const PERMISSIONS = {
   DASHBOARDS_MANAGE: "dashboards.manage",
   DASHBOARDS_KPI_VIEW: "dashboards.kpi.view",
 
+  SUBSCRIPTIONS_VIEW: "subscriptions.view",
+  SUBSCRIPTIONS_MANAGE: "subscriptions.manage",
+  CAMPAIGNS_VIEW: "campaigns.view",
+  CAMPAIGNS_MANAGE: "campaigns.manage",
+
   AUDIT_VIEW: "audit.view",
   SECURITY_LOGS_VIEW: "security_logs.view",
 

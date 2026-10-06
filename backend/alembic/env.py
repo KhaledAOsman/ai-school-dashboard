@@ -31,6 +31,7 @@ from app.modules.finance.staff.models import StaffMember, StaffDepartment  # noq
 from app.modules.crm.teachers.models import CRMTeacher, TeacherSlot  # noqa: F401
 from app.modules.crm.leads.models import Lead, LeadCallAttempt, LeadStageEvent  # noqa: F401
 from app.modules.whatsapp.models import MessageTemplate, WhatsAppMessageLog  # noqa: F401
+from app.modules.marketing.models import Subscription, AdCampaign, AppSetting  # noqa: F401
 
 config = context.config
 settings = get_settings()

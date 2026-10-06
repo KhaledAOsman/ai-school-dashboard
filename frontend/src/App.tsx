@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "@/auth/AuthContext";
 import { ProtectedRoute } from "@/auth/ProtectedRoute";
@@ -17,7 +17,8 @@ import { AllLeadsOverviewPage } from "@/modules/crm/pages/AllLeadsOverviewPage";
 import { SchedulePage } from "@/modules/crm/pages/SchedulePage";
 import { WhatsAppConnectionPage } from "@/modules/whatsapp/pages/WhatsAppConnectionPage";
 import { TemplatesPage } from "@/modules/whatsapp/pages/TemplatesPage";
-import { KpiDashboardPage } from "@/modules/kpi/pages/KpiDashboardPage";
+import { SubscriptionsPage } from "@/modules/marketing/pages/SubscriptionsPage";
+import { CampaignsPage } from "@/modules/marketing/pages/CampaignsPage";
 import { UsersPage } from "@/modules/finance/pages/UsersPage";
 import { RolesPage } from "@/modules/finance/pages/RolesPage";
 import { AuditLogPage } from "@/modules/finance/pages/AuditLogPage";
@@ -51,12 +52,24 @@ export function App() {
               }
             />
 
+            <Route path="/kpi-dashboard" element={<Navigate to="/dashboard" replace />} />
+
             <Route
-              path="/kpi-dashboard"
+              path="/marketing/subscriptions"
               element={
                 <ProtectedRoute>
                   <AppLayout>
-                    <KpiDashboardPage />
+                    <SubscriptionsPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/marketing/campaigns"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <CampaignsPage />
                   </AppLayout>
                 </ProtectedRoute>
               }

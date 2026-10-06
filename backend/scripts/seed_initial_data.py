@@ -35,7 +35,7 @@ DEFAULT_ROLES: dict[str, list[str]] = {
     "Admin": [
         p.code
         for p in SEED_PERMISSIONS
-        if p.category in {"users", "roles", "permissions", "dashboards", "audit", "security", "settings"}
+        if p.category in {"users", "roles", "permissions", "dashboards", "marketing", "audit", "security", "settings"}
     ]
     + [
         # Admin is who enters new leads into the system (see crm.lead.create
@@ -50,7 +50,8 @@ DEFAULT_ROLES: dict[str, list[str]] = {
     "Director": [
         p.code
         for p in SEED_PERMISSIONS
-        if p.category in {"finance", "dashboards"} and "delete" not in p.code and "approve" not in p.code
+        if (p.category in {"finance", "dashboards"} and "delete" not in p.code and "approve" not in p.code)
+        or (p.category == "marketing" and p.code.endswith(".view"))
     ],
     # General Manager: approves budget lines and individual expenses, views
     # everything finance-related, but does not create/edit line items

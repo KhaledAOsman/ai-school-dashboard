@@ -15,11 +15,18 @@ import { CategoriesPage } from "@/modules/finance/pages/CategoriesPage";
 import { ChartOfAccountsPage } from "@/modules/finance/pages/ChartOfAccountsPage";
 import { StaffPage } from "@/modules/finance/pages/StaffPage";
 import { ReportsPage } from "@/modules/finance/pages/ReportsPage";
+import { FinanceOverviewPage } from "@/modules/finance/pages/FinanceOverviewPage";
+import { usePermission } from "@/permissions/usePermission";
+import { PERMISSIONS } from "@/permissions/constants";
 
 export function FinanceSectionPage() {
+  // The finance section opens on its overview when the user may see
+  // finance reports; otherwise on the expenses list.
+  const canViewReports = usePermission(PERMISSIONS.FINANCE_REPORT_VIEW);
   return (
     <Routes>
-      <Route index element={<Navigate to="expenses" replace />} />
+      <Route index element={<Navigate to={canViewReports ? "overview" : "expenses"} replace />} />
+      <Route path="overview" element={<FinanceOverviewPage />} />
       <Route path="expenses" element={<ExpensesListPage />} />
       <Route path="expenses/new" element={<ExpenseFormPage />} />
       <Route path="expenses/:id" element={<ExpenseDetailPage />} />
