@@ -85,59 +85,67 @@ function SectionTitle({ children, note }: { children: ReactNode; note?: string }
 
 /* ----------------------------- phases ----------------------------- */
 
-/** Test-phase goals: first block on the page. */
+/** Test-phase goals: first block on the page (compact bordered cards, 3D icons made in Canva). */
 function TargetsStrip({ tp }: { tp: TestPhase }) {
   const t = tp.targets, m = tp.metrics;
   const cac = num(m.cac);
-  type Row = { icon: LucideIcon; label: string; value: string; goal: string; progress: number; state: "met" | "near" | "behind" | "none"; hint: string };
-  const state = (ok: boolean, ratio: number, has: boolean): Row["state"] => (!has ? "none" : ok ? "met" : ratio >= 0.7 ? "near" : "behind");
-  const rows: Row[] = [
+  type State = "met" | "near" | "behind" | "none";
+  const st = (ok: boolean, ratio: number, has: boolean): State => (!has ? "none" : ok ? "met" : ratio >= 0.7 ? "near" : "behind");
+  const rows: { img: string; label: string; info: string; value: string; goal: string; progress: number; state: State }[] = [
     {
-      icon: Users, label: "عدد العملاء المشتركين", value: formatNumber(m.subscribers), goal: `الهدف ${formatNumber(t.subscribers)} عميل`,
-      progress: Math.min(m.subscribers / t.subscribers, 1), state: state(m.subscribers >= t.subscribers, m.subscribers / t.subscribers, true),
-      hint: `متبقٍ ${formatNumber(Math.max(t.subscribers - m.subscribers, 0))} عميل`,
+      img: "goal-customers", label: "عدد العملاء", info: "عدد المشتركين المدفوعين خلال مرحلة الاختبار",
+      value: `${formatNumber(m.subscribers)} / ${formatNumber(t.subscribers)}`, goal: `متبقٍ ${formatNumber(Math.max(t.subscribers - m.subscribers, 0))} عميل`,
+      progress: Math.min(m.subscribers / t.subscribers, 1), state: st(m.subscribers >= t.subscribers, m.subscribers / t.subscribers, true),
     },
     {
-      icon: Coins, label: "تكلفة اكتساب العميل", value: cac === null ? "—" : formatSAR(cac), goal: `الهدف أقل من ${formatSAR(t.max_cac)}`,
-      progress: cac === null ? 0 : Math.min(t.max_cac / Math.max(cac, 1), 1), state: state(cac !== null && cac < t.max_cac, cac ? t.max_cac / cac : 0, cac !== null),
-      hint: `إنفاق ${formatSAR(m.total_spend)}`,
+      img: "goal-cac", label: "تكلفة اكتساب العميل", info: `إجمالي الإنفاق الإعلاني ÷ المشتركين · إنفاق ${formatSAR(m.total_spend)}`,
+      value: cac === null ? "—" : formatSAR(cac), goal: `الهدف < ${formatSAR(t.max_cac)}`,
+      progress: cac === null ? 0 : Math.min(t.max_cac / Math.max(cac, 1), 1), state: st(cac !== null && cac < t.max_cac, cac ? t.max_cac / cac : 0, cac !== null),
     },
     {
-      icon: Percent, label: "التحويل من الحاضرين", value: pct(m.conversion), goal: `الهدف ${t.min_conversion}%`,
-      progress: Math.min((m.conversion ?? 0) / t.min_conversion, 1), state: state((m.conversion ?? 0) >= t.min_conversion, (m.conversion ?? 0) / t.min_conversion, m.conversion !== null),
-      hint: "مشترك ÷ من حضر المحاضرة",
+      img: "goal-conversion", label: "التحويل من الحاضرين", info: "المشتركون ÷ من حضروا المحاضرة (وليس من إجمالي المحتملين)",
+      value: pct(m.conversion), goal: `الهدف ${t.min_conversion}%`,
+      progress: Math.min((m.conversion ?? 0) / t.min_conversion, 1), state: st((m.conversion ?? 0) >= t.min_conversion, (m.conversion ?? 0) / t.min_conversion, m.conversion !== null),
     },
     {
-      icon: UserCheck, label: "نسبة حضور المحاضرة", value: pct(m.attendance_rate), goal: `الهدف ${t.min_attendance}%`,
-      progress: Math.min((m.attendance_rate ?? 0) / t.min_attendance, 1), state: state((m.attendance_rate ?? 0) >= t.min_attendance, (m.attendance_rate ?? 0) / t.min_attendance, m.attendance_rate !== null),
-      hint: `${formatNumber(m.attended)} حضروا من ${formatNumber(m.booked)} حجز`,
+      img: "goal-attendance", label: "نسبة حضور المحاضرة", info: `${formatNumber(m.attended)} حضروا من ${formatNumber(m.booked)} حجز`,
+      value: pct(m.attendance_rate), goal: `الهدف ${t.min_attendance}%`,
+      progress: Math.min((m.attendance_rate ?? 0) / t.min_attendance, 1), state: st((m.attendance_rate ?? 0) >= t.min_attendance, (m.attendance_rate ?? 0) / t.min_attendance, m.attendance_rate !== null),
     },
   ];
-  const chip = { met: ["تحقق", "bg-success-50 text-success-700"], near: ["قريب من الهدف", "bg-accent-50 text-accent-700"], behind: ["دون الهدف", "bg-danger-50 text-danger-700"], none: ["لا بيانات", "bg-ink-100 text-ink-600"] } as const;
-  const bar = { met: "bg-success-600", near: "bg-accent-400", behind: "bg-danger-600", none: "bg-ink-300" } as const;
+  const chip = { met: ["تحقق", "text-[#136c3a]", "bg-[#2fa56f]"], near: ["قريب", "text-accent-700", "bg-accent-400"], behind: ["دون الهدف", "text-[#a02a24]", "bg-[#d9453d]"], none: ["بانتظار البيانات", "text-ink-600", "bg-ink-300"] } as const;
+  const bar = { met: "bg-[#2fa56f]", near: "bg-accent-400", behind: "bg-[#d9453d]", none: "bg-ink-300" } as const;
   return (
-    <section className="rounded-[32px] bg-brand-950 p-5 text-white sm:p-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 px-1">
-        <h2 className="flex items-center gap-2 text-[22px] font-semibold"><Target className="h-6 w-6 text-accent-400" />أهداف مرحلة الاختبار</h2>
-        <p className="text-[14px] text-brand-200">
-          <span className="ltr-content">{tp.start} → {tp.end_inclusive}</span>
-          {!tp.configured && " · التواريخ غير محددة (يُعرض النصف المحدد)"}
+    <section>
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-[22px] font-semibold text-ink-900">أهداف مرحلة الاختبار</h2>
+        <p className="ltr-content text-[13px] text-ink-600">
+          {tp.start} → {tp.end_inclusive}
+          {!tp.configured && <span className="font-sans"> · النصف المحدد (لم تُحدَّد بداية المشروع)</span>}
         </p>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {rows.map((r) => (
-          <div key={r.label} className="rounded-2xl bg-white p-5 text-ink-900">
-            <div className="flex items-center justify-between gap-2">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-100 text-brand-700"><r.icon className="h-5 w-5" /></span>
-              <span className={`rounded-full px-3 py-1 text-[13px] font-semibold ${chip[r.state][1]}`}>{chip[r.state][0]}</span>
+          <div key={r.label} className="flex flex-col justify-between rounded-2xl border border-ink-200 bg-white p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="flex items-center gap-1.5 text-[14.5px] font-medium text-ink-700">
+                  {r.label}
+                  <span title={r.info} className="cursor-help text-ink-400"><Info size={14} /></span>
+                </p>
+                <p className="ltr-content mt-1 whitespace-nowrap text-right text-[24px] font-bold leading-9 tracking-tight text-ink-900">{r.value}</p>
+              </div>
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-ink-200 bg-white">
+                <img src={`/icons/${r.img}.png`} alt="" className="h-10 w-10 object-contain" />
+              </span>
             </div>
-            <p className="mt-3 text-[15px] font-medium text-ink-600">{r.label}</p>
-            <p className="ltr-content mt-1 text-right text-[32px] font-semibold leading-tight">{r.value}</p>
-            <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-ink-100">
+            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-ink-100">
               <div className={`h-full rounded-full ${bar[r.state]}`} style={{ width: `${Math.round(r.progress * 100)}%` }} />
             </div>
-            <p className="mt-2 text-[14px] font-semibold text-ink-800">{r.goal}</p>
-            <p className="text-[13px] text-ink-500">{r.hint}</p>
+            <div className="mt-2.5 flex items-center justify-between gap-2 text-[13px] text-ink-600">
+              <span className="min-w-0 whitespace-nowrap leading-snug">{r.goal}</span>
+              <span className={`inline-flex shrink-0 items-center gap-1.5 text-[13px] font-semibold ${chip[r.state][1]}`}><span className={`h-1.5 w-1.5 rounded-full ${chip[r.state][2]}`} />{chip[r.state][0]}</span>
+            </div>
           </div>
         ))}
       </div>
