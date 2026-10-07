@@ -204,6 +204,9 @@ def previous_period(year: int, half: int) -> tuple[int, int]:
     return (year, 1) if half == 2 else (year - 1, 2)
 
 
+# First half-year of the project: earlier lead records are counted in it.
+LAUNCH_PERIOD_START = date(2026, 7, 1)
+
 # Management targets for the 6-month test phase.
 TEST_PHASE_TARGETS = {
     "subscribers": 100,        # customers (paid subscribers) to reach
@@ -257,7 +260,16 @@ class KpiService:
         end_dt = datetime(end.year, end.month, end.day, tzinfo=timezone.utc)
 
         # ---- CRM funnel: cohort of leads created in the period
-        in_period = (Lead.created_at >= start_dt, Lead.created_at < end_dt)
+        # Records registered before the launch half-year (pre-launch website
+        # sign-ups that still attended a lecture) belong to the launch cohort,
+        # otherwise bookings would not match the attendance sheet. The half
+        # before launch therefore has an empty lead cohort.
+        cohort_start, cohort_end = start_dt, end_dt
+        if start == LAUNCH_PERIOD_START:
+            cohort_start = datetime(2000, 1, 1, tzinfo=timezone.utc)
+        elif end == LAUNCH_PERIOD_START:
+            cohort_end = cohort_start
+        in_period = (Lead.created_at >= cohort_start, Lead.created_at < cohort_end)
         leads = (await self.db.execute(select(func.count(Lead.id)).where(*in_period))).scalar_one()
         booked = (
             await self.db.execute(
