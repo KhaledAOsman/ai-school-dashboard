@@ -262,7 +262,10 @@ class KpiService:
         booked = (
             await self.db.execute(
                 select(func.count(Lead.id)).where(
-                    *in_period, or_(Lead.lecture_date.isnot(None), Lead.teacher_slot_id.isnot(None))
+                    *in_period,
+                    # someone with an attendance record was necessarily booked,
+                    # even when their lecture date was never captured
+                    or_(Lead.lecture_date.isnot(None), Lead.teacher_slot_id.isnot(None), Lead.attended.isnot(None)),
                 )
             )
         ).scalar_one()
@@ -274,7 +277,12 @@ class KpiService:
         not_attended = (
             await self.db.execute(select(func.count(Lead.id)).where(*in_period, Lead.attended.is_(False)))
         ).scalar_one()
+        # "Bookings" in the KPI = sessions with a recorded outcome, so
+        # booked == attended + not_attended always holds. Booked leads whose
+        # attendance is not recorded yet (upcoming / postponed) are reported
+        # separately as pending and are not counted as bookings.
         pending_attendance = max(booked - attended - not_attended, 0)
+        booked = attended + not_attended
 
         # ---- Subscribers & revenue
         sub_row = (
@@ -307,7 +315,6 @@ class KpiService:
                     used.append(c)
         platforms = platform_totals(used)
         spend = sum((p.spend for p in platforms), ZERO)
-        reported_leads = sum(p.leads for p in platforms)
 
         # ---- Reconciliation: what the ad platforms report vs. what is
         # actually recorded as a lead (with a phone number) in the CRM.
@@ -320,20 +327,34 @@ class KpiService:
         for src, n in by_src.items():
             if src in crm_platform:
                 recorded[crm_platform[src]] += n
+        # A lead = a person whose details we registered (name + phone). Ad
+        # "results" also count website events and message conversations, which
+        # are interactions, not leads - so leads / cost-per-lead below come from
+        # the CRM, not from the ad account's results figure.
+        account = {p.platform: p for p in platforms}  # figures as the ad accounts report them
+        platforms = [
+            p.model_copy(update={
+                "leads": recorded[p.platform],
+                "cost_per_lead": (p.spend / recorded[p.platform]).quantize(Decimal("0.01")) if recorded[p.platform] else None,
+            })
+            for p in platforms
+        ]
+        reported_leads = sum(p.leads for p in platforms)
         recon_rows = []
         for p in platforms:
-            rec = recorded[p.platform]
+            acc = account[p.platform]
+            rec = p.leads
             recon_rows.append({
                 "platform": p.platform,
                 "spend": p.spend,
-                "reported": p.leads,
-                "form_leads": p.form_leads,
-                "website_leads": p.website_leads,
-                "messaging_conversations": p.messaging_conversations,
-                "recorded": rec,
-                "capture_rate": round(rec / p.leads * 100, 1) if p.leads else None,
-                "gap": p.leads - rec,
-                "real_cpl": (p.spend / rec).quantize(Decimal("0.01")) if rec else None,
+                "reported": acc.leads,                      # "results" in the ad account
+                "form_leads": acc.form_leads,
+                "website_leads": acc.website_leads,         # events, not leads
+                "messaging_conversations": acc.messaging_conversations,  # conversations, not leads
+                "recorded": rec,                            # leads with registered details
+                "capture_rate": round(rec / acc.leads * 100, 1) if acc.leads else None,
+                "gap": acc.leads - rec,
+                "real_cpl": p.cost_per_lead,
             })
         reconciliation = {
             "platforms": recon_rows,

@@ -7,7 +7,7 @@
  * Reading order: period switcher -> project phases -> executive summary
  * -> KPI groups -> funnel + ad spend split. No finance figures here.
  */
-import { useState, type FormEvent, type ReactNode } from "react";
+import { Children, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -20,6 +20,7 @@ import { FormField, Input } from "@/components/ui/Field";
 import { usePermission } from "@/permissions/usePermission";
 import { PERMISSIONS } from "@/permissions/constants";
 import { kpiApi, type PeriodMetrics, type Phases, type TestPhase } from "@/modules/kpi/services/kpiApi";
+import { AnimatedText, Reveal, useCountUp, useMounted } from "@/components/motion";
 import { apiErrorMessage, formatNumber, formatSAR, PLATFORM_LABELS } from "@/modules/marketing/lib";
 
 const HALF_LABEL: Record<number, string> = { 1: "النصف الأول · يناير – يونيو", 2: "النصف الثاني · يوليو – ديسمبر" };
@@ -52,7 +53,7 @@ function DeltaPill({ current, previous, lowerIsBetter = false }: { current: numb
   const Icon = up ? ArrowUpRight : ArrowDownRight;
   return (
     <span className={`${base} ${good ? "bg-[#e3f7ea] text-[#136c3a]" : "bg-[#fde8e7] text-[#a02a24]"}`}>
-      <span className="ltr-content">{Math.abs(p).toLocaleString("en-US", { maximumFractionDigits: 0 })}%</span>
+      <span className="ltr-content">{Math.abs(p) > 999 ? "999%+" : `${Math.abs(p).toLocaleString("en-US", { maximumFractionDigits: 0 })}%`}</span>
       <Icon size={14} strokeWidth={2.5} />
     </span>
   );
@@ -62,15 +63,24 @@ function KpiCard({ icon: Icon, label, value, hint, current, previous, lowerIsBet
   icon: LucideIcon; label: string; value: string; hint?: string; current: number | null; previous: number | null; lowerIsBetter?: boolean;
 }) {
   return (
-    <Card className="flex flex-col p-6">
+    <Card className="flex h-full flex-col p-5 transition-shadow duration-300 hover:shadow-md sm:p-6">
       <div className="mb-5 flex items-start justify-between gap-2">
         <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-50 text-brand-600 ring-1 ring-inset ring-brand-200/70"><Icon size={22} /></span>
         <DeltaPill current={current} previous={previous} lowerIsBetter={lowerIsBetter} />
       </div>
       <p className="text-[16px] font-medium text-ink-600">{label}</p>
-      <p className="ltr-content mt-2 whitespace-nowrap text-right text-[32px] font-medium leading-10 tracking-tight text-ink-900">{value}</p>
+      <p className="ltr-content mt-2 whitespace-nowrap text-right text-[28px] font-medium leading-10 tracking-tight text-ink-900 sm:text-[32px]"><AnimatedText text={value} /></p>
       {hint && <p className="mt-3 text-[14px] leading-snug text-ink-600">{hint}</p>}
     </Card>
+  );
+}
+
+/** Grid whose children rise in one after another. */
+function RevealGrid({ className, children }: { className: string; children: ReactNode }) {
+  return (
+    <div className={className}>
+      {Children.toArray(children).map((c, i) => <Reveal key={i} delay={i * 80} className="h-full">{c}</Reveal>)}
+    </div>
   );
 }
 
@@ -85,68 +95,83 @@ function SectionTitle({ children, note }: { children: ReactNode; note?: string }
 
 /* ----------------------------- phases ----------------------------- */
 
-/** Test-phase goals: first block on the page (compact bordered cards, 3D icons made in Canva). */
+/** Horizontal progress bar that fills in on mount (width transition). */
+function GoalBar({ progress, color, label }: { progress: number; color: string; label: string }) {
+  const mounted = useMounted(150);
+  const pctNow = useCountUp(Math.round(progress * 100), 1200);
+  return (
+    <div className="flex items-center gap-3" role="img" aria-label={label}>
+      <div className="h-2 flex-1 overflow-hidden rounded-full bg-ink-100">
+        <div className="h-full rounded-full transition-[width] duration-[1300ms] ease-out-expo" style={{ width: mounted ? `${Math.max(progress * 100, progress > 0 ? 3 : 0)}%` : "0%", backgroundColor: color }} />
+      </div>
+      <span className="ltr-content w-10 shrink-0 text-end text-[13px] font-semibold text-ink-700">{Math.round(pctNow)}%</span>
+    </div>
+  );
+}
+
+/** Test-phase goals: first block on the page. */
 function TargetsStrip({ tp }: { tp: TestPhase }) {
   const t = tp.targets, m = tp.metrics;
   const cac = num(m.cac);
   type State = "met" | "near" | "behind" | "none";
   const st = (ok: boolean, ratio: number, has: boolean): State => (!has ? "none" : ok ? "met" : ratio >= 0.7 ? "near" : "behind");
-  const rows: { img: string; label: string; info: string; value: string; goal: string; progress: number; state: State }[] = [
+  const rows: { label: string; info: string; value: string; goal: string; progress: number; state: State }[] = [
     {
-      img: "goal-customers", label: "عدد العملاء", info: "عدد المشتركين المدفوعين خلال مرحلة الاختبار",
+      label: "عدد العملاء", info: "عدد المشتركين المدفوعين خلال مرحلة الاختبار",
       value: `${formatNumber(m.subscribers)} / ${formatNumber(t.subscribers)}`, goal: `متبقٍ ${formatNumber(Math.max(t.subscribers - m.subscribers, 0))} عميل`,
       progress: Math.min(m.subscribers / t.subscribers, 1), state: st(m.subscribers >= t.subscribers, m.subscribers / t.subscribers, true),
     },
     {
-      img: "goal-cac", label: "تكلفة اكتساب العميل", info: `إجمالي الإنفاق الإعلاني ÷ المشتركين · إنفاق ${formatSAR(m.total_spend)}`,
-      value: cac === null ? "—" : formatSAR(cac), goal: `الهدف < ${formatSAR(t.max_cac)}`,
+      label: "تكلفة اكتساب العميل", info: `إجمالي الإنفاق الإعلاني ÷ المشتركين · إنفاق ${formatSAR(m.total_spend)}`,
+      value: cac === null ? "—" : formatSAR(cac), goal: `الهدف أقل من ${formatSAR(t.max_cac)}`,
       progress: cac === null ? 0 : Math.min(t.max_cac / Math.max(cac, 1), 1), state: st(cac !== null && cac < t.max_cac, cac ? t.max_cac / cac : 0, cac !== null),
     },
     {
-      img: "goal-conversion", label: "التحويل من الحاضرين", info: "المشتركون ÷ من حضروا المحاضرة (وليس من إجمالي المحتملين)",
-      value: pct(m.conversion), goal: `الهدف ${t.min_conversion}%`,
+      label: "التحويل من الحاضرين", info: "المشتركون ÷ من حضروا المحاضرة (وليس من إجمالي المحتملين)",
+      value: pct(m.conversion), goal: `الهدف \u200E${t.min_conversion}%\u200E`,
       progress: Math.min((m.conversion ?? 0) / t.min_conversion, 1), state: st((m.conversion ?? 0) >= t.min_conversion, (m.conversion ?? 0) / t.min_conversion, m.conversion !== null),
     },
     {
-      img: "goal-attendance", label: "نسبة حضور المحاضرة", info: `${formatNumber(m.attended)} حضروا من ${formatNumber(m.booked)} حجز`,
-      value: pct(m.attendance_rate), goal: `الهدف ${t.min_attendance}%`,
+      label: "نسبة حضور المحاضرة", info: `${formatNumber(m.attended)} حضروا من ${formatNumber(m.booked)} حجز (حضروا + لم يحضروا)`,
+      value: pct(m.attendance_rate), goal: `الهدف \u200E${t.min_attendance}%\u200E`,
       progress: Math.min((m.attendance_rate ?? 0) / t.min_attendance, 1), state: st((m.attendance_rate ?? 0) >= t.min_attendance, (m.attendance_rate ?? 0) / t.min_attendance, m.attendance_rate !== null),
     },
   ];
-  const chip = { met: ["تحقق", "bg-[#e3f7ea] text-[#136c3a]"], near: ["قريب", "bg-accent-50 text-accent-700"], behind: ["دون الهدف", "bg-[#fde8e7] text-[#a02a24]"], none: ["بانتظار البيانات", "bg-ink-100 text-ink-600"] } as const;
-  const bar = { met: "bg-[#2fa56f]", near: "bg-accent-400", behind: "bg-[#d9453d]", none: "bg-ink-300" } as const;
+  const status = {
+    met: { text: "تحقق الهدف", color: "#1f8a52", cls: "text-[#136c3a]" },
+    near: { text: "قريب من الهدف", color: "#ff8a3d", cls: "text-accent-700" },
+    behind: { text: "دون الهدف", color: "#d9453d", cls: "text-[#a02a24]" },
+    none: { text: "بانتظار البيانات", color: "#b7bdd3", cls: "text-ink-600" },
+  } as const;
   return (
     <section>
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-[22px] font-semibold text-ink-900">أهداف مرحلة الاختبار</h2>
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 className="text-[20px] font-semibold text-ink-900 sm:text-[22px]">أهداف مرحلة الاختبار</h2>
         <p className="ltr-content text-[13px] text-ink-600">
           {tp.start} → {tp.end_inclusive}
           {!tp.configured && <span className="font-sans"> · النصف المحدد (لم تُحدَّد بداية المشروع)</span>}
         </p>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {rows.map((r) => (
-          <div key={r.label} className="flex flex-col justify-between rounded-2xl border border-ink-200 bg-white p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="flex items-center gap-1.5 text-[14.5px] font-medium text-ink-700">
-                  {r.label}
-                  <span title={r.info} className="cursor-help text-ink-400"><Info size={14} /></span>
-                </p>
-                <p className="ltr-content mt-1 whitespace-nowrap text-right text-[24px] font-bold leading-9 tracking-tight text-ink-900">{r.value}</p>
+        {rows.map((r, i) => (
+          <Reveal key={r.label} delay={i * 90} className="h-full">
+            <div className="flex h-full flex-col rounded-2xl border border-ink-200 bg-white p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md">
+              <p className="flex items-center gap-1.5 text-[15px] font-medium text-ink-600">
+                <span>{r.label}</span>
+                <span title={r.info} className="shrink-0 cursor-help text-ink-400"><Info size={14} /></span>
+              </p>
+              <p className="ltr-content mt-2 whitespace-nowrap text-right text-[30px] font-medium leading-10 tracking-tight text-ink-900"><AnimatedText text={r.value} /></p>
+              <div className="mt-3">
+                <GoalBar progress={r.progress} color={r.state === "met" ? "#1f8a52" : r.state === "behind" ? "#d9453d" : r.state === "near" ? "#ff8a3d" : "#b7bdd3"} label={`${r.label}: ${Math.round(r.progress * 100)}% من الهدف`} />
               </div>
-              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-ink-200 bg-white">
-                <img src={`/icons/${r.img}.png`} alt="" className="h-10 w-10 object-contain" />
-              </span>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-ink-100 pt-3 text-[13px] text-ink-600">
+                <span className={`inline-flex items-center gap-1.5 font-semibold ${status[r.state].cls}`}>
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: status[r.state].color }} />{status[r.state].text}
+                </span>
+                <span>{r.goal}</span>
+              </div>
             </div>
-            <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-ink-100">
-              <div className={`h-full rounded-full ${bar[r.state]}`} style={{ width: `${Math.round(r.progress * 100)}%` }} />
-            </div>
-            <div className="mt-2.5 flex items-center justify-between gap-2 text-[13px] text-ink-600">
-              <span className="min-w-0 whitespace-nowrap leading-snug">{r.goal}</span>
-              <span className={`inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-[12.5px] font-semibold ${chip[r.state][1]}`}>{chip[r.state][0]}</span>
-            </div>
-          </div>
+          </Reveal>
         ))}
       </div>
     </section>
@@ -222,8 +247,8 @@ function HeroSummary({ cur, prev, label }: { cur: PeriodMetrics; prev: PeriodMet
       c: num(cur.marketing.cac), p: num(prev.marketing.cac), low: true,
     },
     {
-      icon: UserCheck, q: "الحضور", label: "نسبة الحضور من الحجوزات", value: pct(cur.funnel_rates.booked_to_attended),
-      sub: `حضر ${formatNumber(f.attended)} · لم يحضر ${formatNumber(f.not_attended)} · بانتظار التسجيل ${formatNumber(f.pending_attendance)} (من ${formatNumber(f.booked)} حجز)`,
+      icon: UserCheck, q: "الحضور", label: "نسبة الحضور", value: pct(cur.funnel_rates.booked_to_attended),
+      sub: `حضر ${formatNumber(f.attended)} + لم يحضر ${formatNumber(f.not_attended)} = ${formatNumber(f.booked)} حجز`,
       c: cur.funnel_rates.booked_to_attended, p: prev.funnel_rates.booked_to_attended, low: false,
     },
     {
@@ -250,7 +275,7 @@ function HeroSummary({ cur, prev, label }: { cur: PeriodMetrics; prev: PeriodMet
             </div>
             <div>
               <p className="text-[14px] text-ink-600">{it.label}</p>
-              <p className="ltr-content mt-0.5 whitespace-nowrap text-right text-[34px] font-medium leading-10 text-ink-900">{it.value}</p>
+              <p className="ltr-content mt-0.5 whitespace-nowrap text-right text-[30px] font-medium leading-10 text-ink-900 sm:text-[34px]"><AnimatedText text={it.value} /></p>
             </div>
             <p className="border-t border-ink-100 pt-3 text-[13.5px] leading-snug text-ink-600">{it.sub}</p>
           </div>
@@ -316,22 +341,26 @@ function Funnel({ cur, prev, prevLabel }: { cur: PeriodMetrics; prev: PeriodMetr
   );
 }
 
-/** After booking: how the booked leads split into attended / no-show / not yet recorded. */
+/** Bookings = attended + did not attend. Not-yet-recorded sessions are shown apart. */
 function AttendanceSplit({ f }: { f: PeriodMetrics["funnel"] }) {
-  if (f.booked <= 0) return null;
+  const mounted = useMounted(150);
+  if (f.booked <= 0 && f.pending_attendance <= 0) return null;
   const parts = [
     { label: "حضروا", v: f.attended, cls: "bg-success-500", dot: "bg-success-500" },
     { label: "لم يحضروا", v: f.not_attended, cls: "bg-danger-500", dot: "bg-danger-500" },
-    { label: "بانتظار تسجيل الحضور", v: f.pending_attendance, cls: "bg-ink-300", dot: "bg-ink-300" },
   ];
   return (
     <div className="mt-5 rounded-2xl border border-ink-200 p-4">
-      <div className="mb-3 flex items-center justify-between text-[15px]">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-1 text-[15px]">
         <span className="font-semibold text-ink-900">الحضور بعد الحجز</span>
-        <span className="text-ink-600">من <span className="ltr-content font-semibold text-ink-900">{formatNumber(f.booked)}</span> حجز</span>
+        <span className="text-ink-600">
+          <span className="ltr-content font-semibold text-ink-900">{formatNumber(f.attended)} + {formatNumber(f.not_attended)} = {formatNumber(f.booked)}</span> حجز
+        </span>
       </div>
       <div className="flex h-4 overflow-hidden rounded-full bg-ink-100">
-        {parts.map((p) => p.v > 0 && <div key={p.label} className={p.cls} style={{ width: `${(p.v / f.booked) * 100}%` }} title={`${p.label}: ${p.v}`} />)}
+        {parts.map((p) => p.v > 0 && (
+          <div key={p.label} className={`${p.cls} transition-[width] duration-[1200ms] ease-out-expo`} style={{ width: mounted ? `${(p.v / Math.max(f.booked, 1)) * 100}%` : "0%" }} title={`${p.label}: ${p.v}`} />
+        ))}
       </div>
       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-[14px] text-ink-700">
         {parts.map((p) => (
@@ -341,6 +370,11 @@ function AttendanceSplit({ f }: { f: PeriodMetrics["funnel"] }) {
           </span>
         ))}
       </div>
+      {f.pending_attendance > 0 && (
+        <p className="mt-3 border-t border-ink-100 pt-3 text-[13.5px] text-ink-600">
+          يوجد <span className="ltr-content font-semibold text-ink-900">{formatNumber(f.pending_attendance)}</span> حجز لم يُسجَّل حضوره بعد (قادم أو مؤجَّل)، ولا يدخل في عدد الحجوزات حتى يُسجَّل.
+        </p>
+      )}
     </div>
   );
 }
@@ -415,86 +449,6 @@ function PlatformCard({ cur }: { cur: PeriodMetrics }) {
 
 /* ----------------------------- page ----------------------------- */
 
-/* ------------------------ lead reconciliation ------------------------ */
-
-/** Ad-account "results" vs leads we actually hold details for (name + phone). */
-function ReconciliationCard({ cur }: { cur: PeriodMetrics }) {
-  const rec = cur.marketing.reconciliation;
-  const th = "px-3 py-2.5 text-start font-semibold";
-  const td = "px-3 py-3.5";
-  return (
-    <Card className="p-6">
-      <CardHeader>
-        <div>
-          <CardTitle>من الإعلان إلى العميل المحتمل</CardTitle>
-          <CardSubtitle>الليد هو شخص سجّلنا اسمه ورقم هاتفه فقط</CardSubtitle>
-        </div>
-        <Link to="/marketing/campaigns"><Button variant="outline" size="sm" type="button">تفصيل نتائج الحملات</Button></Link>
-      </CardHeader>
-      <div className="overflow-x-auto">
-        <table className="w-full text-[14px]">
-          <thead>
-            <tr className="border-b border-ink-200 text-[14px] text-ink-600">
-              <th className={th}>المصدر</th>
-              <th className={th}>نتائج الحساب الإعلاني</th>
-              <th className={th}>منها ليست ليدز</th>
-              <th className={th}>ليدز مسجَّلة</th>
-              <th className={th}>تكلفة الليد</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-ink-100">
-            {rec.platforms.map((p) => {
-              const nonLead = p.website_leads + p.messaging_conversations;
-              return (
-                <tr key={p.platform} className="align-top">
-                  <td className={td + " whitespace-nowrap font-semibold text-ink-900"}>{PLATFORM_LABELS[p.platform]}</td>
-                  <td className={td + " ltr-content text-start text-ink-600"}>{p.reported ? formatNumber(p.reported) : "—"}</td>
-                  <td className={td + " text-ink-600"}>
-                    {nonLead > 0 ? (
-                      <>
-                        <span className="ltr-content">{formatNumber(nonLead)}</span>
-                        <span className="mt-1 block text-[13px]">موقع {formatNumber(p.website_leads)} · محادثات {formatNumber(p.messaging_conversations)}</span>
-                      </>
-                    ) : "—"}
-                  </td>
-                  <td className={td + " ltr-content text-start text-[16px] font-semibold text-ink-900"}>{formatNumber(p.recorded)}</td>
-                  <td className={td + " ltr-content whitespace-nowrap text-start font-medium text-ink-900"}>{p.real_cpl ? formatSAR(p.real_cpl) : "—"}</td>
-                </tr>
-              );
-            })}
-            {([["الموقع (تسجيل مباشر)", rec.other_channels.website], ["عضوي / يدوي", rec.other_channels.organic]] as const).map(([label, n]) => (
-              <tr key={label}>
-                <td className={td + " whitespace-nowrap font-semibold text-ink-900"}>{label}</td>
-                <td className={td + " text-ink-600"}>—</td>
-                <td className={td + " text-ink-600"}>—</td>
-                <td className={td + " ltr-content text-start text-[16px] font-semibold text-ink-900"}>{formatNumber(n)}</td>
-                <td className={td + " text-ink-600"}>—</td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="border-t border-ink-200">
-              <td className={td + " font-semibold text-ink-900"}>إجمالي الليدز المسجَّلة</td>
-              <td colSpan={2} />
-              <td className={td + " ltr-content text-start text-[16px] font-semibold text-ink-900"}>{formatNumber(rec.total_recorded)}</td>
-              <td />
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-      <div className="mt-4 space-y-2 border-t border-ink-200 pt-4 text-[13.5px] leading-relaxed text-ink-600">
-        <p className="flex gap-2"><Info size={16} className="mt-0.5 shrink-0" />
-          الحساب الإعلاني يعدّ كل «نتيجة» حتى لو كانت زيارة للموقع أو تواصلاً من خلاله أو محادثة رسائل. هذه تفاعلات وليست ليدز، لأننا لا نملك بيانات صاحبها، ولذلك لا تدخل في أي حساب هنا.
-        </p>
-        <p className="ps-6">تكلفة الليد = الإنفاق ÷ الليدز المسجَّلة، وهي التي تُستخدم في بقية المؤشرات.</p>
-        {cur.marketing.includes_cumulative && (
-          <p className="ps-6">بعض الحملات أرقامها تراكمية بدون تواريخ، بينما الليدز المسجَّلة تُحتسب داخل هذه الفترة فقط؛ أضف تواريخ الحملات لمقارنة أدق.</p>
-        )}
-      </div>
-    </Card>
-  );
-}
-
 function PageSkeleton() {
   return (
     <div className="space-y-6" aria-busy="true">
@@ -520,7 +474,7 @@ export function KpiDashboardPage() {
     <div>
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-[36px] font-medium leading-[44px] text-ink-900">مؤشرات أداء المشروع</h1>
+          <h1 className="text-[28px] font-medium leading-9 text-ink-900 sm:text-[36px] sm:leading-[44px]">مؤشرات أداء المشروع</h1>
           <p className="mt-1.5 text-[17px] text-ink-600">تقرير نصف سنوي لمتابعة الإدارة — مقارنة بالنصف السابق</p>
         </div>
         <div className="flex items-center gap-3">
@@ -550,40 +504,39 @@ export function KpiDashboardPage() {
       {data && cur && prev && (
         <div className="space-y-6">
           <TargetsStrip tp={data.test_phase} />
-          <PhaseTimeline key={JSON.stringify(data.phases)} phases={data.phases} />
-          <HeroSummary cur={cur} prev={prev} label={periodLabel} />
+          <Reveal delay={60}><PhaseTimeline key={JSON.stringify(data.phases)} phases={data.phases} /></Reveal>
+          <Reveal><HeroSummary cur={cur} prev={prev} label={periodLabel} /></Reveal>
 
-          <SectionTitle note="الاشتراكات والإيراد">النمو والإيراد</SectionTitle>
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+          <Reveal><SectionTitle note="الاشتراكات والإيراد">النمو والإيراد</SectionTitle></Reveal>
+          <RevealGrid className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard icon={Users} label="المشتركون الجدد" value={formatNumber(cur.revenue.subscribers)} current={cur.revenue.subscribers} previous={prev.revenue.subscribers} hint="اشتراكات مدفوعة داخل الفترة" />
             <KpiCard icon={Wallet} label="الإيراد المحصَّل" value={formatSAR(cur.revenue.total_paid)} current={num(cur.revenue.total_paid)} previous={num(prev.revenue.total_paid)} hint={`خصومات ${formatSAR(cur.revenue.total_discount)}`} />
             <KpiCard icon={BadgeDollarSign} label="متوسط قيمة المشترك" value={formatSAR(cur.revenue.avg_paid)} current={num(cur.revenue.avg_paid)} previous={num(prev.revenue.avg_paid)} hint="الإيراد ÷ عدد المشتركين" />
             <KpiCard icon={Percent} label="التحويل من الحاضرين" value={pct(cur.funnel_rates.attended_to_subscriber)} current={cur.funnel_rates.attended_to_subscriber} previous={prev.funnel_rates.attended_to_subscriber} hint="مشترك ÷ حضر المحاضرة" />
-          </div>
+          </RevealGrid>
 
-          <SectionTitle note="بعد الحجز">الحضور وعدم الحضور</SectionTitle>
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
-            <KpiCard icon={CalendarCheck} label="الحجوزات" value={formatNumber(cur.funnel.booked)} current={cur.funnel.booked} previous={prev.funnel.booked} hint="عملاء حجزوا حصة تجريبية" />
+          <Reveal><SectionTitle note="بعد الحجز">الحضور وعدم الحضور</SectionTitle></Reveal>
+          <RevealGrid className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+            <KpiCard icon={CalendarCheck} label="الحجوزات" value={formatNumber(cur.funnel.booked)} current={cur.funnel.booked} previous={prev.funnel.booked} hint="حضروا + لم يحضروا" />
             <KpiCard icon={UserCheck} label="حضروا" value={formatNumber(cur.funnel.attended)} current={cur.funnel.attended} previous={prev.funnel.attended} hint={`${pct(cur.funnel_rates.booked_to_attended)} من الحجوزات`} />
             <KpiCard icon={UserX} label="لم يحضروا" value={formatNumber(cur.funnel.not_attended)} current={cur.funnel.not_attended} previous={prev.funnel.not_attended} lowerIsBetter hint={`${pct(cur.funnel_rates.booked_to_not_attended)} من الحجوزات`} />
-            <KpiCard icon={Clock} label="بانتظار تسجيل الحضور" value={formatNumber(cur.funnel.pending_attendance)} current={cur.funnel.pending_attendance} previous={prev.funnel.pending_attendance} lowerIsBetter hint="حجوزات لم يُسجَّل حضورها بعد" />
-          </div>
+            <KpiCard icon={Clock} label="بانتظار تسجيل الحضور" value={formatNumber(cur.funnel.pending_attendance)} current={cur.funnel.pending_attendance} previous={prev.funnel.pending_attendance} lowerIsBetter hint="قادمة أو لم يُسجَّل حضورها، ولا تدخل في الحجوزات" />
+          </RevealGrid>
 
-          <SectionTitle note="كفاءة الإنفاق الإعلاني">التسويق</SectionTitle>
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+          <Reveal><SectionTitle note="كفاءة الإنفاق الإعلاني">التسويق</SectionTitle></Reveal>
+          <RevealGrid className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard icon={Megaphone} label="إجمالي الإنفاق الإعلاني" value={formatSAR(cur.marketing.total_spend)} current={num(cur.marketing.total_spend)} previous={num(prev.marketing.total_spend)} lowerIsBetter hint="سناب شات + ميتا + تيك توك" />
             <KpiCard icon={Target} label="تكلفة اكتساب المشترك (CAC)" value={cur.marketing.cac ? formatSAR(cur.marketing.cac) : "—"} current={num(cur.marketing.cac)} previous={num(prev.marketing.cac)} lowerIsBetter hint="الإنفاق الإعلاني ÷ المشتركين الجدد" />
             <KpiCard icon={UserCheck} label="عملاء محتملون (إعلانات)" value={formatNumber(cur.marketing.reported_leads)} current={cur.marketing.reported_leads} previous={prev.marketing.reported_leads} hint="سُجّلت بياناتهم (اسم + رقم هاتف)" />
             <KpiCard icon={Coins} label="تكلفة العميل المحتمل" value={cur.marketing.cost_per_lead ? formatSAR(cur.marketing.cost_per_lead) : "—"} current={num(cur.marketing.cost_per_lead)} previous={num(prev.marketing.cost_per_lead)} lowerIsBetter hint="الإنفاق ÷ العملاء المحتملين" />
-          </div>
+          </RevealGrid>
 
-          <SectionTitle note="هذه الفترة مقابل السابقة">القمع والمنصات</SectionTitle>
-          <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          <Reveal><SectionTitle note="هذه الفترة مقابل السابقة">القمع والمنصات</SectionTitle></Reveal>
+          <RevealGrid className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             <Funnel cur={cur} prev={prev} prevLabel={prevLabel} />
             <PlatformCard cur={cur} />
-          </div>
+          </RevealGrid>
 
-          <ReconciliationCard cur={cur} />
         </div>
       )}
     </div>

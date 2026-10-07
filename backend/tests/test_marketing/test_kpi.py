@@ -123,10 +123,11 @@ def test_funnel_rates_include_no_show():
     from app.modules.marketing.service import KpiService
 
     rates = KpiService._funnel_rates(
-        {"leads": 40, "booked": 12, "attended": 8, "not_attended": 3, "pending_attendance": 1, "subscribers": 5}
+        {"leads": 40, "booked": 11, "attended": 8, "not_attended": 3, "pending_attendance": 1, "subscribers": 5}
     )
-    assert rates["booked_to_attended"] == pytest_approx(66.7)
-    assert rates["booked_to_not_attended"] == 25.0
+    assert rates["booked_to_attended"] == pytest_approx(72.7)
+    assert rates["booked_to_not_attended"] == pytest_approx(27.3)
+    assert rates["booked_to_attended"] + rates["booked_to_not_attended"] == pytest_approx(100.0)
 
 
 def pytest_approx(v):

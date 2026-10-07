@@ -35,6 +35,8 @@ import {
   ChevronDown,
   Megaphone,
   BadgeCheck,
+  Menu,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { usePermission } from "@/permissions/usePermission";
@@ -174,6 +176,19 @@ export function AppLayout({ children }: { children: ReactNode }) {
     else if (isMarketingRoute) setOpenGroup("marketing");
   }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Mobile drawer: closes by itself on every navigation, on Escape, and the
+  // page behind it does not scroll while it is open.
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuOpen(false); };
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => { document.body.style.overflow = prev; window.removeEventListener("keydown", onKey); };
+  }, [menuOpen]);
+
   async function handleLogout() {
     await logout();
     navigate("/login");
@@ -189,12 +204,31 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-[#f1f3f9]" dir="rtl">
-      <aside className="sticky top-0 flex h-screen w-[300px] shrink-0 flex-col border-e border-[#dcdfeb] bg-white">
-        <div className="flex h-[80px] items-center border-b border-ink-100 px-6">
+      {/* Backdrop (mobile only) */}
+      <div
+        onClick={() => setMenuOpen(false)}
+        aria-hidden
+        className={clsx(
+          "fixed inset-0 z-40 bg-ink-900/40 transition-opacity duration-300 lg:hidden",
+          menuOpen ? "opacity-100" : "pointer-events-none opacity-0"
+        )}
+      />
+      <aside
+        id="app-sidebar"
+        className={clsx(
+          "fixed inset-y-0 start-0 z-50 flex w-[300px] max-w-[86vw] flex-col border-e border-[#dcdfeb] bg-white shadow-xl transition-transform duration-300 ease-out-expo",
+          "lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:shrink-0 lg:translate-x-0 lg:shadow-none",
+          menuOpen ? "translate-x-0" : "translate-x-full"
+        )}
+      >
+        <div className="flex h-[72px] items-center justify-between border-b border-ink-100 px-6 lg:h-[80px]">
           <img src="/logo.png" alt="AiSchool" className="h-10 w-auto object-contain" />
+          <button type="button" onClick={() => setMenuOpen(false)} aria-label="إغلاق القائمة" className="rounded-full p-2 text-ink-600 hover:bg-ink-100 lg:hidden">
+            <X size={22} />
+          </button>
         </div>
 
-        <nav className="thin-scrollbar flex-1 overflow-y-auto px-3 pb-4">
+        <nav onClick={(e) => { if ((e.target as HTMLElement).closest("a")) setMenuOpen(false); }} className="thin-scrollbar flex-1 overflow-y-auto px-3 pb-4">
           {canViewDashboard && (
             <>
               <NavSectionLabel>عام</NavSectionLabel>
@@ -284,9 +318,20 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className="thin-scrollbar flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1360px] px-6 py-8 lg:px-10">{children}</div>
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-[#dcdfeb] bg-white/95 px-4 backdrop-blur lg:hidden">
+          <button
+            type="button" onClick={() => setMenuOpen(true)} aria-label="فتح القائمة" aria-expanded={menuOpen} aria-controls="app-sidebar"
+            className="-me-1 rounded-full p-2 text-ink-800 hover:bg-ink-100"
+          >
+            <Menu size={24} />
+          </button>
+          <img src="/logo.png" alt="AiSchool" className="h-8 w-auto object-contain" />
+        </header>
+        <main className="thin-scrollbar min-w-0 flex-1">
+          <div className="mx-auto max-w-[1360px] px-4 py-5 sm:px-6 sm:py-8 lg:px-10">{children}</div>
+        </main>
+      </div>
     </div>
   );
 }
