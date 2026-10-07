@@ -24,6 +24,9 @@ interface FormState {
   results_count: string;
   results_label: string;
   counts_as_leads: boolean;
+  form_leads: string;
+  website_leads: string;
+  messaging_conversations: string;
   period_start: string;
   period_end: string;
   period_label: string;
@@ -38,6 +41,9 @@ const EMPTY: FormState = {
   results_count: "",
   results_label: "",
   counts_as_leads: false,
+  form_leads: "",
+  website_leads: "",
+  messaging_conversations: "",
   period_start: "",
   period_end: "",
   period_label: "",
@@ -76,6 +82,9 @@ export function CampaignsPage() {
       results_count: c.results_count?.toString() ?? "",
       results_label: c.results_label ?? "",
       counts_as_leads: c.counts_as_leads,
+      form_leads: c.form_leads?.toString() ?? "",
+      website_leads: c.website_leads?.toString() ?? "",
+      messaging_conversations: c.messaging_conversations?.toString() ?? "",
       period_start: c.period_start ?? "",
       period_end: c.period_end ?? "",
       period_label: c.period_label ?? "",
@@ -96,6 +105,9 @@ export function CampaignsPage() {
       results_count: form.results_count === "" ? null : Number(form.results_count),
       results_label: form.results_label.trim() || null,
       counts_as_leads: form.counts_as_leads,
+      form_leads: form.form_leads === "" ? null : Number(form.form_leads),
+      website_leads: form.website_leads === "" ? null : Number(form.website_leads),
+      messaging_conversations: form.messaging_conversations === "" ? null : Number(form.messaging_conversations),
       period_start: form.period_start || null,
       period_end: form.period_end || null,
       period_label: form.period_label.trim() || null,
@@ -191,6 +203,23 @@ export function CampaignsPage() {
               <input type="checkbox" checked={form.counts_as_leads} onChange={(e) => set("counts_as_leads", e.target.checked)} />
               النتائج تُحتسب عملاء محتملين (وليست نقرات أو مشاهدات)
             </label>
+            <div className="rounded-xl border border-ink-200 p-4">
+              <p className="mb-1 text-sm font-semibold text-ink-900">تفصيل النتائج (اختياري)</p>
+              <p className="mb-3 text-xs text-ink-500">
+                رقم «النتائج» في الحساب الإعلاني يجمع أنواعاً مختلفة. نماذج الليد فقط تُصدَّر ببيانات العميل، أما نتائج الموقع والمحادثات فلا يوجد لها صف في ملف الليدز.
+              </p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <FormField label="ليدز النماذج (Meta leads)">
+                  <Input type="number" min="0" dir="ltr" value={form.form_leads} onChange={(e) => set("form_leads", e.target.value)} />
+                </FormField>
+                <FormField label="ليدز الموقع (Website leads)">
+                  <Input type="number" min="0" dir="ltr" value={form.website_leads} onChange={(e) => set("website_leads", e.target.value)} />
+                </FormField>
+                <FormField label="محادثات (Messaging)">
+                  <Input type="number" min="0" dir="ltr" value={form.messaging_conversations} onChange={(e) => set("messaging_conversations", e.target.value)} />
+                </FormField>
+              </div>
+            </div>
             <FormField label="وصف الفترة" hint="مثال: تراكمي حتى تاريخ كذا — عند ترك التواريخ فارغة تُحتسب الحملة على النصف الحالي">
               <Input value={form.period_label} onChange={(e) => set("period_label", e.target.value)} />
             </FormField>
@@ -257,6 +286,11 @@ export function CampaignsPage() {
                           <span className="text-xs text-ink-500">{c.results_label}</span>
                           {c.counts_as_leads && <Badge tone="success" dot={false} className="ms-2">ليد</Badge>}
                         </>
+                      )}
+                      {(c.form_leads != null || c.website_leads != null || c.messaging_conversations != null) && (
+                        <span className="mt-1 block text-xs text-ink-500">
+                          نماذج {formatNumber(c.form_leads ?? 0)} · موقع {formatNumber(c.website_leads ?? 0)} · محادثات {formatNumber(c.messaging_conversations ?? 0)}
+                        </span>
                       )}
                     </td>
                     <td className="px-3 py-3 text-xs text-ink-500">

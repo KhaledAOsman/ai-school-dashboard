@@ -101,6 +101,9 @@ class CampaignBase(BaseModel):
     results_count: int | None = Field(default=None, ge=0)
     results_label: str | None = Field(default=None, max_length=100)
     counts_as_leads: bool = False
+    form_leads: int | None = Field(default=None, ge=0)
+    website_leads: int | None = Field(default=None, ge=0)
+    messaging_conversations: int | None = Field(default=None, ge=0)
     impressions: int | None = Field(default=None, ge=0)
     clicks: int | None = Field(default=None, ge=0)
     period_start: date | None = None
@@ -121,6 +124,9 @@ class CampaignUpdateRequest(BaseModel):
     results_count: int | None = Field(default=None, ge=0)
     results_label: str | None = None
     counts_as_leads: bool | None = None
+    form_leads: int | None = Field(default=None, ge=0)
+    website_leads: int | None = Field(default=None, ge=0)
+    messaging_conversations: int | None = Field(default=None, ge=0)
     impressions: int | None = Field(default=None, ge=0)
     clicks: int | None = Field(default=None, ge=0)
     period_start: date | None = None
@@ -142,6 +148,9 @@ class PlatformTotals(BaseModel):
     leads: int
     cost_per_lead: Decimal | None
     campaigns: int
+    form_leads: int = 0
+    website_leads: int = 0
+    messaging_conversations: int = 0
 
 
 class CampaignListResponse(BaseModel):

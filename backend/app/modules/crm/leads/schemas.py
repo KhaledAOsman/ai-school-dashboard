@@ -18,7 +18,7 @@ class LeadCreateRequest(BaseModel):
     """
     full_name: str = Field(min_length=1, max_length=200)
     phone: str = Field(min_length=1, max_length=30)
-    source: str | None = Field(default=None, pattern="^(instagram|tiktok|snapchat|organic)$")
+    source: str | None = Field(default=None, pattern="^(instagram|tiktok|snapchat|website|organic)$")
     notes: str | None = None
     assigned_to: uuid.UUID | None = None
 
@@ -78,7 +78,7 @@ class LeadUpdateRequest(BaseModel):
     All fields optional; only provided ones are changed."""
     full_name: str | None = Field(default=None, min_length=1, max_length=200)
     phone: str | None = Field(default=None, min_length=1, max_length=30)
-    source: str | None = Field(default=None, pattern="^(instagram|tiktok|snapchat|organic)$")
+    source: str | None = Field(default=None, pattern="^(instagram|tiktok|snapchat|website|organic)$")
     notes: str | None = None
 
 
@@ -150,7 +150,7 @@ class LeadImportRow(BaseModel):
     a spreadsheet still works."""
     full_name: str = Field(min_length=1, max_length=200)
     phone: str = Field(min_length=1, max_length=30)
-    source: str | None = Field(default=None, pattern="^(instagram|tiktok|snapchat|organic)$")
+    source: str | None = Field(default=None, pattern="^(instagram|tiktok|snapchat|website|organic)$")
     notes: str | None = None
 
 

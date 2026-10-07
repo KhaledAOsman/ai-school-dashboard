@@ -43,6 +43,9 @@ export interface Campaign {
   results_count: number | null;
   results_label: string | null;
   counts_as_leads: boolean;
+  form_leads: number | null;
+  website_leads: number | null;
+  messaging_conversations: number | null;
   impressions: number | null;
   clicks: number | null;
   period_start: string | null;
@@ -59,6 +62,9 @@ export interface CampaignPayload {
   results_count: number | null;
   results_label: string | null;
   counts_as_leads: boolean;
+  form_leads: number | null;
+  website_leads: number | null;
+  messaging_conversations: number | null;
   period_start: string | null;
   period_end: string | null;
   period_label: string | null;
@@ -71,6 +77,9 @@ export interface PlatformTotals {
   leads: number;
   cost_per_lead: string | null;
   campaigns: number;
+  form_leads: number;
+  website_leads: number;
+  messaging_conversations: number;
 }
 
 export const marketingApi = {

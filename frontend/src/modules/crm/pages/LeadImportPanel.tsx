@@ -29,6 +29,7 @@ function normalizeSource(raw: string | null): string | null {
   if (value.includes("insta") || value.includes("انستا") || value.includes("انستجرام")) return "instagram";
   if (value.includes("tiktok") || value.includes("tik tok") || value.includes("تيك توك")) return "tiktok";
   if (value.includes("snap") || value.includes("سناب")) return "snapchat";
+  if (value.includes("website") || value.includes("الموقع") || value.includes("موقع")) return "website";
   if (value.includes("organic") || value.includes("عضوي") || value.includes("مباشر")) return "organic";
   return null;
 }
@@ -178,7 +179,7 @@ export function LeadImportPanel({ onDone }: { onDone: () => void }) {
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileChange} />
 
             <div>
-              <div className="mb-1.5 flex items-center gap-1.5 text-[14px] font-medium text-ink-700">
+              <div className="mb-1.5 flex items-center gap-1.5 text-[13px] font-medium text-ink-700">
                 <ClipboardPaste size={14} />
                 أو الصق مباشرة من جوجل شيت / إكسل
               </div>

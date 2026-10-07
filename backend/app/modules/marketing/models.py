@@ -70,6 +70,11 @@ class AdCampaign(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # True when results_count is a real "lead" (sign-up / lead-form) result;
     # traffic/engagement results (clicks, page views) must not inflate lead counts.
     counts_as_leads: Mapped[bool] = mapped_column(default=False, nullable=False)
+    # Split of the platform's reported results (all optional): instant-form
+    # leads export with a phone number, the other two never do.
+    form_leads: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    website_leads: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    messaging_conversations: Mapped[int | None] = mapped_column(Integer, nullable=True)
     impressions: Mapped[int | None] = mapped_column(Integer, nullable=True)
     clicks: Mapped[int | None] = mapped_column(Integer, nullable=True)
     period_start: Mapped[date | None] = mapped_column(Date, nullable=True)

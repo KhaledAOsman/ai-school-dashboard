@@ -1,5 +1,5 @@
 import { api } from "@/lib/apiClient";
-import type { PlatformTotals } from "@/modules/marketing/services/marketingApi";
+import type { Platform, PlatformTotals } from "@/modules/marketing/services/marketingApi";
 
 export interface FunnelCounts {
   leads: number;
@@ -41,7 +41,27 @@ export interface PeriodMetrics {
     roas: number | null;
     includes_cumulative: boolean;
     platforms: PlatformTotals[];
+    reconciliation: Reconciliation;
   };
+}
+
+export interface ReconciliationRow {
+  platform: Platform;
+  spend: string;
+  reported: number;
+  form_leads: number;
+  website_leads: number;
+  messaging_conversations: number;
+  recorded: number;
+  capture_rate: number | null;
+  gap: number;
+  real_cpl: string | null;
+}
+
+export interface Reconciliation {
+  platforms: ReconciliationRow[];
+  other_channels: { website: number; organic: number };
+  total_recorded: number;
 }
 
 export interface Phases {

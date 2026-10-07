@@ -113,7 +113,7 @@ function TargetsStrip({ tp }: { tp: TestPhase }) {
       progress: Math.min((m.attendance_rate ?? 0) / t.min_attendance, 1), state: st((m.attendance_rate ?? 0) >= t.min_attendance, (m.attendance_rate ?? 0) / t.min_attendance, m.attendance_rate !== null),
     },
   ];
-  const chip = { met: ["تحقق", "text-[#136c3a]", "bg-[#2fa56f]"], near: ["قريب", "text-accent-700", "bg-accent-400"], behind: ["دون الهدف", "text-[#a02a24]", "bg-[#d9453d]"], none: ["بانتظار البيانات", "text-ink-600", "bg-ink-300"] } as const;
+  const chip = { met: ["تحقق", "bg-[#e3f7ea] text-[#136c3a]"], near: ["قريب", "bg-accent-50 text-accent-700"], behind: ["دون الهدف", "bg-[#fde8e7] text-[#a02a24]"], none: ["بانتظار البيانات", "bg-ink-100 text-ink-600"] } as const;
   const bar = { met: "bg-[#2fa56f]", near: "bg-accent-400", behind: "bg-[#d9453d]", none: "bg-ink-300" } as const;
   return (
     <section>
@@ -144,7 +144,7 @@ function TargetsStrip({ tp }: { tp: TestPhase }) {
             </div>
             <div className="mt-2.5 flex items-center justify-between gap-2 text-[13px] text-ink-600">
               <span className="min-w-0 whitespace-nowrap leading-snug">{r.goal}</span>
-              <span className={`inline-flex shrink-0 items-center gap-1.5 text-[13px] font-semibold ${chip[r.state][1]}`}><span className={`h-1.5 w-1.5 rounded-full ${chip[r.state][2]}`} />{chip[r.state][0]}</span>
+              <span className={`inline-flex shrink-0 items-center rounded-md px-2 py-0.5 text-[12.5px] font-semibold ${chip[r.state][1]}`}>{chip[r.state][0]}</span>
             </div>
           </div>
         ))}
@@ -356,7 +356,7 @@ function PlatformCard({ cur }: { cur: PeriodMetrics }) {
       <CardHeader>
         <div>
           <CardTitle>توزيع الإنفاق الإعلاني</CardTitle>
-          <CardSubtitle>الإنفاق والعملاء المحتملون من حسابات الإعلانات</CardSubtitle>
+          <CardSubtitle>الإنفاق والعملاء المحتملون المسجَّلون لكل منصة</CardSubtitle>
         </div>
         <Link to="/marketing/campaigns"><Button variant="outline" size="sm" type="button">إدارة الحملات</Button></Link>
       </CardHeader>
@@ -414,6 +414,86 @@ function PlatformCard({ cur }: { cur: PeriodMetrics }) {
 }
 
 /* ----------------------------- page ----------------------------- */
+
+/* ------------------------ lead reconciliation ------------------------ */
+
+/** Ad-account "results" vs leads we actually hold details for (name + phone). */
+function ReconciliationCard({ cur }: { cur: PeriodMetrics }) {
+  const rec = cur.marketing.reconciliation;
+  const th = "px-3 py-2.5 text-start font-semibold";
+  const td = "px-3 py-3.5";
+  return (
+    <Card className="p-6">
+      <CardHeader>
+        <div>
+          <CardTitle>من الإعلان إلى العميل المحتمل</CardTitle>
+          <CardSubtitle>الليد هو شخص سجّلنا اسمه ورقم هاتفه فقط</CardSubtitle>
+        </div>
+        <Link to="/marketing/campaigns"><Button variant="outline" size="sm" type="button">تفصيل نتائج الحملات</Button></Link>
+      </CardHeader>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[14px]">
+          <thead>
+            <tr className="border-b border-ink-200 text-[14px] text-ink-600">
+              <th className={th}>المصدر</th>
+              <th className={th}>نتائج الحساب الإعلاني</th>
+              <th className={th}>منها ليست ليدز</th>
+              <th className={th}>ليدز مسجَّلة</th>
+              <th className={th}>تكلفة الليد</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-ink-100">
+            {rec.platforms.map((p) => {
+              const nonLead = p.website_leads + p.messaging_conversations;
+              return (
+                <tr key={p.platform} className="align-top">
+                  <td className={td + " whitespace-nowrap font-semibold text-ink-900"}>{PLATFORM_LABELS[p.platform]}</td>
+                  <td className={td + " ltr-content text-start text-ink-600"}>{p.reported ? formatNumber(p.reported) : "—"}</td>
+                  <td className={td + " text-ink-600"}>
+                    {nonLead > 0 ? (
+                      <>
+                        <span className="ltr-content">{formatNumber(nonLead)}</span>
+                        <span className="mt-1 block text-[13px]">موقع {formatNumber(p.website_leads)} · محادثات {formatNumber(p.messaging_conversations)}</span>
+                      </>
+                    ) : "—"}
+                  </td>
+                  <td className={td + " ltr-content text-start text-[16px] font-semibold text-ink-900"}>{formatNumber(p.recorded)}</td>
+                  <td className={td + " ltr-content whitespace-nowrap text-start font-medium text-ink-900"}>{p.real_cpl ? formatSAR(p.real_cpl) : "—"}</td>
+                </tr>
+              );
+            })}
+            {([["الموقع (تسجيل مباشر)", rec.other_channels.website], ["عضوي / يدوي", rec.other_channels.organic]] as const).map(([label, n]) => (
+              <tr key={label}>
+                <td className={td + " whitespace-nowrap font-semibold text-ink-900"}>{label}</td>
+                <td className={td + " text-ink-600"}>—</td>
+                <td className={td + " text-ink-600"}>—</td>
+                <td className={td + " ltr-content text-start text-[16px] font-semibold text-ink-900"}>{formatNumber(n)}</td>
+                <td className={td + " text-ink-600"}>—</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t border-ink-200">
+              <td className={td + " font-semibold text-ink-900"}>إجمالي الليدز المسجَّلة</td>
+              <td colSpan={2} />
+              <td className={td + " ltr-content text-start text-[16px] font-semibold text-ink-900"}>{formatNumber(rec.total_recorded)}</td>
+              <td />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div className="mt-4 space-y-2 border-t border-ink-200 pt-4 text-[13.5px] leading-relaxed text-ink-600">
+        <p className="flex gap-2"><Info size={16} className="mt-0.5 shrink-0" />
+          الحساب الإعلاني يعدّ كل «نتيجة» حتى لو كانت زيارة للموقع أو تواصلاً من خلاله أو محادثة رسائل. هذه تفاعلات وليست ليدز، لأننا لا نملك بيانات صاحبها، ولذلك لا تدخل في أي حساب هنا.
+        </p>
+        <p className="ps-6">تكلفة الليد = الإنفاق ÷ الليدز المسجَّلة، وهي التي تُستخدم في بقية المؤشرات.</p>
+        {cur.marketing.includes_cumulative && (
+          <p className="ps-6">بعض الحملات أرقامها تراكمية بدون تواريخ، بينما الليدز المسجَّلة تُحتسب داخل هذه الفترة فقط؛ أضف تواريخ الحملات لمقارنة أدق.</p>
+        )}
+      </div>
+    </Card>
+  );
+}
 
 function PageSkeleton() {
   return (
@@ -493,7 +573,7 @@ export function KpiDashboardPage() {
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard icon={Megaphone} label="إجمالي الإنفاق الإعلاني" value={formatSAR(cur.marketing.total_spend)} current={num(cur.marketing.total_spend)} previous={num(prev.marketing.total_spend)} lowerIsBetter hint="سناب شات + ميتا + تيك توك" />
             <KpiCard icon={Target} label="تكلفة اكتساب المشترك (CAC)" value={cur.marketing.cac ? formatSAR(cur.marketing.cac) : "—"} current={num(cur.marketing.cac)} previous={num(prev.marketing.cac)} lowerIsBetter hint="الإنفاق الإعلاني ÷ المشتركين الجدد" />
-            <KpiCard icon={UserCheck} label="عملاء محتملون (إعلانات)" value={formatNumber(cur.marketing.reported_leads)} current={cur.marketing.reported_leads} previous={prev.marketing.reported_leads} hint="كما تُبلِّغ عنه المنصات" />
+            <KpiCard icon={UserCheck} label="عملاء محتملون (إعلانات)" value={formatNumber(cur.marketing.reported_leads)} current={cur.marketing.reported_leads} previous={prev.marketing.reported_leads} hint="سُجّلت بياناتهم (اسم + رقم هاتف)" />
             <KpiCard icon={Coins} label="تكلفة العميل المحتمل" value={cur.marketing.cost_per_lead ? formatSAR(cur.marketing.cost_per_lead) : "—"} current={num(cur.marketing.cost_per_lead)} previous={num(prev.marketing.cost_per_lead)} lowerIsBetter hint="الإنفاق ÷ العملاء المحتملين" />
           </div>
 
@@ -502,6 +582,8 @@ export function KpiDashboardPage() {
             <Funnel cur={cur} prev={prev} prevLabel={prevLabel} />
             <PlatformCard cur={cur} />
           </div>
+
+          <ReconciliationCard cur={cur} />
         </div>
       )}
     </div>

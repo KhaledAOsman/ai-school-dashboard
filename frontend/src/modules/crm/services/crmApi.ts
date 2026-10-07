@@ -19,7 +19,7 @@ export type LeadGroup = "leads" | "bookings" | "interested";
 
 export type CallOutcome = "contacted" | "not_answered";
 
-export type LeadSource = "instagram" | "tiktok" | "snapchat" | "organic";
+export type LeadSource = "instagram" | "tiktok" | "snapchat" | "website" | "organic";
 
 export interface TeacherSlot {
   id: string;

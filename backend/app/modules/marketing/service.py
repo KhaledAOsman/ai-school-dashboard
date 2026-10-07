@@ -156,9 +156,13 @@ def platform_totals(campaigns) -> list[PlatformTotals]:
     spend: dict[str, Decimal] = defaultdict(lambda: ZERO)
     leads: dict[str, int] = defaultdict(int)
     count: dict[str, int] = defaultdict(int)
+    split: dict[str, list[int]] = defaultdict(lambda: [0, 0, 0])
     for c in campaigns:
         spend[c.platform] += c.spend
         count[c.platform] += 1
+        split[c.platform][0] += c.form_leads or 0
+        split[c.platform][1] += c.website_leads or 0
+        split[c.platform][2] += c.messaging_conversations or 0
         if c.counts_as_leads and c.results_count:
             leads[c.platform] += c.results_count
     out = []
@@ -168,6 +172,7 @@ def platform_totals(campaigns) -> list[PlatformTotals]:
             PlatformTotals(
                 platform=p, spend=s, leads=l, campaigns=count[p],
                 cost_per_lead=(s / l).quantize(Decimal("0.01")) if l else None,
+                form_leads=split[p][0], website_leads=split[p][1], messaging_conversations=split[p][2],
             )
         )
     return out
@@ -304,6 +309,38 @@ class KpiService:
         spend = sum((p.spend for p in platforms), ZERO)
         reported_leads = sum(p.leads for p in platforms)
 
+        # ---- Reconciliation: what the ad platforms report vs. what is
+        # actually recorded as a lead (with a phone number) in the CRM.
+        src_rows = (
+            await self.db.execute(select(Lead.source, func.count(Lead.id)).where(*in_period).group_by(Lead.source))
+        ).all()
+        by_src = {(r[0] or "other"): int(r[1]) for r in src_rows}
+        crm_platform = {"instagram": "meta", "snapchat": "snapchat", "tiktok": "tiktok"}
+        recorded = {p: 0 for p in PLATFORMS}
+        for src, n in by_src.items():
+            if src in crm_platform:
+                recorded[crm_platform[src]] += n
+        recon_rows = []
+        for p in platforms:
+            rec = recorded[p.platform]
+            recon_rows.append({
+                "platform": p.platform,
+                "spend": p.spend,
+                "reported": p.leads,
+                "form_leads": p.form_leads,
+                "website_leads": p.website_leads,
+                "messaging_conversations": p.messaging_conversations,
+                "recorded": rec,
+                "capture_rate": round(rec / p.leads * 100, 1) if p.leads else None,
+                "gap": p.leads - rec,
+                "real_cpl": (p.spend / rec).quantize(Decimal("0.01")) if rec else None,
+            })
+        reconciliation = {
+            "platforms": recon_rows,
+            "other_channels": {"website": by_src.get("website", 0), "organic": by_src.get("organic", 0)},
+            "total_recorded": sum(by_src.values()),
+        }
+
         return {
             "start": start,
             "end_inclusive": date.fromordinal(end.toordinal() - 1),
@@ -330,6 +367,7 @@ class KpiService:
                 "roas": round(float(revenue) / float(spend), 2) if spend else None,
                 "includes_cumulative": cumulative,
                 "platforms": platforms,
+                "reconciliation": reconciliation,
             },
         }
 

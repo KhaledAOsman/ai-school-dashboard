@@ -145,3 +145,25 @@ async def test_summary_has_test_phase_targets(client, db_session):
     for k in ("subscribers", "cac", "conversion", "attendance_rate", "attended", "booked"):
         assert k in tp["metrics"]
     assert tp["configured"] is False
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_platform_vs_recorded(client, db_session):
+    from app.modules.crm.leads.models import Lead
+    from app.modules.crm.teachers import models as _teachers  # noqa: F401  (registers FK targets)
+
+    h = await _admin_headers(client, db_session)
+    db_session.add(AdCampaign(platform="meta", name="m", spend=Decimal("900"), results_count=49, counts_as_leads=True,
+                              form_leads=36, website_leads=13, messaging_conversations=24))
+    for i, src in enumerate(["instagram"] * 3 + ["website"] * 2 + ["organic"]):
+        db_session.add(Lead(full_name=f"l{i}", phone=f"96650000000{i}", source=src))
+    await db_session.commit()
+    today = date.today()
+    half = f"{today.year}-H{1 if today.month <= 6 else 2}"
+    rec = (await client.get(f"/api/kpi-dashboard/summary?period={half}", headers=h)).json()["current"]["marketing"]["reconciliation"]
+    meta = next(p for p in rec["platforms"] if p["platform"] == "meta")
+    assert (meta["reported"], meta["form_leads"], meta["website_leads"], meta["messaging_conversations"]) == (49, 36, 13, 24)
+    assert meta["recorded"] == 3 and meta["gap"] == 46
+    assert meta["capture_rate"] == round(3 / 49 * 100, 1)
+    assert Decimal(meta["real_cpl"]) == Decimal("300.00")
+    assert rec["other_channels"] == {"website": 2, "organic": 1} and rec["total_recorded"] == 6
