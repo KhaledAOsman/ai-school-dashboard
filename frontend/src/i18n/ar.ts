@@ -1,6 +1,6 @@
 export const ar = {
   app_name: "منصة إدارة مدرسة الذكاء الاصطناعي",
-  nav_dashboard: "لوحة التحكم",
+  nav_dashboard: "مؤشرات أداء المشروع",
   nav_expenses: "المصروفات",
   nav_categories: "التصنيفات",
   nav_reports: "التقارير",

@@ -9,7 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth.dependencies import CurrentUser
 from app.core.permissions.dependencies import require_permission
-from app.core.permissions.registry import CRM_LEAD_CREATE, CRM_LEAD_MANAGE, CRM_LEAD_VIEW, CRM_LEAD_VIEW_ALL
+from fastapi import HTTPException
+from app.core.permissions.registry import (
+    CRM_LEAD_CREATE,
+    CRM_LEAD_DELETE,
+    CRM_LEAD_LEGACY_BOOKING,
+    CRM_LEAD_MANAGE,
+    CRM_LEAD_VIEW,
+    CRM_LEAD_VIEW_ALL,
+)
 from app.database.session import get_db
 from app.modules.crm.leads.models import BOOKINGS_GROUP_STAGES, INTERESTED_GROUP_STAGES, LEADS_GROUP_STAGES
 from app.modules.crm.leads.schemas import (
@@ -24,6 +32,7 @@ from app.modules.crm.leads.schemas import (
     LeadCreateRequest,
     LeadDetailResponse,
     LeadLoseRequest,
+    LeadPromoteLegacyRequest,
     LeadNotInterestedRequest,
     LeadReassignRequest,
     LeadRescheduleRequest,
@@ -53,7 +62,7 @@ async def search_leads(
     search: str | None = Query(default=None, description="Matches name or phone"),
     group: str | None = Query(
         default=None,
-        description="One of: leads, bookings, interested - restricts to that UI section's stages",
+        description="One of: leads, bookings, interested - restricts to that UI section's stages. legacy = old booked-without-appointment leads (system administrator only)",
     ),
     stage: str | None = Query(default=None),
     source: str | None = Query(default=None),
@@ -82,12 +91,15 @@ async def search_leads(
     elif mine_only:
         effective_assigned_to = user.id
 
+    legacy_only = group == "legacy"
+    if legacy_only and CRM_LEAD_LEGACY_BOOKING not in user.permissions:
+        raise HTTPException(status_code=403, detail="هذا القسم لمدير النظام فقط")
     stages = {"leads": LEADS_GROUP_STAGES, "bookings": BOOKINGS_GROUP_STAGES, "interested": INTERESTED_GROUP_STAGES}.get(group)
 
     return await service.list_paginated(
         page=page, page_size=page_size, search=search, stage=stage, stages=stages, source=source,
         assigned_to=effective_assigned_to, date_from=date_from, date_to=date_to,
-        sort_by=sort_by, sort_dir=sort_dir,
+        sort_by=sort_by, sort_dir=sort_dir, legacy_only=legacy_only,
     )
 
 
@@ -269,6 +281,32 @@ async def record_attendance(
 ):
     service = LeadService(db)
     return await service.record_attendance(lead_id=lead_id, payload=payload, user_id=user.id)
+
+
+@router.post("/{lead_id}/promote-legacy-booking", response_model=LeadResponse)
+async def promote_legacy_booking(
+    lead_id: uuid.UUID,
+    payload: LeadPromoteLegacyRequest,
+    user: CurrentUser = Depends(require_permission(CRM_LEAD_LEGACY_BOOKING)),
+    db: AsyncSession = Depends(get_db),
+):
+    """System administrator only: moves an old booked-without-appointment
+    lead into الحجوزات, optionally recording حضر / لم يحضر at once."""
+    service = LeadService(db)
+    return await service.promote_legacy_booking(
+        lead_id=lead_id, user_id=user.id, attended=payload.attended, note=payload.note
+    )
+
+
+@router.delete("/{lead_id}", status_code=204)
+async def delete_lead(
+    lead_id: uuid.UUID,
+    user: CurrentUser = Depends(require_permission(CRM_LEAD_DELETE)),
+    db: AsyncSession = Depends(get_db),
+):
+    """System administrator only: permanently deletes one student/lead."""
+    service = LeadService(db)
+    await service.delete_lead(lead_id=lead_id, user_id=user.id)
 
 
 @router.post("/{lead_id}/send-report", response_model=LeadResponse)

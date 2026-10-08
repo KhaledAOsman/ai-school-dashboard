@@ -9,6 +9,7 @@ import { DashboardPage } from "@/dashboard/DashboardPage";
 import { FinanceSectionPage } from "@/modules/finance/pages/FinanceSectionPage";
 import { LeadsListPage } from "@/modules/crm/pages/LeadsListPage";
 import { BookingsPage } from "@/modules/crm/pages/BookingsPage";
+import { LegacyBookingsPage } from "@/modules/crm/pages/LegacyBookingsPage";
 import { InterestedPage } from "@/modules/crm/pages/InterestedPage";
 import { LeadDetailPage } from "@/modules/crm/pages/LeadDetailPage";
 import { CRMTeachersPage } from "@/modules/crm/pages/CRMTeachersPage";
@@ -122,6 +123,16 @@ export function App() {
                 <ProtectedRoute>
                   <AppLayout>
                     <BookingsPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/crm/legacy-bookings"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <LegacyBookingsPage />
                   </AppLayout>
                 </ProtectedRoute>
               }

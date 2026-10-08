@@ -7,7 +7,7 @@
  * Reading order: period switcher -> project phases -> executive summary
  * -> KPI groups -> funnel + ad spend split. No finance figures here.
  */
-import { Children, useState, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -69,19 +69,15 @@ function KpiCard({ icon: Icon, label, value, hint, current, previous, lowerIsBet
         <DeltaPill current={current} previous={previous} lowerIsBetter={lowerIsBetter} />
       </div>
       <p className="text-[16px] font-medium text-ink-600">{label}</p>
-      <p className="ltr-content mt-2 whitespace-nowrap text-right text-[28px] font-medium leading-10 tracking-tight text-ink-900 sm:text-[32px]"><AnimatedText text={value} /></p>
+      <p className="ltr-content mt-2 whitespace-nowrap text-right text-[28px] font-medium leading-10 tracking-tight text-ink-900 sm:text-[32px]">{value}</p>
       {hint && <p className="mt-3 text-[14px] leading-snug text-ink-600">{hint}</p>}
     </Card>
   );
 }
 
-/** Grid whose children rise in one after another. */
+/** Plain grid. Motion is reserved for the test-phase goals strip. */
 function RevealGrid({ className, children }: { className: string; children: ReactNode }) {
-  return (
-    <div className={className}>
-      {Children.toArray(children).map((c, i) => <Reveal key={i} delay={i * 80} className="h-full">{c}</Reveal>)}
-    </div>
-  );
+  return <div className={className}>{children}</div>;
 }
 
 function SectionTitle({ children, note }: { children: ReactNode; note?: string }) {
@@ -275,7 +271,7 @@ function HeroSummary({ cur, prev, label }: { cur: PeriodMetrics; prev: PeriodMet
             </div>
             <div>
               <p className="text-[14px] text-ink-600">{it.label}</p>
-              <p className="ltr-content mt-0.5 whitespace-nowrap text-right text-[30px] font-medium leading-10 text-ink-900 sm:text-[34px]"><AnimatedText text={it.value} /></p>
+              <p className="ltr-content mt-0.5 whitespace-nowrap text-right text-[30px] font-medium leading-10 text-ink-900 sm:text-[34px]">{it.value}</p>
             </div>
             <p className="border-t border-ink-100 pt-3 text-[13.5px] leading-snug text-ink-600">{it.sub}</p>
           </div>
@@ -343,7 +339,7 @@ function Funnel({ cur, prev, prevLabel }: { cur: PeriodMetrics; prev: PeriodMetr
 
 /** Bookings = attended + did not attend. Not-yet-recorded sessions are shown apart. */
 function AttendanceSplit({ f }: { f: PeriodMetrics["funnel"] }) {
-  const mounted = useMounted(150);
+  const mounted = true;
   if (f.booked <= 0 && f.pending_attendance <= 0) return null;
   const parts = [
     { label: "حضروا", v: f.attended, cls: "bg-success-500", dot: "bg-success-500" },
@@ -504,10 +500,10 @@ export function KpiDashboardPage() {
       {data && cur && prev && (
         <div className="space-y-6">
           <TargetsStrip tp={data.test_phase} />
-          <Reveal delay={60}><PhaseTimeline key={JSON.stringify(data.phases)} phases={data.phases} /></Reveal>
-          <Reveal><HeroSummary cur={cur} prev={prev} label={periodLabel} /></Reveal>
+          <PhaseTimeline key={JSON.stringify(data.phases)} phases={data.phases} />
+          <HeroSummary cur={cur} prev={prev} label={periodLabel} />
 
-          <Reveal><SectionTitle note="الاشتراكات والإيراد">النمو والإيراد</SectionTitle></Reveal>
+          <SectionTitle note="الاشتراكات والإيراد">النمو والإيراد</SectionTitle>
           <RevealGrid className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard icon={Users} label="المشتركون الجدد" value={formatNumber(cur.revenue.subscribers)} current={cur.revenue.subscribers} previous={prev.revenue.subscribers} hint="اشتراكات مدفوعة داخل الفترة" />
             <KpiCard icon={Wallet} label="الإيراد المحصَّل" value={formatSAR(cur.revenue.total_paid)} current={num(cur.revenue.total_paid)} previous={num(prev.revenue.total_paid)} hint={`خصومات ${formatSAR(cur.revenue.total_discount)}`} />
@@ -515,7 +511,7 @@ export function KpiDashboardPage() {
             <KpiCard icon={Percent} label="التحويل من الحاضرين" value={pct(cur.funnel_rates.attended_to_subscriber)} current={cur.funnel_rates.attended_to_subscriber} previous={prev.funnel_rates.attended_to_subscriber} hint="مشترك ÷ حضر المحاضرة" />
           </RevealGrid>
 
-          <Reveal><SectionTitle note="بعد الحجز">الحضور وعدم الحضور</SectionTitle></Reveal>
+          <SectionTitle note="بعد الحجز">الحضور وعدم الحضور</SectionTitle>
           <RevealGrid className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard icon={CalendarCheck} label="الحجوزات" value={formatNumber(cur.funnel.booked)} current={cur.funnel.booked} previous={prev.funnel.booked} hint="حضروا + لم يحضروا" />
             <KpiCard icon={UserCheck} label="حضروا" value={formatNumber(cur.funnel.attended)} current={cur.funnel.attended} previous={prev.funnel.attended} hint={`${pct(cur.funnel_rates.booked_to_attended)} من الحجوزات`} />
@@ -523,7 +519,7 @@ export function KpiDashboardPage() {
             <KpiCard icon={Clock} label="بانتظار تسجيل الحضور" value={formatNumber(cur.funnel.pending_attendance)} current={cur.funnel.pending_attendance} previous={prev.funnel.pending_attendance} lowerIsBetter hint="قادمة أو لم يُسجَّل حضورها، ولا تدخل في الحجوزات" />
           </RevealGrid>
 
-          <Reveal><SectionTitle note="كفاءة الإنفاق الإعلاني">التسويق</SectionTitle></Reveal>
+          <SectionTitle note="كفاءة الإنفاق الإعلاني">التسويق</SectionTitle>
           <RevealGrid className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard icon={Megaphone} label="إجمالي الإنفاق الإعلاني" value={formatSAR(cur.marketing.total_spend)} current={num(cur.marketing.total_spend)} previous={num(prev.marketing.total_spend)} lowerIsBetter hint="سناب شات + ميتا + تيك توك" />
             <KpiCard icon={Target} label="تكلفة اكتساب المشترك (CAC)" value={cur.marketing.cac ? formatSAR(cur.marketing.cac) : "—"} current={num(cur.marketing.cac)} previous={num(prev.marketing.cac)} lowerIsBetter hint="الإنفاق الإعلاني ÷ المشتركين الجدد" />
@@ -531,7 +527,7 @@ export function KpiDashboardPage() {
             <KpiCard icon={Coins} label="تكلفة العميل المحتمل" value={cur.marketing.cost_per_lead ? formatSAR(cur.marketing.cost_per_lead) : "—"} current={num(cur.marketing.cost_per_lead)} previous={num(prev.marketing.cost_per_lead)} lowerIsBetter hint="الإنفاق ÷ العملاء المحتملين" />
           </RevealGrid>
 
-          <Reveal><SectionTitle note="هذه الفترة مقابل السابقة">القمع والمنصات</SectionTitle></Reveal>
+          <SectionTitle note="هذه الفترة مقابل السابقة">القمع والمنصات</SectionTitle>
           <RevealGrid className="grid grid-cols-1 gap-5 xl:grid-cols-2">
             <Funnel cur={cur} prev={prev} prevLabel={prevLabel} />
             <PlatformCard cur={cur} />

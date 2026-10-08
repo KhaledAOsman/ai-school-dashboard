@@ -78,6 +78,11 @@ CRM_LEAD_VIEW = "crm.lead.view"
 CRM_LEAD_VIEW_ALL = "crm.lead.view_all"
 CRM_LEAD_CREATE = "crm.lead.create"
 CRM_LEAD_MANAGE = "crm.lead.manage"
+# System-administrator-only: old "تم الحجز" records that have no lecture
+# appointment (legacy data) - convert them into real bookings.
+CRM_LEAD_LEGACY_BOOKING = "crm.lead.legacy_booking"
+# System-administrator-only: permanently delete one lead/student.
+CRM_LEAD_DELETE = "crm.lead.delete"
 
 # ---- CRM: Teachers (trial-lecture scheduling) ----
 CRM_TEACHER_VIEW = "crm.teacher.view"
@@ -150,6 +155,8 @@ SEED_PERMISSIONS: list[PermissionDef] = [
     PermissionDef(CRM_LEAD_VIEW_ALL, "View all reps' CRM leads and reassign them", "crm"),
     PermissionDef(CRM_LEAD_CREATE, "Create new CRM leads", "crm"),
     PermissionDef(CRM_LEAD_MANAGE, "Work existing CRM leads through the pipeline", "crm"),
+    PermissionDef(CRM_LEAD_LEGACY_BOOKING, "Convert old booked-without-appointment leads into bookings", "crm"),
+    PermissionDef(CRM_LEAD_DELETE, "Permanently delete a lead / student record", "crm"),
     PermissionDef(CRM_TEACHER_VIEW, "View CRM teachers and their slots", "crm"),
     PermissionDef(CRM_TEACHER_MANAGE, "Manage CRM teachers and their available slots", "crm"),
     PermissionDef(USERS_VIEW, "View users", "users"),

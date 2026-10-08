@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowRight, Phone, PhoneMissed, Calendar, CalendarClock, CheckCircle2, XCircle, Send, User, MessageCircle } from "lucide-react";
+import { ArrowRight, Trash2, Phone, PhoneMissed, Calendar, CalendarClock, CheckCircle2, XCircle, Send, User, MessageCircle } from "lucide-react";
 import { translate } from "@/i18n";
 import {
   useLead,
@@ -14,6 +14,7 @@ import {
   useLoseLead,
   useLogCallAttempt,
   useRescheduleLead,
+  useDeleteLead,
 } from "@/modules/crm/hooks/useCRM";
 import { useMessageTemplates, useSendWhatsAppToLead } from "@/modules/whatsapp/hooks/useWhatsApp";
 import type { CallOutcome } from "@/modules/crm/services/crmApi";
@@ -186,6 +187,8 @@ export function LeadDetailPage() {
   const loseLead = useLoseLead(id!);
 
   const canManage = usePermission(PERMISSIONS.CRM_LEAD_MANAGE);
+  const canDelete = usePermission(PERMISSIONS.CRM_LEAD_DELETE);
+  const deleteLead = useDeleteLead(id!);
 
   const [followUpNote, setFollowUpNote] = useState("");
   const [lossReason, setLossReason] = useState("");
@@ -215,7 +218,27 @@ export function LeadDetailPage() {
           </div>
           <p className="ltr-content mt-1 text-sm text-ink-500">{lead.phone}</p>
         </div>
-        {canManage && <SendWhatsAppPanel leadId={lead.id} />}
+        <div className="flex flex-col items-end gap-3">
+          {canManage && <SendWhatsAppPanel leadId={lead.id} />}
+          {canDelete && (
+            <Button
+              size="sm"
+              variant="danger"
+              isLoading={deleteLead.isPending}
+              onClick={async () => {
+                if (!window.confirm(`حذف بيانات الطالب «${lead.full_name}» نهائياً؟ لا يمكن التراجع.`)) return;
+                try {
+                  await deleteLead.mutateAsync();
+                  navigate("/crm/all-leads");
+                } catch (e: any) {
+                  window.alert(e?.response?.data?.detail || "تعذر الحذف");
+                }
+              }}
+            >
+              <Trash2 size={14} />حذف الطالب
+            </Button>
+          )}
+        </div>
       </div>
 
       {isTerminal ? (

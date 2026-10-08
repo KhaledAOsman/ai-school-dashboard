@@ -39,7 +39,7 @@ import enum
 import uuid
 from datetime import date, datetime, time
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, Time
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, Time, false
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -131,6 +131,11 @@ class Lead(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     zoom_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
     attended: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+
+    # Old "تم الحجز" customers imported without a lecture appointment. Only a
+    # system administrator can turn them into real bookings (then mark
+    # attended / not attended). Cleared when promoted.
+    legacy_booked: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), nullable=False)
 
     is_converted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_lost: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

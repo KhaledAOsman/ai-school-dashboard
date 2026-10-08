@@ -207,6 +207,29 @@ export function useRecordAttendance(id: string) {
   });
 }
 
+/** System administrator: move a lead to الحجوزات without an appointment,
+ * optionally recording حضر / لم يحضر in the same step. */
+export function usePromoteLegacyBooking(id: string) {
+  const invalidate = useInvalidateLead(id);
+  return useMutation({
+    mutationFn: (attended?: boolean | null) => crmLeadApi.promoteLegacyBooking(id, attended),
+    onSuccess: invalidate,
+  });
+}
+
+/** System administrator: permanently delete one student / lead. */
+export function useDeleteLead(id: string) {
+  const invalidate = useInvalidateLead(id);
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => crmLeadApi.deleteLead(id),
+    onSuccess: () => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["crm-dashboard-stats"] });
+    },
+  });
+}
+
 export function useSendReport(id: string) {
   const invalidate = useInvalidateLead(id);
   return useMutation({ mutationFn: (note?: string) => crmLeadApi.sendReport(id, note), onSuccess: invalidate });

@@ -42,6 +42,8 @@ export const PERMISSIONS = {
   CRM_LEAD_VIEW_ALL: "crm.lead.view_all",
   CRM_LEAD_CREATE: "crm.lead.create",
   CRM_LEAD_MANAGE: "crm.lead.manage",
+  CRM_LEAD_LEGACY_BOOKING: "crm.lead.legacy_booking",
+  CRM_LEAD_DELETE: "crm.lead.delete",
   CRM_TEACHER_VIEW: "crm.teacher.view",
   CRM_TEACHER_MANAGE: "crm.teacher.manage",
 

@@ -15,7 +15,7 @@ export type LeadStage =
   | "lost"
   | "not_interested";
 
-export type LeadGroup = "leads" | "bookings" | "interested";
+export type LeadGroup = "leads" | "bookings" | "interested" | "legacy";
 
 export type CallOutcome = "contacted" | "not_answered";
 
@@ -80,6 +80,7 @@ export interface Lead {
   lecture_time: string | null;
   zoom_link: string | null;
   attended: boolean | null;
+  legacy_booked?: boolean;
   is_converted: boolean;
   is_lost: boolean;
   lost_reason: string | null;
@@ -260,6 +261,13 @@ export const crmLeadApi = {
   recordAttendance: async (id: string, attended: boolean, note?: string): Promise<Lead> => {
     const { data } = await api.post(`/crm/leads/${id}/attendance`, { attended, note });
     return data;
+  },
+  promoteLegacyBooking: async (id: string, attended?: boolean | null): Promise<Lead> => {
+    const { data } = await api.post(`/crm/leads/${id}/promote-legacy-booking`, { attended: attended ?? null });
+    return data;
+  },
+  deleteLead: async (id: string): Promise<void> => {
+    await api.delete(`/crm/leads/${id}`);
   },
   sendReport: async (id: string, note?: string): Promise<Lead> => {
     const { data } = await api.post(`/crm/leads/${id}/send-report`, { note });

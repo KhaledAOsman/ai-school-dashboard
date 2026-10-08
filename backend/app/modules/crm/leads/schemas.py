@@ -46,6 +46,14 @@ class LeadAdvanceRequest(BaseModel):
     note: str | None = None
 
 
+class LeadPromoteLegacyRequest(BaseModel):
+    """Turns an old booked-without-appointment lead into a real booking.
+    attended: None = just move it to الحجوزات (attendance chosen there);
+    True / False = also record حضر / لم يحضر in the same step."""
+    attended: bool | None = None
+    note: str | None = None
+
+
 class LeadAttendanceRequest(BaseModel):
     attended: bool
     note: str | None = None
@@ -124,6 +132,7 @@ class LeadResponse(BaseModel):
     lecture_time: time | None
     zoom_link: str | None
     attended: bool | None
+    legacy_booked: bool = False
     is_converted: bool
     is_lost: bool
     lost_reason: str | None

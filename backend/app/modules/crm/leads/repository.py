@@ -64,6 +64,7 @@ class LeadRepository:
         date_to: date | None = None,
         sort_by: str = "created_at",
         sort_dir: str = "desc",
+        legacy_only: bool = False,
     ) -> tuple[list[Lead], int]:
         """
         Server-side pagination, search, and filtering - this is what makes
@@ -83,6 +84,8 @@ class LeadRepository:
         if search:
             like = f"%{search}%"
             conditions.append(or_(Lead.full_name.ilike(like), Lead.phone.ilike(like)))
+        if legacy_only:
+            conditions.append(Lead.legacy_booked.is_(True))
         if stages:
             conditions.append(Lead.stage.in_(stages))
         if stage:
