@@ -105,7 +105,7 @@ export default {
         lg: "0 12px 20px -6px rgba(29,27,32,0.10), 0 4px 6px -4px rgba(29,27,32,0.06)",
         xl: "0 24px 40px -8px rgba(29,27,32,0.14), 0 8px 16px -8px rgba(29,27,32,0.08)",
         "glow-brand": "0 0 0 4px rgba(109,58,242,0.14)",
-        "card": "0 1px 2px rgba(16,18,31,0.05), 0 4px 12px -4px rgba(16,18,31,0.06)",
+        "card": "0 4px 24px -4px rgba(138,151,171,0.5)",
         "inner-hairline": "inset 0 0 0 1px rgba(29,27,32,0.06)",
       },
       borderRadius: {
