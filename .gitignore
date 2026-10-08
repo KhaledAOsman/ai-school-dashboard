@@ -31,3 +31,5 @@ backend/storage/attachments/*
 import_data/ 
 full_import_*.sql 
 *.xlsx 
+
+_prev/

@@ -1,3 +1,4 @@
+import { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "@/auth/AuthContext";
@@ -5,25 +6,25 @@ import { ProtectedRoute } from "@/auth/ProtectedRoute";
 import { HomeRedirect } from "@/auth/HomeRedirect";
 import { LoginPage } from "@/auth/LoginPage";
 import { AppLayout } from "@/layouts/AppLayout";
-import { DashboardPage } from "@/dashboard/DashboardPage";
-import { FinanceSectionPage } from "@/modules/finance/pages/FinanceSectionPage";
-import { LeadsListPage } from "@/modules/crm/pages/LeadsListPage";
-import { BookingsPage } from "@/modules/crm/pages/BookingsPage";
-import { LegacyBookingsPage } from "@/modules/crm/pages/LegacyBookingsPage";
-import { InterestedPage } from "@/modules/crm/pages/InterestedPage";
-import { LeadDetailPage } from "@/modules/crm/pages/LeadDetailPage";
-import { CRMTeachersPage } from "@/modules/crm/pages/CRMTeachersPage";
-import { CRMDashboardPage } from "@/modules/crm/pages/CRMDashboardPage";
-import { AllLeadsOverviewPage } from "@/modules/crm/pages/AllLeadsOverviewPage";
-import { SchedulePage } from "@/modules/crm/pages/SchedulePage";
-import { WhatsAppConnectionPage } from "@/modules/whatsapp/pages/WhatsAppConnectionPage";
-import { TemplatesPage } from "@/modules/whatsapp/pages/TemplatesPage";
-import { SubscriptionsPage } from "@/modules/marketing/pages/SubscriptionsPage";
-import { CampaignsPage } from "@/modules/marketing/pages/CampaignsPage";
-import { UsersPage } from "@/modules/finance/pages/UsersPage";
-import { RolesPage } from "@/modules/finance/pages/RolesPage";
-import { AuditLogPage } from "@/modules/finance/pages/AuditLogPage";
-import { SecurityLogPage } from "@/modules/finance/pages/SecurityLogPage";
+const DashboardPage = lazy(() => import("@/dashboard/DashboardPage").then((m) => ({ default: m.DashboardPage })));
+const FinanceSectionPage = lazy(() => import("@/modules/finance/pages/FinanceSectionPage").then((m) => ({ default: m.FinanceSectionPage })));
+const LeadsListPage = lazy(() => import("@/modules/crm/pages/LeadsListPage").then((m) => ({ default: m.LeadsListPage })));
+const BookingsPage = lazy(() => import("@/modules/crm/pages/BookingsPage").then((m) => ({ default: m.BookingsPage })));
+const LegacyBookingsPage = lazy(() => import("@/modules/crm/pages/LegacyBookingsPage").then((m) => ({ default: m.LegacyBookingsPage })));
+const InterestedPage = lazy(() => import("@/modules/crm/pages/InterestedPage").then((m) => ({ default: m.InterestedPage })));
+const LeadDetailPage = lazy(() => import("@/modules/crm/pages/LeadDetailPage").then((m) => ({ default: m.LeadDetailPage })));
+const CRMTeachersPage = lazy(() => import("@/modules/crm/pages/CRMTeachersPage").then((m) => ({ default: m.CRMTeachersPage })));
+const CRMDashboardPage = lazy(() => import("@/modules/crm/pages/CRMDashboardPage").then((m) => ({ default: m.CRMDashboardPage })));
+const AllLeadsOverviewPage = lazy(() => import("@/modules/crm/pages/AllLeadsOverviewPage").then((m) => ({ default: m.AllLeadsOverviewPage })));
+const SchedulePage = lazy(() => import("@/modules/crm/pages/SchedulePage").then((m) => ({ default: m.SchedulePage })));
+const WhatsAppConnectionPage = lazy(() => import("@/modules/whatsapp/pages/WhatsAppConnectionPage").then((m) => ({ default: m.WhatsAppConnectionPage })));
+const TemplatesPage = lazy(() => import("@/modules/whatsapp/pages/TemplatesPage").then((m) => ({ default: m.TemplatesPage })));
+const SubscriptionsPage = lazy(() => import("@/modules/marketing/pages/SubscriptionsPage").then((m) => ({ default: m.SubscriptionsPage })));
+const CampaignsPage = lazy(() => import("@/modules/marketing/pages/CampaignsPage").then((m) => ({ default: m.CampaignsPage })));
+const UsersPage = lazy(() => import("@/modules/finance/pages/UsersPage").then((m) => ({ default: m.UsersPage })));
+const RolesPage = lazy(() => import("@/modules/finance/pages/RolesPage").then((m) => ({ default: m.RolesPage })));
+const AuditLogPage = lazy(() => import("@/modules/finance/pages/AuditLogPage").then((m) => ({ default: m.AuditLogPage })));
+const SecurityLogPage = lazy(() => import("@/modules/finance/pages/SecurityLogPage").then((m) => ({ default: m.SecurityLogPage })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -39,6 +40,7 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <BrowserRouter>
+          <Suspense fallback={<div className="p-10 text-center text-[15px] text-ink-600">جارٍ التحميل…</div>}>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
 
@@ -256,6 +258,7 @@ export function App() {
               }
             />
           </Routes>
+          </Suspense>
         </BrowserRouter>
       </AuthProvider>
     </QueryClientProvider>
