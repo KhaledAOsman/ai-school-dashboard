@@ -191,7 +191,7 @@ LAUNCH_PERIOD_START = date(2026, 7, 1)
 
 # Year-1 phase defaults (editable by the system administrator).
 DEFAULT_PHASE_START = date(2026, 8, 1)
-DEFAULT_PHASE_END = date(2027, 9, 1)  # exclusive (phase runs through August 2027)
+DEFAULT_PHASE_END = date(2027, 8, 1)  # exclusive: one year, Aug 2026 .. Jul 2027
 
 # Management targets for the phase (editable).
 TEST_PHASE_TARGETS = {
@@ -223,6 +223,20 @@ def _quarter_label(year: int, q: int) -> str:
     s, e = _quarter_bounds(year, q)
     last = date.fromordinal(e.toordinal() - 1)
     return f"الربع {_AR_QUARTER[q]} {year} ({_AR_MONTHS[s.month - 1]} – {_AR_MONTHS[last.month - 1]})"
+
+
+def _add_months(d: date, n: int) -> date:
+    m = d.month - 1 + n
+    return date(d.year + m // 12, m % 12 + 1, 1)
+
+
+def _op_label(start: date, end: date, n: int) -> str:
+    """Operating quarter label, e.g. 'الربع الأول · أغسطس – أكتوبر 2026'."""
+    last = date.fromordinal(end.toordinal() - 1)
+    span = f"{_AR_MONTHS[start.month - 1]} – {_AR_MONTHS[last.month - 1]} {last.year}"
+    if start.year != last.year:
+        span = f"{_AR_MONTHS[start.month - 1]} {start.year} – {_AR_MONTHS[last.month - 1]} {last.year}"
+    return f"الربع {_AR_QUARTER.get(n, str(n))} · {span}"
 
 
 def _month_label(d: date) -> str:
@@ -328,18 +342,26 @@ class KpiService:
         return out
 
     # ------------------------------------------------------------- periods
+    @staticmethod
+    def _op_quarters(settings: dict) -> list[dict]:
+        """Operating quarters = consecutive 3-month blocks counted from the
+        phase start (Aug-Oct, Nov-Jan, Feb-Apr, May-Jul for an August start).
+        They shift automatically when the phase start date is edited."""
+        start, end = settings["phase_start"], settings["_phase_end"]
+        out, n, s = [], 1, start
+        while s < end and n <= 12:
+            e = _add_months(s, 3) if _add_months(s, 3) <= end else end
+            out.append({"n": n, "key": f"Q{n}", "start": s, "end": e, "label": _op_label(s, e, n)})
+            n += 1
+            s = _add_months(start, 3 * (n - 1))
+        return out
+
     def period_options(self, settings: dict) -> list[dict]:
         today = date.today()
-        opts: list[dict] = []
-        y, q = LAUNCH_PERIOD_START.year, (LAUNCH_PERIOD_START.month - 1) // 3 + 1
-        cy, cq = today.year, (today.month - 1) // 3 + 1
-        while (y, q) <= (cy, cq):
-            opts.append({"key": f"{y}-Q{q}", "label": _quarter_label(y, q), "group": "quarter"})
-            q += 1
-            if q == 5:
-                y, q = y + 1, 1
-        opts.reverse()
-        opts.append({"key": "phase", "label": f"المرحلة الأولى ({_AR_MONTHS[settings['phase_start'].month - 1]} {settings['phase_start'].year} – {_AR_MONTHS[settings['phase_end_inclusive'].month - 1]} {settings['phase_end_inclusive'].year})", "group": "range"})
+        quarters = [q for q in self._op_quarters(settings) if q["start"] <= today] or self._op_quarters(settings)[:1]
+        opts = [{"key": q["key"], "label": q["label"], "group": "quarter"} for q in reversed(quarters)]
+        ps, pe = settings["phase_start"], settings["phase_end_inclusive"]
+        opts.append({"key": "phase", "label": f"المرحلة الأولى ({_AR_MONTHS[ps.month - 1]} {ps.year} – {_AR_MONTHS[pe.month - 1]} {pe.year})", "group": "range"})
         opts.append({"key": "all", "label": "كل الفترات", "group": "range"})
         return opts
 
@@ -347,26 +369,36 @@ class KpiService:
         """-> key,label,start,end(exclusive), prev (dict|None)."""
         today = date.today()
         key = (period or "").strip()
+        quarters = self._op_quarters(settings)
         if not key:
-            key = f"{today.year}-Q{(today.month - 1) // 3 + 1}"
+            started = [q for q in quarters if q["start"] <= today]
+            key = (started[-1] if started else quarters[0])["key"]
         low = key.lower()
         if low == "all":
             return {"key": "all", "label": "كل الفترات", "start": LAUNCH_PERIOD_START, "end": FAR_FUTURE, "prev": None}
         if low == "phase":
             return {"key": "phase", "label": "المرحلة الأولى", "start": settings["phase_start"], "end": settings["_phase_end"], "prev": None}
         up = key.upper()
-        if "-Q" in up:
+        if up.startswith("Q") and up[1:].isdigit():
+            n = int(up[1:])
+            q = next((x for x in quarters if x["n"] == n), None)
+            if q is None:
+                raise HTTPException(status_code=422, detail="الربع غير موجود ضمن المرحلة الحالية")
+            prev = next((x for x in quarters if x["n"] == n - 1), None)
+            return {"key": q["key"], "label": q["label"], "start": q["start"], "end": q["end"],
+                    "prev": {"key": prev["key"], "label": prev["label"], "start": prev["start"], "end": prev["end"]} if prev else None}
+        if "-Q" in up:  # legacy calendar quarter '2026-Q4'
             try:
                 ys, qs = up.split("-Q")
-                year, q = int(ys), int(qs)
-                if q not in (1, 2, 3, 4):
+                year, cq = int(ys), int(qs)
+                if cq not in (1, 2, 3, 4):
                     raise ValueError
             except ValueError:
-                raise HTTPException(status_code=422, detail="صيغة الفترة غير صحيحة، المثال: 2026-Q4")
-            s, e = _quarter_bounds(year, q)
-            py, pq = (year, q - 1) if q > 1 else (year - 1, 4)
+                raise HTTPException(status_code=422, detail="صيغة الفترة غير صحيحة، المثال: Q1")
+            s, e = _quarter_bounds(year, cq)
+            py, pq = (year, cq - 1) if cq > 1 else (year - 1, 4)
             ps, pe = _quarter_bounds(py, pq)
-            return {"key": f"{year}-Q{q}", "label": _quarter_label(year, q), "start": s, "end": e,
+            return {"key": f"{year}-Q{cq}", "label": _quarter_label(year, cq), "start": s, "end": e,
                     "prev": {"key": f"{py}-Q{pq}", "label": _quarter_label(py, pq), "start": ps, "end": pe}}
         year, half = parse_period(key)  # legacy half-year
         s, e = period_bounds(year, half)

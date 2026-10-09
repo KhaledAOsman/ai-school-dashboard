@@ -85,13 +85,13 @@ async def test_kpi_summary_cac_and_platforms(client, db_session):
 async def test_phase_settings_roundtrip(client, db_session):
     h = await _admin_headers(client, db_session)
     r = await client.get("/api/kpi-dashboard/settings", headers=h)
-    assert r.json()["phase_start"] == "2026-08-01" and r.json()["phase_end_inclusive"] == "2027-08-31"
+    assert r.json()["phase_start"] == "2026-08-01" and r.json()["phase_end_inclusive"] == "2027-07-31"
     r = await client.patch("/api/kpi-dashboard/settings", json={"subscribers": 250, "max_cac": 900, "phase_start": "2026-09-01"}, headers=h)
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["targets"]["subscribers"] == 250 and body["targets"]["max_cac"] == 900.0
     assert body["targets"]["min_conversion"] == 15  # untouched target keeps its default
-    assert body["phase_start"] == "2026-09-01" and body["phase_end_inclusive"] == "2027-08-31"
+    assert body["phase_start"] == "2026-09-01" and body["phase_end_inclusive"] == "2027-07-31"
     bad = await client.patch("/api/kpi-dashboard/settings", json={"phase_end_inclusive": "2026-01-01"}, headers=h)
     assert bad.status_code == 422
 
@@ -132,14 +132,19 @@ def pytest_approx(v):
 
 
 @pytest.mark.asyncio
-async def test_summary_periods_and_phase_goals(client, db_session):
+async def test_summary_operating_quarters_and_phase_goals(client, db_session):
     h = await _admin_headers(client, db_session)
-    r = await client.get("/api/kpi-dashboard/summary?period=2026-Q4", headers=h)
+    r = await client.get("/api/kpi-dashboard/summary?period=Q1", headers=h)
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["current"]["period"] == "2026-Q4" and body["previous"]["period"] == "2026-Q3"
+    # operating quarters count from the phase start (Aug-Sep-Oct for an August start)
+    assert body["current"]["period"] == "Q1" and body["current"]["start"] == "2026-08-01"
+    assert body["current"]["end_inclusive"] == "2026-10-31"
+    assert body["previous"] is None
     keys = [p["key"] for p in body["periods"]]
-    assert "phase" in keys and "all" in keys
+    assert "Q1" in keys and "phase" in keys and "all" in keys
+    f = body["current"]["funnel"]
+    assert f["booked"] == f["attended"] + f["not_attended"] + f["pending_attendance"]
     goals = body["phase_goals"]
     assert goals["targets"] == {"subscribers": 100, "max_cac": 1500, "min_conversion": 15, "min_attendance": 60}
     for k in ("subscribers", "cac", "conversion", "attendance_rate", "attended", "decided", "booked"):
@@ -147,7 +152,11 @@ async def test_summary_periods_and_phase_goals(client, db_session):
     # whole-range filters carry no previous period
     for key in ("all", "phase"):
         assert (await client.get(f"/api/kpi-dashboard/summary?period={key}", headers=h)).json()["previous"] is None
-    assert (await client.get("/api/kpi-dashboard/summary?period=2026-Q9", headers=h)).status_code == 422
+    assert (await client.get("/api/kpi-dashboard/summary?period=Q9", headers=h)).status_code == 422
+    # quarters follow the phase start when it is edited
+    await client.patch("/api/kpi-dashboard/settings", json={"phase_start": "2026-09-01"}, headers=h)
+    q1 = (await client.get("/api/kpi-dashboard/summary?period=Q1", headers=h)).json()["current"]
+    assert q1["start"] == "2026-09-01" and q1["end_inclusive"] == "2026-11-30"
 
 
 def test_booked_is_attended_plus_not_attended_plus_pending():
