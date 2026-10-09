@@ -71,6 +71,7 @@ async def search_leads(
     sort_dir: str = Query(default="desc"),
     mine_only: bool = Query(default=False),
     attendance: str | None = Query(default=None, pattern="^(pending|not_attended)$"),
+    unique_phone: bool = Query(default=False, description="One row per phone number (customer list)"),
     user: CurrentUser = Depends(require_permission(CRM_LEAD_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
@@ -95,7 +96,7 @@ async def search_leads(
     return await service.list_paginated(
         page=page, page_size=page_size, search=search, stage=stage, stages=stages, source=source,
         assigned_to=effective_assigned_to, date_from=date_from, date_to=date_to,
-        sort_by=sort_by, sort_dir=sort_dir, attendance=attendance,
+        sort_by=sort_by, sort_dir=sort_dir, attendance=attendance, unique_phone=unique_phone,
     )
 
 

@@ -65,6 +65,7 @@ class LeadRepository:
         sort_by: str = "created_at",
         sort_dir: str = "desc",
         attendance: str | None = None,
+        unique_phone: bool = False,
     ) -> tuple[list[Lead], int]:
         """
         Server-side pagination, search, and filtering - this is what makes
@@ -84,6 +85,10 @@ class LeadRepository:
         if search:
             like = f"%{search}%"
             conditions.append(or_(Lead.full_name.ilike(like), Lead.phone.ilike(like)))
+        if unique_phone:
+            # one row per phone number (the earliest registration) - the customer list
+            earliest = select(Lead.id).distinct(Lead.phone).order_by(Lead.phone, Lead.created_at, Lead.id)
+            conditions.append(Lead.id.in_(earliest))
         if attendance == "pending":
             conditions.append(Lead.attended.is_(None))
         elif attendance == "not_attended":
@@ -120,6 +125,10 @@ class LeadRepository:
         total = count_result.scalar_one()
 
         return leads, total
+
+    async def list_by_phone(self, phone: str) -> list[Lead]:
+        result = await self.db.execute(select(Lead).where(Lead.phone == phone))
+        return list(result.scalars().all())
 
     async def list_distinct_sources(self) -> list[str]:
         """Powers the source filter dropdown with actual values in use,
@@ -162,7 +171,7 @@ class LeadRepository:
         leads, attended / did-not-attend, and count of leads currently
         sitting at the not_answered stage.
         """
-        total_result = await self.db.execute(select(func.count(Lead.id)))
+        total_result = await self.db.execute(select(func.count(func.distinct(Lead.phone))))
         total = total_result.scalar_one()
 
         attended_result = await self.db.execute(select(func.count(Lead.id)).where(Lead.attended.is_(True)))

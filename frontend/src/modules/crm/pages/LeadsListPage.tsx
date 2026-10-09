@@ -199,6 +199,37 @@ function InlineAssignSelect({ leadId, currentAssignedTo, users }: { leadId: stri
   );
 }
 
+/** Category bar: one tab per contact status, each with its live count. */
+function StageTabs({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const tabs = [
+    { key: "", label: "الكل" },
+    { key: "new", label: "جديد" },
+    { key: "contacted", label: "تم الاتصال" },
+    { key: "not_answered", label: "لم يتم الرد" },
+  ];
+  const all = useLeadsSearch({ page: 1, page_size: 1, group: "leads" }).data?.total;
+  const n = useLeadsSearch({ page: 1, page_size: 1, group: "leads", stage: "new" }).data?.total;
+  const c = useLeadsSearch({ page: 1, page_size: 1, group: "leads", stage: "contacted" }).data?.total;
+  const na = useLeadsSearch({ page: 1, page_size: 1, group: "leads", stage: "not_answered" }).data?.total;
+  const counts: Record<string, number | undefined> = { "": all, new: n, contacted: c, not_answered: na };
+  return (
+    <div className="mb-4 flex gap-1 overflow-x-auto border-b border-ink-200">
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          onClick={() => onChange(t.key)}
+          className={`-mb-px whitespace-nowrap border-b-2 px-4 py-2.5 text-[14px] font-semibold transition-colors ${
+            value === t.key ? "border-brand-500 text-brand-700" : "border-transparent text-ink-500 hover:text-ink-800"
+          }`}
+        >
+          {t.label}
+          <span className="ms-1.5 text-[12px] font-medium text-ink-400">{counts[t.key]?.toLocaleString("ar-SA-u-nu-latn") ?? ""}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function LeadsListPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showImportPanel, setShowImportPanel] = useState(false);
@@ -256,6 +287,8 @@ export function LeadsListPage() {
       {showCreateForm && <CreateLeadForm onDone={() => setShowCreateForm(false)} />}
       {showImportPanel && <LeadImportPanel onDone={() => setShowImportPanel(false)} />}
 
+      <StageTabs value={stageFilter} onChange={(v) => { setStageFilter(v); setPage(1); }} />
+
       <Card className="mb-4 p-4">
         <div className="flex flex-wrap items-end gap-3">
           <form onSubmit={submitSearch} className="min-w-[220px] flex-1">
@@ -264,12 +297,6 @@ export function LeadsListPage() {
               <Input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="بحث بالاسم أو رقم الهاتف..." className="pr-9" />
             </div>
           </form>
-          <Select value={stageFilter} onChange={(e) => { setStageFilter(e.target.value); setPage(1); }} className="w-44">
-            <option value="">كل الحالات</option>
-            <option value="new">جديد</option>
-            <option value="contacted">تم الاتصال</option>
-            <option value="not_answered">لم يتم الرد</option>
-          </Select>
           <Select value={sourceFilter} onChange={(e) => { setSourceFilter(e.target.value); setPage(1); }} className="w-44">
             <option value="">كل المصادر</option>
             {(sources ?? []).map((s) => <option key={s} value={s}>{SOURCE_ICON[s as LeadSource]?.label ?? s}</option>)}

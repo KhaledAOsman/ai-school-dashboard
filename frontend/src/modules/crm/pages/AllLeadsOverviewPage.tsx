@@ -22,7 +22,7 @@ export function AllLeadsOverviewPage() {
   const [page, setPage] = useState(1);
 
   const { data, isLoading } = useLeadsSearch({
-    page, page_size: 50, search: search || undefined, stage: stageFilter || undefined,
+    page, page_size: 50, unique_phone: true, search: search || undefined, stage: stageFilter || undefined,
   });
 
   function submitSearch(e: React.FormEvent) { e.preventDefault(); setSearch(searchInput); setPage(1); }
@@ -31,7 +31,7 @@ export function AllLeadsOverviewPage() {
     <div className="max-w-none">
       <div className="mb-6">
         <h1 className="text-[26px] font-bold tracking-tight text-ink-900">كل العملاء</h1>
-        <p className="mt-1 text-sm text-ink-500">{data ? `${data.total.toLocaleString("ar-SA-u-nu-latn")} عميل بكل الحالات` : "نظرة عامة على جميع العملاء بكل الحالات (للعرض فقط)"}</p>
+        <p className="mt-1 text-sm text-ink-500">{data ? `${data.total.toLocaleString("ar-SA-u-nu-latn")} عميل (كل رقم هاتف مرة واحدة)` : "كل العملاء بدون تكرار حسب رقم الهاتف"}</p>
       </div>
 
       <Card className="mb-4 p-4">

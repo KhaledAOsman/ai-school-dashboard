@@ -14,6 +14,7 @@ import {
   useLogCallAttempt,
   useRescheduleLead,
   useDeleteLead,
+  useUpdateLead,
 } from "@/modules/crm/hooks/useCRM";
 import { useMessageTemplates, useSendWhatsAppToLead } from "@/modules/whatsapp/hooks/useWhatsApp";
 import type { CallOutcome } from "@/modules/crm/services/crmApi";
@@ -178,6 +179,23 @@ function SendWhatsAppPanel({ leadId }: { leadId: string }) {
   );
 }
 
+function EditCustomer({ leadId, name, phone }: { leadId: string; name: string; phone: string }) {
+  const update = useUpdateLead(leadId);
+  const [open, setOpen] = useState(false);
+  const [n, setN] = useState(name);
+  const [p, setP] = useState(phone);
+  if (!open) return <Button size="sm" variant="outline" onClick={() => setOpen(true)}>تعديل البيانات</Button>;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <input value={n} onChange={(e) => setN(e.target.value)} className="h-9 w-44 rounded-lg border border-ink-200 px-2.5 text-sm outline-none focus:border-brand-400" placeholder="الاسم" />
+      <input value={p} onChange={(e) => setP(e.target.value)} dir="ltr" className="h-9 w-40 rounded-lg border border-ink-200 px-2.5 text-sm outline-none focus:border-brand-400" placeholder="رقم الهاتف" />
+      <Button size="sm" variant="primary" isLoading={update.isPending} disabled={!n.trim() || !p.trim()}
+        onClick={async () => { await update.mutateAsync({ full_name: n.trim(), phone: p.trim() }); setOpen(false); }}>حفظ</Button>
+      <Button size="sm" variant="ghost" onClick={() => { setN(name); setP(phone); setOpen(false); }}>إلغاء</Button>
+    </div>
+  );
+}
+
 export function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -221,6 +239,7 @@ export function LeadDetailPage() {
             <Badge tone={STAGE_TONE[lead.stage]}>{STAGE_LABEL[lead.stage]}</Badge>
           </div>
           <p className="ltr-content mt-1 text-sm text-ink-500">{lead.phone}</p>
+          {canManage && <div className="mt-2"><EditCustomer key={lead.id + lead.phone + lead.full_name} leadId={lead.id} name={lead.full_name} phone={lead.phone} /></div>}
         </div>
         <div className="flex flex-col items-end gap-3">
           {canManage && <SendWhatsAppPanel leadId={lead.id} />}
@@ -230,7 +249,7 @@ export function LeadDetailPage() {
               variant="danger"
               isLoading={deleteLead.isPending}
               onClick={async () => {
-                if (!window.confirm(`حذف بيانات الطالب «${lead.full_name}» نهائياً؟ لا يمكن التراجع.`)) return;
+                if (!window.confirm(`حذف العميل «${lead.full_name}» (${lead.phone}) نهائياً من كل القوائم: المحتملون والحجوزات والمهتمون؟ لا يمكن التراجع.`)) return;
                 try {
                   await deleteLead.mutateAsync();
                   navigate("/crm/all-leads");
@@ -239,7 +258,7 @@ export function LeadDetailPage() {
                 }
               }}
             >
-              <Trash2 size={14} />حذف الطالب
+              <Trash2 size={14} />حذف العميل
             </Button>
           )}
         </div>

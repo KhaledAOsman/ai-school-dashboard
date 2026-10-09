@@ -134,7 +134,7 @@ export function BookingsPage() {
         ) : (
           <>
             <div className="grid grid-cols-12 gap-2 border-b border-ink-100 bg-ink-50/70 px-4 py-3 text-center text-[14px] font-semibold text-ink-500">
-              <div className="col-span-1">الموعد</div>
+              <div className="col-span-1">اليوم / التاريخ</div>
               <div className="col-span-2 text-start">الاسم</div>
               <div className="col-span-1">الهاتف</div>
               <div className="col-span-1">المدرّس</div>
@@ -146,6 +146,7 @@ export function BookingsPage() {
                 <div key={lead.id} className="grid grid-cols-12 items-center gap-2 px-4 py-2.5 text-center text-sm transition-colors hover:bg-ink-50/70">
                   <div className="col-span-1 flex flex-col items-center leading-tight">
                     <span className="text-[14px] font-semibold text-ink-800">{formatDayLabel(lead.lecture_date)}</span>
+                    <span className="ltr-content text-[12px] text-ink-400">{lead.lecture_date || ""}</span>
                     <span className="ltr-content text-[13px] text-ink-400">{lead.lecture_time?.slice(0, 5) || "—"}</span>
                   </div>
                   <Link to={`/crm/leads/${lead.id}`} className="col-span-2 truncate text-start text-[15px] font-medium text-ink-900 hover:text-brand-600">{lead.full_name}</Link>

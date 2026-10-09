@@ -208,8 +208,11 @@ class LeadService:
         previous = {"full_name": lead.full_name, "phone": lead.phone, "source": lead.source, "notes": lead.notes}
         if payload.full_name is not None:
             lead.full_name = payload.full_name
-        if payload.phone is not None:
-            lead.phone = payload.phone
+        if payload.phone is not None and payload.phone != lead.phone:
+            # the phone identifies the customer: every booking of the same
+            # customer (siblings / repeat lectures) follows the corrected number
+            for sibling in await self.repo.list_by_phone(lead.phone):
+                sibling.phone = payload.phone
         if payload.source is not None:
             lead.source = payload.source
         if payload.notes is not None:
@@ -398,22 +401,26 @@ class LeadService:
         return await self._to_response(lead)
 
     async def delete_lead(self, *, lead_id: uuid.UUID, user_id: uuid.UUID) -> None:
-        """System-administrator action: permanently removes one student /
-        lead with its stage events and call attempts. Blocked when the
-        lead owns a subscription, so revenue records are never orphaned."""
+        """System-administrator action: permanently removes the customer
+        (identified by phone) with ALL of their rows - leads, bookings and
+        interested lists - plus stage events and call attempts. Blocked when
+        the customer owns a subscription, so revenue records are never orphaned."""
         lead = await self.repo.get_by_id(lead_id)
         ensure_found(lead, "Lead")
+        rows = await self.repo.list_by_phone(lead.phone)
+        ids = [r.id for r in rows]
         has_sub = (
-            await self.db.execute(text("SELECT count(*) FROM subscriptions WHERE lead_id = :id"), {"id": lead_id})
+            await self.db.execute(text("SELECT count(*) FROM subscriptions WHERE lead_id = ANY(:ids) OR phone = :p"), {"ids": ids, "p": lead.phone})
         ).scalar_one()
         if has_sub:
             raise HTTPException(status_code=409, detail="لا يمكن حذف عميل لديه اشتراك مسجّل. عدّل أو احذف الاشتراك أولاً.")
-        snapshot = {"full_name": lead.full_name, "phone": lead.phone, "source": lead.source, "stage": lead.stage}
+        snapshot = {"full_name": lead.full_name, "phone": lead.phone, "source": lead.source, "stage": lead.stage, "rows": len(rows)}
         await self.audit.record(
             user_id=user_id, action="crm_lead.deleted", resource_type="Lead", resource_id=str(lead.id),
             previous_value=snapshot,
         )
-        await self.db.delete(lead)
+        for r in rows:
+            await self.db.delete(r)
         await self.db.commit()
 
     async def send_report(self, *, lead_id: uuid.UUID, user_id: uuid.UUID, note: str | None) -> LeadResponse:
@@ -530,11 +537,12 @@ class LeadService:
         sort_by: str,
         sort_dir: str,
         attendance: str | None = None,
+        unique_phone: bool = False,
     ) -> PaginatedLeadResponse:
         leads, total = await self.repo.list_paginated(
             page=page, page_size=page_size, search=search, stage=stage, stages=stages, source=source,
             assigned_to=assigned_to, date_from=date_from, date_to=date_to,
-            sort_by=sort_by, sort_dir=sort_dir, attendance=attendance,
+            sort_by=sort_by, sort_dir=sort_dir, attendance=attendance, unique_phone=unique_phone,
         )
         items = [await self._to_response(l) for l in leads]
         total_pages = max(1, (total + page_size - 1) // page_size)

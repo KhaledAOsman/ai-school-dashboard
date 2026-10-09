@@ -122,6 +122,8 @@ export interface LeadSearchParams {
   mine_only?: boolean;
   /** bookings only: pending = awaiting a decision, not_attended = لم يحضر */
   attendance?: "pending" | "not_attended";
+  /** one row per phone number (customer list) */
+  unique_phone?: boolean;
 }
 
 export interface LeadImportRow {
