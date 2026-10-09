@@ -1,24 +1,23 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowRight, Trash2, Phone, PhoneMissed, Calendar, CalendarClock, CheckCircle2, XCircle, Send, User, MessageCircle } from "lucide-react";
+import { ArrowRight, Trash2, Phone, PhoneMissed, Calendar, CheckCircle2, XCircle, Send, User, MessageCircle } from "lucide-react";
 import { translate } from "@/i18n";
 import {
   useLead,
   useBookSlot,
   useConfirmWhatsapp,
   useConfirmCall,
-  useRecordAttendance,
   useLogFollowUp,
   useConvertLead,
   useLoseLead,
   useLogCallAttempt,
-  useRescheduleLead,
   useDeleteLead,
   useUpdateLead,
 } from "@/modules/crm/hooks/useCRM";
 import { useMessageTemplates, useSendWhatsAppToLead } from "@/modules/whatsapp/hooks/useWhatsApp";
-import type { CallOutcome } from "@/modules/crm/services/crmApi";
+import type { Booking, CallOutcome } from "@/modules/crm/services/crmApi";
 import { STAGE_LABEL, STAGE_TONE } from "@/modules/crm/pages/LeadsListPage";
+import { AttendanceDropdown } from "@/modules/crm/pages/BookingsPage";
 import { TeacherScheduleModal } from "@/modules/crm/pages/TeacherScheduleModal";
 import { usePermission } from "@/permissions/usePermission";
 import { PERMISSIONS } from "@/permissions/constants";
@@ -67,14 +66,14 @@ function CallAttemptPanel({ leadId }: { leadId: string }) {
   );
 }
 
-function BookingPanel({ leadId }: { leadId: string }) {
+function BookingPanel({ leadId, hasBookings }: { leadId: string; hasBookings: boolean }) {
   const bookSlot = useBookSlot(leadId);
   const [showSchedule, setShowSchedule] = useState(false);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>حجز موعد المحاضرة</CardTitle>
+        <CardTitle>{hasBookings ? "إضافة حجز آخر لنفس العميل" : "حجز موعد المحاضرة"}</CardTitle>
       </CardHeader>
       <div className="flex flex-wrap gap-2">
         <Button variant="primary" isLoading={bookSlot.isPending} onClick={() => bookSlot.mutate(undefined)}>
@@ -97,24 +96,32 @@ function BookingPanel({ leadId }: { leadId: string }) {
   );
 }
 
-function ReschedulePanel({ leadId }: { leadId: string }) {
-  const reschedule = useRescheduleLead(leadId);
-  const [showSchedule, setShowSchedule] = useState(false);
-
+function BookingsList({ bookings, canManage }: { bookings: Booking[]; canManage: boolean }) {
+  if (bookings.length === 0) return null;
   return (
-    <>
-      <Button variant="outline" onClick={() => setShowSchedule(true)}>
-        <CalendarClock size={15} />
-        تأجيل الموعد
-      </Button>
-      {showSchedule && (
-        <TeacherScheduleModal
-          onClose={() => setShowSchedule(false)}
-          isBooking={reschedule.isPending}
-          onConfirm={(slotId) => reschedule.mutateAsync({ teacherSlotId: slotId })}
-        />
-      )}
-    </>
+    <Card>
+      <CardHeader>
+        <CardTitle>حجوزات العميل ({bookings.length})</CardTitle>
+      </CardHeader>
+      <div className="divide-y divide-ink-100">
+        {bookings.map((b) => (
+          <div key={b.id} className="flex flex-wrap items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+            <div className="min-w-0 text-sm text-ink-700">
+              <div className="flex items-center gap-2">
+                <Calendar size={15} className="shrink-0 text-brand-600" />
+                <span className="font-semibold">{b.lecture_date ?? "بدون موعد محدد"}</span>
+                {b.lecture_time && <span className="ltr-content text-ink-500">{b.lecture_time.slice(0, 5)}</span>}
+                {b.teacher_name && <span className="text-ink-500">— {b.teacher_name}</span>}
+              </div>
+              {b.note && <p className="mt-0.5 truncate text-[12px] text-ink-400" title={b.note}>{b.note}</p>}
+            </div>
+            <div className="w-56 max-w-full">
+              <AttendanceDropdown bookingId={b.id} attended={b.attended} disabled={!canManage} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 
@@ -203,7 +210,6 @@ export function LeadDetailPage() {
 
   const confirmWhatsapp = useConfirmWhatsapp(id!);
   const confirmCall = useConfirmCall(id!);
-  const recordAttendance = useRecordAttendance(id!);
   const logFollowUp = useLogFollowUp(id!);
   const convertLead = useConvertLead(id!);
   const loseLead = useLoseLead(id!);
@@ -283,18 +289,9 @@ export function LeadDetailPage() {
             <CallAttemptPanel leadId={lead.id} />
           )}
 
-          {(lead.stage === "new" || lead.stage === "contacted" || lead.stage === "not_answered") && canManage && (
-            <BookingPanel leadId={lead.id} />
-          )}
+          <BookingsList bookings={lead.bookings} canManage={canManage} />
 
-          {lead.teacher_name && (
-            <Card>
-              <div className="flex items-center gap-2 text-sm text-ink-700">
-                <Calendar size={16} className="text-brand-600" />
-                محاضرة مع <span className="font-semibold">{lead.teacher_name}</span> بتاريخ {lead.lecture_date} الساعة {lead.lecture_time}
-              </div>
-            </Card>
-          )}
+          {canManage && <BookingPanel leadId={lead.id} hasBookings={lead.bookings.length > 0} />}
 
           {lead.stage === "booked" && canManage && (
             <Card>
@@ -313,36 +310,6 @@ export function LeadDetailPage() {
                 <Phone size={15} />
                 تم التأكيد هاتفيًا
               </Button>
-            </Card>
-          )}
-
-          {["booked", "confirmed_whatsapp", "confirmed_call", "zoom_sent", "attendance_recorded"].includes(lead.stage) && canManage && (
-            <Card>
-              <p className="mb-3 text-sm text-ink-600">هل حضر العميل المحاضرة؟</p>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="success" isLoading={recordAttendance.isPending} onClick={() => recordAttendance.mutate({ attended: true })}>
-                  <CheckCircle2 size={15} />
-                  حضر
-                </Button>
-                <Button variant="danger" isLoading={recordAttendance.isPending} onClick={() => recordAttendance.mutate({ attended: false })}>
-                  <XCircle size={15} />
-                  لم يحضر
-                </Button>
-                <ReschedulePanel leadId={lead.id} />
-              </div>
-            </Card>
-          )}
-
-          {lead.attended !== null && (
-            <Card>
-              <Badge tone={lead.attended ? "success" : "danger"}>{lead.attended ? "حضر المحاضرة" : "لم يحضر المحاضرة"}</Badge>
-            </Card>
-          )}
-
-          {lead.stage === "attendance_recorded" && !lead.attended && canManage && (
-            <Card>
-              <p className="mb-3 text-sm text-ink-600">لم يحضر العميل — يمكن تأجيل الموعد</p>
-              <ReschedulePanel leadId={lead.id} />
             </Card>
           )}
 

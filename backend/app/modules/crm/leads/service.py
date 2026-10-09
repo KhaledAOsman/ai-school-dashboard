@@ -18,7 +18,7 @@ being a dead end.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import text
@@ -27,9 +27,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit.service import AuditService
 from app.core.permissions.object_policy import ensure_found
 from app.core.users.repository import UserRepository
-from app.modules.crm.leads.models import BOOKINGS_GROUP_STAGES, INTERESTED_GROUP_STAGES, Lead, LeadCallAttempt, LeadStage, LeadStageEvent
+from app.modules.crm.leads.models import (
+    BOOKINGS_GROUP_STAGES,
+    INTERESTED_GROUP_STAGES,
+    LEADS_GROUP_STAGES,
+    Booking,
+    Lead,
+    LeadCallAttempt,
+    LeadStage,
+    LeadStageEvent,
+)
 from app.modules.crm.leads.repository import LeadRepository
 from app.modules.crm.leads.schemas import (
+    BookingListItem,
+    BookingResponse,
+    PaginatedBookingResponse,
     LeadBookRequest,
     LeadAttendanceRequest,
     LeadBulkAssignRequest,
@@ -114,6 +126,7 @@ class LeadService:
             zoom_link=lead.zoom_link,
             attended=lead.attended,
             legacy_booked=lead.legacy_booked,
+            bookings=[BookingResponse.model_validate(b) for b in lead.bookings],
             is_converted=lead.is_converted,
             is_lost=lead.is_lost,
             lost_reason=lead.lost_reason,
@@ -177,6 +190,8 @@ class LeadService:
 
     # ---- Group 1 -> creation ----
     async def create_lead(self, *, payload: LeadCreateRequest, user_id: uuid.UUID) -> LeadResponse:
+        if await self.repo.phone_exists(payload.phone):
+            raise HTTPException(status.HTTP_409_CONFLICT, "هذا الرقم مسجّل بالفعل كعميل")
         lead = Lead(
             full_name=payload.full_name,
             phone=payload.phone,
@@ -209,10 +224,10 @@ class LeadService:
         if payload.full_name is not None:
             lead.full_name = payload.full_name
         if payload.phone is not None and payload.phone != lead.phone:
-            # the phone identifies the customer: every booking of the same
-            # customer (siblings / repeat lectures) follows the corrected number
-            for sibling in await self.repo.list_by_phone(lead.phone):
-                sibling.phone = payload.phone
+            # the phone identifies the customer: it cannot collide with another one
+            if await self.repo.phone_exists(payload.phone):
+                raise HTTPException(status.HTTP_409_CONFLICT, "هذا الرقم مسجّل لعميل آخر")
+            lead.phone = payload.phone
         if payload.source is not None:
             lead.source = payload.source
         if payload.notes is not None:
@@ -227,113 +242,155 @@ class LeadService:
         lead = await self.repo.get_by_id(lead_id)
         return await self._to_response(lead)
 
-    # ---- Group 2: booking / reschedule ----
+    # ---- Bookings: a customer can hold any number of them ----
+    @staticmethod
+    def _mirror_latest_booking(lead: Lead) -> None:
+        """Lead.teacher_name / lecture_date / ... mirror the customer's
+        latest booking (WhatsApp templates and the schedule read them)."""
+        bookings = list(lead.bookings)
+        if not bookings:
+            lead.teacher_slot_id = lead.teacher_name = lead.lecture_date = lead.lecture_time = lead.zoom_link = None
+            lead.attended = None
+            return
+        latest = max(enumerate(bookings), key=lambda ib: (ib[1].lecture_date or date.min, ib[0]))[1]
+        lead.teacher_slot_id = latest.teacher_slot_id
+        lead.teacher_name = latest.teacher_name
+        lead.lecture_date = latest.lecture_date
+        lead.lecture_time = latest.lecture_time
+        lead.zoom_link = latest.zoom_link
+        lead.attended = latest.attended
+
+    def _recompute_stage(
+        self, lead: Lead, *, user_id: uuid.UUID, note: str | None, attendance_changed: bool = False, record: bool = True
+    ) -> None:
+        """Keeps the customer's stage in step with their bookings: any
+        attended booking -> interested; otherwise booked while bookings
+        exist; back to contacted when the last booking is removed. Later
+        pipeline stages (follow-up, converted, lost...) are never touched."""
+        old = lead.stage
+        if old in (LeadStage.REPORT_SENT.value, LeadStage.FOLLOW_UP.value, LeadStage.CONVERTED.value, LeadStage.LOST.value):
+            return
+        has_attended = any(b.attended is True for b in lead.bookings)
+        if has_attended:
+            new = LeadStage.INTERESTED.value
+        elif lead.bookings:
+            if old in (LeadStage.CONFIRMED_WHATSAPP.value, LeadStage.CONFIRMED_CALL.value, LeadStage.ZOOM_SENT.value):
+                new = old
+            elif old == LeadStage.INTERESTED.value and not attendance_changed:
+                new = old
+            else:
+                new = LeadStage.BOOKED.value
+        else:
+            new = LeadStage.CONTACTED.value if (old in BOOKINGS_GROUP_STAGES or old == LeadStage.INTERESTED.value) else old
+        if new != old:
+            lead.stage = new
+            if record:
+                self._record_stage_event(lead=lead, stage=new, user_id=user_id, note=note)
+
+    async def _load_booking(self, booking_id: uuid.UUID) -> tuple[Booking, Lead]:
+        booking = await self.repo.get_booking(booking_id)
+        ensure_found(booking, "Booking")
+        lead = await self.repo.get_by_id(booking.lead_id)
+        ensure_found(lead, "Lead")
+        booking = next(b for b in lead.bookings if b.id == booking_id)
+        return booking, lead
+
+    async def _free_slot(self, booking: Booking, lead: Lead) -> None:
+        if booking.teacher_slot_id:
+            old_slot = await self.slot_repo.get_by_id(booking.teacher_slot_id)
+            if old_slot and old_slot.booked_lead_id == lead.id:
+                old_slot.is_booked = False
+                old_slot.booked_lead_id = None
+
     async def book(self, *, lead_id: uuid.UUID, payload: LeadBookRequest, user_id: uuid.UUID) -> LeadResponse:
-        """Moves a lead into الحجوزات. With a teacher slot it consumes the
-        slot (book_slot); without one it is a plain "تم الحجز" - the lead is
-        recorded as booked right away (phone is all that is needed) and the
-        lecture details can be filled in or reviewed later."""
-        if payload.teacher_slot_id:
-            return await self.book_slot(lead_id=lead_id, teacher_slot_id=payload.teacher_slot_id, user_id=user_id)
+        """Adds a booking for the customer (any number of them - siblings
+        sharing a phone, or one person attending several lectures). With a
+        teacher slot it consumes the slot; without one it is a plain
+        "تم الحجز" whose lecture details can be filled in later."""
         lead = await self.repo.get_by_id(lead_id)
         ensure_found(lead, "Lead")
-        if lead.stage in INTERESTED_GROUP_STAGES or lead.stage in BOOKINGS_GROUP_STAGES:
-            raise HTTPException(status.HTTP_409_CONFLICT, "هذا العميل محجوز بالفعل")
+
+        teacher_name, lecture_date, lecture_time, zoom_link, slot_id = (
+            payload.teacher_name, payload.lecture_date, payload.lecture_time, None, None,
+        )
+        slot = None
+        if payload.teacher_slot_id:
+            slot = await self.slot_repo.get_by_id(payload.teacher_slot_id)
+            ensure_found(slot, "Teacher slot")
+            if slot.is_booked:
+                raise HTTPException(status.HTTP_409_CONFLICT, "This slot has already been booked")
+            teacher_name = slot.teacher.full_name if slot.teacher else None
+            lecture_date, lecture_time = slot.slot_date, slot.slot_time
+            # the teacher's fixed Zoom link is applied automatically
+            zoom_link = slot.teacher.zoom_link if slot.teacher and slot.teacher.zoom_link else None
+            slot_id = slot.id
+
+        for b in lead.bookings:
+            if lecture_date is None and b.lecture_date is None and b.attended is None:
+                raise HTTPException(status.HTTP_409_CONFLICT, "لدى العميل حجز بدون موعد بانتظار الحضور بالفعل")
+            if lecture_date is not None and b.lecture_date == lecture_date and b.lecture_time == lecture_time and b.teacher_name == teacher_name:
+                raise HTTPException(status.HTTP_409_CONFLICT, "هذا الحجز مسجّل للعميل بالفعل")
+
+        booking = Booking(
+            lead_id=lead.id, teacher_slot_id=slot_id, teacher_name=teacher_name,
+            lecture_date=lecture_date, lecture_time=lecture_time, zoom_link=zoom_link, attended=None,
+        )
+        lead.bookings.append(booking)
+        if slot is not None:
+            slot.is_booked = True
+            slot.booked_lead_id = lead.id
         lead.legacy_booked = False
-        lead.stage = LeadStage.BOOKED.value
-        if payload.teacher_name:
-            lead.teacher_name = payload.teacher_name
-        if payload.lecture_date:
-            lead.lecture_date = payload.lecture_date
-        if payload.lecture_time:
-            lead.lecture_time = payload.lecture_time
-        self._record_stage_event(lead=lead, stage=LeadStage.BOOKED.value, user_id=user_id, note="تم الحجز")
+        self._mirror_latest_booking(lead)
+        self._recompute_stage(lead, user_id=user_id, note="تم الحجز", record=False)
+        when = f" {lecture_date} {lecture_time}" if lecture_date else ""
+        self._record_stage_event(lead=lead, stage=LeadStage.BOOKED.value, user_id=user_id, note=f"حجز جديد{when}")
         await self.db.commit()
         lead = await self.repo.get_by_id(lead_id)
+        if slot is not None:
+            await self._notify_whatsapp(trigger="lecture_booked", lead=lead, user_id=user_id)
         return await self._to_response(lead)
 
-    async def book_slot(
-        self, *, lead_id: uuid.UUID, teacher_slot_id: uuid.UUID, user_id: uuid.UUID, reschedule_note: str | None = None
-    ) -> LeadResponse:
-        lead = await self.repo.get_by_id(lead_id)
-        ensure_found(lead, "Lead")
+    async def unbook(self, *, booking_id: uuid.UUID, user_id: uuid.UUID, note: str | None = None) -> LeadResponse:
+        """إلغاء الحجز: removes one booking (frees its slot, drops its
+        attendance). If it was the customer's last booking the customer
+        returns to العملاء المحتملون."""
+        booking, lead = await self._load_booking(booking_id)
+        await self._free_slot(booking, lead)
+        lead.bookings.remove(booking)
+        lead.legacy_booked = False
+        await self.db.flush()
+        self._mirror_latest_booking(lead)
+        self._recompute_stage(lead, user_id=user_id, note=note or "إلغاء الحجز", attendance_changed=True)
+        await self.db.commit()
+        lead = await self.repo.get_by_id(lead.id)
+        return await self._to_response(lead)
 
+    async def reschedule(self, *, booking_id: uuid.UUID, teacher_slot_id: uuid.UUID, user_id: uuid.UUID, note: str | None) -> LeadResponse:
+        """تأجيل: moves one booking to a new teacher slot (frees the old
+        slot, re-applies the new teacher's Zoom link, resets attendance)."""
+        booking, lead = await self._load_booking(booking_id)
         slot = await self.slot_repo.get_by_id(teacher_slot_id)
         ensure_found(slot, "Teacher slot")
         if slot.is_booked:
             raise HTTPException(status.HTTP_409_CONFLICT, "This slot has already been booked")
-
+        await self._free_slot(booking, lead)
         slot.is_booked = True
         slot.booked_lead_id = lead.id
-
-        lead.teacher_slot_id = slot.id
-        lead.teacher_name = slot.teacher.full_name if slot.teacher else None
-        lead.lecture_date = slot.slot_date
-        lead.lecture_time = slot.slot_time
-        # Auto-apply the teacher's fixed Zoom link, if they have one, so
-        # customer service doesn't have to look it up or retype it - the
-        # explicit send_zoom step still exists for cases where a teacher
-        # has no fixed link yet or it needs to be overridden.
+        booking.teacher_slot_id = slot.id
+        booking.teacher_name = slot.teacher.full_name if slot.teacher else None
+        booking.lecture_date = slot.slot_date
+        booking.lecture_time = slot.slot_time
         if slot.teacher and slot.teacher.zoom_link:
-            lead.zoom_link = slot.teacher.zoom_link
-        lead.stage = LeadStage.BOOKED.value
-
-        note = reschedule_note or f"Booked {slot.slot_date} {slot.slot_time}"
-        if reschedule_note is not None:
-            note = f"Rescheduled to {slot.slot_date} {slot.slot_time}" + (f" - {reschedule_note}" if reschedule_note else "")
-        self._record_stage_event(lead=lead, stage=LeadStage.BOOKED.value, user_id=user_id, note=note)
+            booking.zoom_link = slot.teacher.zoom_link
+        booking.attended = None
+        self._mirror_latest_booking(lead)
+        self._recompute_stage(lead, user_id=user_id, note="تأجيل", attendance_changed=True)
+        text_note = f"Rescheduled to {slot.slot_date} {slot.slot_time}" + (f" - {note}" if note else "")
+        self._record_stage_event(lead=lead, stage=lead.stage, user_id=user_id, note=text_note)
         await self.db.commit()
-        lead = await self.repo.get_by_id(lead_id)
-
+        lead = await self.repo.get_by_id(lead.id)
         await self._notify_whatsapp(trigger="lecture_booked", lead=lead, user_id=user_id)
-
         return await self._to_response(lead)
-
-    async def unbook(self, *, lead_id: uuid.UUID, user_id: uuid.UUID, note: str | None = None) -> LeadResponse:
-        """إلغاء الحجز: used while reviewing الحجوزات - sends a booking that
-        should not be there back to العملاء المحتملون (frees its slot, clears
-        any attendance)."""
-        lead = await self.repo.get_by_id(lead_id)
-        ensure_found(lead, "Lead")
-        if lead.stage not in BOOKINGS_GROUP_STAGES:
-            raise HTTPException(status.HTTP_409_CONFLICT, "هذا العميل ليس ضمن الحجوزات")
-        if lead.teacher_slot_id:
-            old_slot = await self.slot_repo.get_by_id(lead.teacher_slot_id)
-            if old_slot and old_slot.booked_lead_id == lead.id:
-                old_slot.is_booked = False
-                old_slot.booked_lead_id = None
-        lead.teacher_slot_id = None
-        lead.attended = None
-        lead.legacy_booked = False
-        lead.stage = LeadStage.CONTACTED.value
-        self._record_stage_event(lead=lead, stage=lead.stage, user_id=user_id, note=note or "إلغاء الحجز")
-        await self.db.commit()
-        lead = await self.repo.get_by_id(lead_id)
-        return await self._to_response(lead)
-
-    async def reschedule(self, *, lead_id: uuid.UUID, teacher_slot_id: uuid.UUID, user_id: uuid.UUID, note: str | None) -> LeadResponse:
-        """
-        تأجيل: used at the attendance step when the lecture needs to be
-        postponed rather than marked attended/did-not-attend. Frees the
-        lead's previous slot (if any, so it becomes bookable again for
-        someone else) and books the new one via book_slot (which also
-        re-applies the new teacher's Zoom link automatically). Resets
-        attended back to None since the previous attendance record no
-        longer applies to the new lecture time.
-        """
-        lead = await self.repo.get_by_id(lead_id)
-        ensure_found(lead, "Lead")
-
-        if lead.teacher_slot_id:
-            old_slot = await self.slot_repo.get_by_id(lead.teacher_slot_id)
-            if old_slot and old_slot.booked_lead_id == lead.id:
-                old_slot.is_booked = False
-                old_slot.booked_lead_id = None
-
-        lead.attended = None
-        await self.db.flush()
-
-        return await self.book_slot(lead_id=lead_id, teacher_slot_id=teacher_slot_id, user_id=user_id, reschedule_note=note)
 
     # ---- Stages 3, 4, 5: simple linear advances within group 2 ----
     async def _advance(
@@ -369,6 +426,9 @@ class LeadService:
         lead = await self.repo.get_by_id(lead_id)
         ensure_found(lead, "Lead")
         lead.zoom_link = zoom_link
+        target = next((b for b in reversed(list(lead.bookings)) if b.attended is None), None)
+        if target is not None:
+            target.zoom_link = zoom_link
         lead.stage = LeadStage.ZOOM_SENT.value
         self._record_stage_event(lead=lead, stage=LeadStage.ZOOM_SENT.value, user_id=user_id, note=note)
         await self.db.commit()
@@ -376,28 +436,22 @@ class LeadService:
         return await self._to_response(lead)
 
     # ---- Attendance ----
-    async def record_attendance(self, *, lead_id: uuid.UUID, payload: LeadAttendanceRequest, user_id: uuid.UUID) -> LeadResponse:
-        """حضر -> the lead becomes an interested client (leaves الحجوزات and
-        appears in عملاء مهتمون). لم يحضر -> stays in الحجوزات, visibly marked.
-        None -> undo: back to waiting for a decision (booked)."""
-        lead = await self.repo.get_by_id(lead_id)
-        ensure_found(lead, "Lead")
-        lead.attended = payload.attended
+    async def record_attendance(self, *, booking_id: uuid.UUID, payload: LeadAttendanceRequest, user_id: uuid.UUID) -> LeadResponse:
+        """Attendance is recorded per booking. حضر -> the customer becomes an
+        interested client (and still shows in الحجوزات as attended). لم يحضر
+        -> the booking stays in الحجوزات marked "لم يحضر". None -> undo:
+        back to waiting for a decision."""
+        booking, lead = await self._load_booking(booking_id)
+        booking.attended = payload.attended
         lead.legacy_booked = False
-        if payload.attended is True:
-            # never push someone already further along (follow-up, converted...) backwards
-            if lead.stage not in INTERESTED_GROUP_STAGES:
-                lead.stage = LeadStage.INTERESTED.value
-            note = payload.note or "حضر المحاضرة"
-        elif payload.attended is False:
-            lead.stage = LeadStage.ATTENDANCE_RECORDED.value
-            note = payload.note or "لم يحضر"
-        else:
-            lead.stage = LeadStage.BOOKED.value
-            note = payload.note or "بانتظار تغيّر الحالة"
-        self._record_stage_event(lead=lead, stage=lead.stage, user_id=user_id, note=note)
+        note = payload.note or {True: "حضر المحاضرة", False: "لم يحضر"}.get(payload.attended, "بانتظار تغيّر الحالة")
+        self._mirror_latest_booking(lead)
+        old_stage = lead.stage
+        self._recompute_stage(lead, user_id=user_id, note=note, attendance_changed=True)
+        if lead.stage == old_stage:
+            self._record_stage_event(lead=lead, stage=lead.stage, user_id=user_id, note=note)
         await self.db.commit()
-        lead = await self.repo.get_by_id(lead_id)
+        lead = await self.repo.get_by_id(lead.id)
         return await self._to_response(lead)
 
     async def delete_lead(self, *, lead_id: uuid.UUID, user_id: uuid.UUID) -> None:
@@ -420,6 +474,8 @@ class LeadService:
             previous_value=snapshot,
         )
         for r in rows:
+            for b in await self.repo.list_bookings(r.id):
+                await self._free_slot(b, r)
             await self.db.delete(r)
         await self.db.commit()
 
@@ -611,21 +667,48 @@ class LeadService:
 
     # ---- Schedule: every booked lecture, calendar-style ----
     async def list_scheduled(self, *, assigned_to: uuid.UUID | None = None) -> list[ScheduledLectureResponse]:
-        leads = await self.repo.list_scheduled(assigned_to=assigned_to)
         results = []
-        for lead in leads:
+        for booking, lead in await self.repo.list_scheduled(assigned_to=assigned_to):
             assigned_user = await self.user_repo.get_by_id(lead.assigned_to) if lead.assigned_to else None
             results.append(
                 ScheduledLectureResponse(
                     lead_id=lead.id,
+                    booking_id=booking.id,
                     lead_full_name=lead.full_name,
                     lead_phone=lead.phone,
                     stage=lead.stage,
-                    teacher_name=lead.teacher_name,
-                    lecture_date=lead.lecture_date,
-                    lecture_time=lead.lecture_time,
-                    zoom_link=lead.zoom_link,
+                    teacher_name=booking.teacher_name,
+                    lecture_date=booking.lecture_date,
+                    lecture_time=booking.lecture_time,
+                    zoom_link=booking.zoom_link,
                     assigned_to_name=assigned_user.full_name if assigned_user else None,
                 )
             )
         return results
+
+    # ---- الحجوزات: one row per booking ----
+    async def list_bookings(
+        self, *, page: int, page_size: int, search: str | None, attendance: str | None, assigned_to: uuid.UUID | None
+    ) -> PaginatedBookingResponse:
+        rows, total, counts = await self.repo.list_bookings_paginated(
+            page=page, page_size=page_size, search=search, attendance=attendance, assigned_to=assigned_to
+        )
+        items = []
+        for booking, lead in rows:
+            assigned_user = await self.user_repo.get_by_id(lead.assigned_to) if lead.assigned_to else None
+            items.append(
+                BookingListItem(
+                    **BookingResponse.model_validate(booking).model_dump(),
+                    full_name=lead.full_name,
+                    phone=lead.phone,
+                    source=lead.source,
+                    lead_stage=lead.stage,
+                    lead_notes=lead.notes,
+                    assigned_to=lead.assigned_to,
+                    assigned_to_name=assigned_user.full_name if assigned_user else None,
+                )
+            )
+        return PaginatedBookingResponse(
+            items=items, total=total, page=page, page_size=page_size,
+            total_pages=max(1, (total + page_size - 1) // page_size), **counts,
+        )

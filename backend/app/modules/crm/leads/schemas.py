@@ -119,6 +119,44 @@ class LeadStageEventResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class BookingResponse(BaseModel):
+    """One lecture booking of a customer."""
+    id: uuid.UUID
+    lead_id: uuid.UUID
+    teacher_slot_id: uuid.UUID | None
+    teacher_name: str | None
+    lecture_date: date | None
+    lecture_time: time | None
+    zoom_link: str | None
+    attended: bool | None
+    note: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class BookingListItem(BookingResponse):
+    """A booking together with its customer - one row of الحجوزات."""
+    full_name: str
+    phone: str
+    source: str | None
+    lead_stage: str
+    lead_notes: str | None = None
+    assigned_to: uuid.UUID | None = None
+    assigned_to_name: str | None = None
+
+
+class PaginatedBookingResponse(BaseModel):
+    items: list[BookingListItem]
+    total: int
+    pending: int
+    attended: int
+    not_attended: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
 class LeadResponse(BaseModel):
     id: uuid.UUID
     full_name: str
@@ -132,6 +170,7 @@ class LeadResponse(BaseModel):
     zoom_link: str | None
     attended: bool | None
     legacy_booked: bool = False
+    bookings: list[BookingResponse] = []
     is_converted: bool
     is_lost: bool
     lost_reason: str | None
@@ -203,6 +242,7 @@ class ScheduledLectureResponse(BaseModel):
     reached the 'booked' stage or beyond with a lecture date still today
     or in the future."""
     lead_id: uuid.UUID
+    booking_id: uuid.UUID | None = None
     lead_full_name: str
     lead_phone: str
     stage: str

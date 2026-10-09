@@ -3,11 +3,11 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.modules.crm.leads.models import Lead, LeadCallAttempt, LeadStage, LeadStageEvent, LEADS_GROUP_STAGES, BOOKINGS_GROUP_STAGES
+from app.modules.crm.leads.models import Booking, Lead, LeadCallAttempt, LeadStage, LeadStageEvent, LEADS_GROUP_STAGES, BOOKINGS_GROUP_STAGES
 
 
 class LeadRepository:
@@ -17,7 +17,7 @@ class LeadRepository:
     async def get_by_id(self, lead_id: uuid.UUID) -> Lead | None:
         result = await self.db.execute(
             select(Lead)
-            .options(selectinload(Lead.stage_events), selectinload(Lead.call_attempts))
+            .options(selectinload(Lead.stage_events), selectinload(Lead.call_attempts), selectinload(Lead.bookings))
             .where(Lead.id == lead_id)
         )
         return result.scalar_one_or_none()
@@ -34,7 +34,7 @@ class LeadRepository:
         """Kept for callers that genuinely want everything unpaginated
         (small, permission-scoped result sets). The main leads list uses
         list_paginated below instead."""
-        stmt = select(Lead).order_by(Lead.created_at.desc())
+        stmt = select(Lead).options(selectinload(Lead.bookings)).order_by(Lead.created_at.desc())
         if stage:
             stmt = stmt.where(Lead.stage == stage)
         if assigned_to:
@@ -78,21 +78,19 @@ class LeadRepository:
         separate list endpoints. `stage` (singular) narrows further within
         that group (e.g. only NOT_ANSWERED leads within group 1).
         """
-        stmt = select(Lead)
+        stmt = select(Lead).options(selectinload(Lead.bookings))
         count_stmt = select(func.count(Lead.id))
 
         conditions = []
         if search:
             like = f"%{search}%"
             conditions.append(or_(Lead.full_name.ilike(like), Lead.phone.ilike(like)))
-        if unique_phone:
-            # one row per phone number (the earliest registration) - the customer list
-            earliest = select(Lead.id).distinct(Lead.phone).order_by(Lead.phone, Lead.created_at, Lead.id)
-            conditions.append(Lead.id.in_(earliest))
+        # a customer is already unique by phone (unique_phone is kept only so
+        # older clients keep working)
         if attendance == "pending":
-            conditions.append(Lead.attended.is_(None))
+            conditions.append(exists().where(Booking.lead_id == Lead.id, Booking.attended.is_(None)))
         elif attendance == "not_attended":
-            conditions.append(Lead.attended.is_(False))
+            conditions.append(exists().where(Booking.lead_id == Lead.id, Booking.attended.is_(False)))
         if stages:
             conditions.append(Lead.stage.in_(stages))
         if stage:
@@ -138,23 +136,81 @@ class LeadRepository:
         )
         return [r for r in result.scalars().all() if r]
 
-    async def list_scheduled(self, *, assigned_to: uuid.UUID | None = None) -> list[Lead]:
-        """
-        Every lead that has reached 'booked' or a later stage (i.e. has a
-        lecture_date set), for the customer-service-facing schedule view.
-        Ordered by date/time so it reads like a calendar/agenda. Excludes
-        lost leads but includes converted ones (their lecture already
-        happened and is still useful history for today's view).
-        """
+    async def list_scheduled(self, *, assigned_to: uuid.UUID | None = None) -> list[tuple[Booking, Lead]]:
+        """Every booking with a lecture date, in calendar order - the
+        customer-service-facing schedule of upcoming (and recent) lectures.
+        Excludes lost customers."""
         stmt = (
-            select(Lead)
-            .where(Lead.lecture_date.is_not(None), Lead.is_lost.is_(False))
-            .order_by(Lead.lecture_date.asc(), Lead.lecture_time.asc())
+            select(Booking, Lead)
+            .join(Lead, Lead.id == Booking.lead_id)
+            .where(Booking.lecture_date.is_not(None), Lead.is_lost.is_(False))
+            .order_by(Booking.lecture_date.asc(), Booking.lecture_time.asc())
         )
         if assigned_to:
             stmt = stmt.where(Lead.assigned_to == assigned_to)
         result = await self.db.execute(stmt)
+        return [(b, l) for b, l in result.all()]
+
+    # ---- Bookings (الحجوزات) ----
+    async def get_booking(self, booking_id: uuid.UUID) -> Booking | None:
+        result = await self.db.execute(select(Booking).where(Booking.id == booking_id))
+        return result.scalar_one_or_none()
+
+    async def list_bookings(self, lead_id: uuid.UUID) -> list[Booking]:
+        result = await self.db.execute(select(Booking).where(Booking.lead_id == lead_id))
         return list(result.scalars().all())
+
+    def add_booking(self, booking: Booking) -> None:
+        self.db.add(booking)
+
+    async def list_bookings_paginated(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        search: str | None = None,
+        attendance: str | None = None,
+        assigned_to: uuid.UUID | None = None,
+    ) -> tuple[list[tuple[Booking, Lead]], int, dict[str, int]]:
+        """One row per booking, newest lecture first. Returns the page, the
+        total matching `attendance` and the pending / attended / not-attended
+        counts for the current search (so the page can show
+        N = pending + attended + not attended)."""
+        base = select(Booking, Lead).join(Lead, Lead.id == Booking.lead_id)
+        conds = []
+        if search:
+            like = f"%{search}%"
+            conds.append(or_(Lead.full_name.ilike(like), Lead.phone.ilike(like)))
+        if assigned_to:
+            conds.append(Lead.assigned_to == assigned_to)
+
+        def apply(stmt):
+            for c in conds:
+                stmt = stmt.where(c)
+            return stmt
+
+        counts_stmt = apply(
+            select(
+                func.count(Booking.id),
+                func.count(Booking.id).filter(Booking.attended.is_(None)),
+                func.count(Booking.id).filter(Booking.attended.is_(True)),
+                func.count(Booking.id).filter(Booking.attended.is_(False)),
+            ).select_from(Booking).join(Lead, Lead.id == Booking.lead_id)
+        )
+        _total, pending, attended, not_attended = (await self.db.execute(counts_stmt)).one()
+
+        stmt = apply(base)
+        if attendance == "pending":
+            stmt = stmt.where(Booking.attended.is_(None))
+        elif attendance == "attended":
+            stmt = stmt.where(Booking.attended.is_(True))
+        elif attendance == "not_attended":
+            stmt = stmt.where(Booking.attended.is_(False))
+        total = {None: _total, "pending": pending, "attended": attended, "not_attended": not_attended}.get(attendance, _total)
+        stmt = stmt.order_by(Booking.lecture_date.desc().nulls_last(), Booking.lecture_time.desc().nulls_last(), Lead.full_name)
+        stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+        rows = (await self.db.execute(stmt)).all()
+        return [(b, l) for b, l in rows], total, {"pending": pending, "attended": attended, "not_attended": not_attended}
 
     def add(self, lead: Lead) -> None:
         self.db.add(lead)
@@ -174,10 +230,10 @@ class LeadRepository:
         total_result = await self.db.execute(select(func.count(func.distinct(Lead.phone))))
         total = total_result.scalar_one()
 
-        attended_result = await self.db.execute(select(func.count(Lead.id)).where(Lead.attended.is_(True)))
+        attended_result = await self.db.execute(select(func.count(Booking.id)).where(Booking.attended.is_(True)))
         attended = attended_result.scalar_one()
 
-        not_attended_result = await self.db.execute(select(func.count(Lead.id)).where(Lead.attended.is_(False)))
+        not_attended_result = await self.db.execute(select(func.count(Booking.id)).where(Booking.attended.is_(False)))
         not_attended = not_attended_result.scalar_one()
 
         not_answered_result = await self.db.execute(
@@ -216,5 +272,5 @@ class LeadRepository:
         الموعد الموعد حتى تسجيل الحضور) - i.e. currently in the
         الحجوزات table, regardless of how far along the confirm/zoom/attendance
         steps they've gotten."""
-        result = await self.db.execute(select(func.count(Lead.id)).where(Lead.stage.in_(BOOKINGS_GROUP_STAGES)))
+        result = await self.db.execute(select(func.count(Booking.id)).where(Booking.attended.is_(None)))
         return result.scalar_one()

@@ -33,6 +33,7 @@ from app.modules.finance.categories.routes import router as finance_categories_r
 from app.modules.finance.expenses.routes import router as finance_expenses_router
 from app.modules.finance.reports.routes import router as finance_reports_router
 from app.modules.finance.staff.routes import router as finance_staff_router
+from app.modules.crm.leads.routes import bookings_router as crm_bookings_router
 from app.modules.crm.leads.routes import router as crm_leads_router
 from app.modules.crm.teachers.routes import router as crm_teachers_router
 from app.modules.crm.dashboard import router as crm_dashboard_router
@@ -97,6 +98,7 @@ app.include_router(finance_reports_router, prefix=API_PREFIX)
 app.include_router(finance_budget_router, prefix=API_PREFIX)
 app.include_router(finance_staff_router, prefix=API_PREFIX)
 app.include_router(crm_leads_router, prefix=API_PREFIX)
+app.include_router(crm_bookings_router, prefix=API_PREFIX)
 app.include_router(crm_teachers_router, prefix=API_PREFIX)
 app.include_router(crm_dashboard_router, prefix=API_PREFIX)
 app.include_router(whatsapp_router, prefix=API_PREFIX)

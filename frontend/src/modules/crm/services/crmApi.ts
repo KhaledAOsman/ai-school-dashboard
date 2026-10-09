@@ -69,6 +69,42 @@ export interface LeadCallAttempt {
   created_at: string;
 }
 
+export interface Booking {
+  id: string;
+  lead_id: string;
+  teacher_slot_id: string | null;
+  teacher_name: string | null;
+  lecture_date: string | null;
+  lecture_time: string | null;
+  zoom_link: string | null;
+  /** null = awaiting a decision, true = attended, false = did not attend */
+  attended: boolean | null;
+  note: string | null;
+  created_at: string;
+}
+
+/** One row of الحجوزات: a booking together with its customer. */
+export interface BookingListItem extends Booking {
+  full_name: string;
+  phone: string;
+  source: string | null;
+  lead_stage: LeadStage;
+  lead_notes: string | null;
+  assigned_to: string | null;
+  assigned_to_name: string | null;
+}
+
+export interface PaginatedBookings {
+  items: BookingListItem[];
+  total: number;
+  pending: number;
+  attended: number;
+  not_attended: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
 export interface Lead {
   id: string;
   full_name: string;
@@ -82,6 +118,7 @@ export interface Lead {
   zoom_link: string | null;
   attended: boolean | null;
   legacy_booked?: boolean;
+  bookings: Booking[];
   is_converted: boolean;
   is_lost: boolean;
   lost_reason: string | null;
@@ -120,9 +157,9 @@ export interface LeadSearchParams {
   sort_by?: "created_at" | "full_name" | "stage";
   sort_dir?: "asc" | "desc";
   mine_only?: boolean;
-  /** bookings only: pending = awaiting a decision, not_attended = لم يحضر */
+  /** customers that have a booking in this state */
   attendance?: "pending" | "not_attended";
-  /** one row per phone number (customer list) */
+  /** kept for old callers - customers are already unique by phone */
   unique_phone?: boolean;
 }
 
@@ -143,6 +180,7 @@ export interface LeadBulkImportResult {
 
 export interface ScheduledLecture {
   lead_id: string;
+  booking_id: string | null;
   lead_full_name: string;
   lead_phone: string;
   stage: LeadStage;
@@ -248,14 +286,6 @@ export const crmLeadApi = {
     const { data } = await api.post(`/crm/leads/${id}/book`, { teacher_slot_id: teacher_slot_id ?? null });
     return data;
   },
-  unbook: async (id: string, note?: string): Promise<Lead> => {
-    const { data } = await api.post(`/crm/leads/${id}/unbook`, { note });
-    return data;
-  },
-  reschedule: async (id: string, teacher_slot_id: string, note?: string): Promise<Lead> => {
-    const { data } = await api.post(`/crm/leads/${id}/reschedule`, { teacher_slot_id, note });
-    return data;
-  },
   confirmWhatsapp: async (id: string, note?: string): Promise<Lead> => {
     const { data } = await api.post(`/crm/leads/${id}/confirm-whatsapp`, { note });
     return data;
@@ -266,10 +296,6 @@ export const crmLeadApi = {
   },
   sendZoom: async (id: string, zoom_link: string, note?: string): Promise<Lead> => {
     const { data } = await api.post(`/crm/leads/${id}/send-zoom`, { zoom_link, note });
-    return data;
-  },
-  recordAttendance: async (id: string, attended: boolean | null, note?: string): Promise<Lead> => {
-    const { data } = await api.post(`/crm/leads/${id}/attendance`, { attended, note });
     return data;
   },
   deleteLead: async (id: string): Promise<void> => {
@@ -297,6 +323,26 @@ export const crmLeadApi = {
   },
   reassign: async (id: string, assigned_to: string): Promise<Lead> => {
     const { data } = await api.post(`/crm/leads/${id}/reassign`, { assigned_to });
+    return data;
+  },
+};
+
+export const crmBookingApi = {
+  list: async (params: { page?: number; page_size?: number; search?: string; attendance?: "pending" | "attended" | "not_attended"; mine_only?: boolean } = {}): Promise<PaginatedBookings> => {
+    const { data } = await api.get("/crm/bookings", { params });
+    return data;
+  },
+  /** attended true = حضر (customer becomes an interested client), false = لم يحضر, null = back to waiting */
+  recordAttendance: async (bookingId: string, attended: boolean | null, note?: string): Promise<Lead> => {
+    const { data } = await api.post(`/crm/bookings/${bookingId}/attendance`, { attended, note });
+    return data;
+  },
+  unbook: async (bookingId: string, note?: string): Promise<Lead> => {
+    const { data } = await api.post(`/crm/bookings/${bookingId}/unbook`, { note });
+    return data;
+  },
+  reschedule: async (bookingId: string, teacher_slot_id: string, note?: string): Promise<Lead> => {
+    const { data } = await api.post(`/crm/bookings/${bookingId}/reschedule`, { teacher_slot_id, note });
     return data;
   },
 };

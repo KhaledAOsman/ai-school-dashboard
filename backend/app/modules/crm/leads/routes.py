@@ -36,6 +36,7 @@ from app.modules.crm.leads.schemas import (
     LeadRescheduleRequest,
     LeadResponse,
     LeadUpdateRequest,
+    PaginatedBookingResponse,
     PaginatedLeadResponse,
     ScheduledLectureResponse,
 )
@@ -222,32 +223,6 @@ async def book_slot(
     return await service.book(lead_id=lead_id, payload=payload, user_id=user.id)
 
 
-@router.post("/{lead_id}/unbook", response_model=LeadResponse)
-async def unbook_lead(
-    lead_id: uuid.UUID,
-    payload: LeadAdvanceRequest,
-    user: CurrentUser = Depends(require_permission(CRM_LEAD_MANAGE)),
-    db: AsyncSession = Depends(get_db),
-):
-    """إلغاء الحجز: returns a booking to العملاء المحتملون."""
-    service = LeadService(db)
-    return await service.unbook(lead_id=lead_id, user_id=user.id, note=payload.note)
-
-
-@router.post("/{lead_id}/reschedule", response_model=LeadResponse)
-async def reschedule_lead(
-    lead_id: uuid.UUID,
-    payload: LeadRescheduleRequest,
-    user: CurrentUser = Depends(require_permission(CRM_LEAD_MANAGE)),
-    db: AsyncSession = Depends(get_db),
-):
-    """تأجيل: frees the lead's current slot and books a new one, returning
-    the lead to the 'booked' stage (used at the attendance step instead of
-    marking attended/did-not-attend)."""
-    service = LeadService(db)
-    return await service.reschedule(lead_id=lead_id, teacher_slot_id=payload.teacher_slot_id, user_id=user.id, note=payload.note)
-
-
 @router.post("/{lead_id}/confirm-whatsapp", response_model=LeadResponse)
 async def confirm_whatsapp(
     lead_id: uuid.UUID,
@@ -279,17 +254,6 @@ async def send_zoom(
 ):
     service = LeadService(db)
     return await service.send_zoom(lead_id=lead_id, zoom_link=payload.zoom_link, user_id=user.id, note=payload.note)
-
-
-@router.post("/{lead_id}/attendance", response_model=LeadResponse)
-async def record_attendance(
-    lead_id: uuid.UUID,
-    payload: LeadAttendanceRequest,
-    user: CurrentUser = Depends(require_permission(CRM_LEAD_MANAGE)),
-    db: AsyncSession = Depends(get_db),
-):
-    service = LeadService(db)
-    return await service.record_attendance(lead_id=lead_id, payload=payload, user_id=user.id)
 
 
 @router.delete("/{lead_id}", status_code=204)
@@ -369,3 +333,60 @@ async def reassign_lead(
 ):
     service = LeadService(db)
     return await service.reassign(lead_id=lead_id, payload=payload, user_id=user.id)
+
+
+# ---------------------------------------------------------------- bookings
+bookings_router = APIRouter(prefix="/crm/bookings", tags=["crm-bookings"])
+
+
+@bookings_router.get("", response_model=PaginatedBookingResponse)
+async def list_bookings(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    search: str | None = Query(default=None, description="Matches name or phone"),
+    attendance: str | None = Query(default=None, pattern="^(pending|attended|not_attended)$"),
+    mine_only: bool = Query(default=False),
+    user: CurrentUser = Depends(require_permission(CRM_LEAD_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    """الحجوزات: one row per booking (a customer may appear several times,
+    once per lecture). Reps without CRM_LEAD_VIEW_ALL see only their own."""
+    can_view_all = CRM_LEAD_VIEW_ALL in user.permissions
+    assigned_to = user.id if (mine_only or not can_view_all) else None
+    return await LeadService(db).list_bookings(
+        page=page, page_size=page_size, search=search, attendance=attendance, assigned_to=assigned_to
+    )
+
+
+@bookings_router.post("/{booking_id}/attendance", response_model=LeadResponse)
+async def record_attendance(
+    booking_id: uuid.UUID,
+    payload: LeadAttendanceRequest,
+    user: CurrentUser = Depends(require_permission(CRM_LEAD_MANAGE)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await LeadService(db).record_attendance(booking_id=booking_id, payload=payload, user_id=user.id)
+
+
+@bookings_router.post("/{booking_id}/unbook", response_model=LeadResponse)
+async def unbook(
+    booking_id: uuid.UUID,
+    payload: LeadAdvanceRequest,
+    user: CurrentUser = Depends(require_permission(CRM_LEAD_MANAGE)),
+    db: AsyncSession = Depends(get_db),
+):
+    """إلغاء الحجز: removes one booking (frees its slot)."""
+    return await LeadService(db).unbook(booking_id=booking_id, user_id=user.id, note=payload.note)
+
+
+@bookings_router.post("/{booking_id}/reschedule", response_model=LeadResponse)
+async def reschedule_booking(
+    booking_id: uuid.UUID,
+    payload: LeadRescheduleRequest,
+    user: CurrentUser = Depends(require_permission(CRM_LEAD_MANAGE)),
+    db: AsyncSession = Depends(get_db),
+):
+    """تأجيل: moves one booking to a new slot."""
+    return await LeadService(db).reschedule(
+        booking_id=booking_id, teacher_slot_id=payload.teacher_slot_id, user_id=user.id, note=payload.note
+    )

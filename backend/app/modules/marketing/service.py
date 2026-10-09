@@ -10,7 +10,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit.service import AuditService
-from app.modules.crm.leads.models import Lead
+from app.modules.crm.leads.models import Booking, Lead
 from app.modules.marketing.models import AdCampaign, AppSetting, Subscription
 from app.modules.marketing.schemas import (
     CampaignCreateRequest,
@@ -187,11 +187,6 @@ def platform_totals(campaigns) -> list[PlatformTotals]:
 # The project went live on this date. Registrations made earlier (pre-launch
 # website sign-ups that still attended a lecture) are absorbed by the first
 # period, otherwise bookings would not match the attendance sheet.
-# stages that mean "a lecture was booked" even when no date / slot / outcome was captured
-BOOKED_OR_LATER_STAGES = frozenset({
-    "booked", "confirmed_whatsapp", "confirmed_call", "zoom_sent", "attendance_recorded",
-    "interested", "report_sent", "follow_up", "converted",
-})
 
 LAUNCH_PERIOD_START = date(2026, 7, 1)
 
@@ -431,50 +426,46 @@ class KpiService:
 
         rows = (
             await self.db.execute(
-                select(Lead.created_at, Lead.source, Lead.attended, Lead.lecture_date, Lead.teacher_slot_id, Lead.stage, Lead.phone).where(*in_period)
+                select(Lead.id, Lead.created_at, Lead.source).where(*in_period)
             )
         ).all()
+        # every booking of the cohort's customers (a customer may hold many)
+        booking_rows = (
+            await self.db.execute(
+                select(Booking.lead_id, Booking.attended).join(Lead, Lead.id == Booking.lead_id).where(*in_period)
+            )
+        ).all()
+        bookings_by_lead: dict = defaultdict(list)
+        for lead_id, att in booking_rows:
+            bookings_by_lead[lead_id].append(att)
+
         leads = attended = not_attended = pending = 0
         by_source: dict[str, dict[str, int]] = defaultdict(lambda: {"leads": 0, "booked": 0, "attended": 0, "not_attended": 0, "pending": 0})
         by_month: dict[date, dict[str, int]] = defaultdict(lambda: {"leads": 0, "booked": 0, "attended": 0, "subscribers": 0, "revenue": 0})
-        seen_phones: set[str] = set()
-        for created_at, source, att, lec_date, slot, stage, phone in rows:
-            # one person may hold several bookings (siblings / repeat attendance)
-            # on the same phone: count the lead once, every booking separately
-            first_of_phone = phone not in seen_phones
-            seen_phones.add(phone)
-            if first_of_phone:
-                leads += 1
+        for lead_id, created_at, source in rows:
+            leads += 1  # customers are unique by phone: one row = one lead
             src = source or "other"
             bucket = by_source[src]
-            if first_of_phone:
-                bucket["leads"] += 1
+            bucket["leads"] += 1
             # month bucket (registrations before the range start fall in its first month)
             m = date(created_at.year, created_at.month, 1)
             if m < date(start.year, start.month, 1):
                 m = date(start.year, start.month, 1)
-            if first_of_phone:
-                by_month[m]["leads"] += 1
-            # someone with an attendance record was necessarily booked, even
-            # when their lecture date was never captured
-            is_booked = (
-                lec_date is not None or slot is not None or att is not None
-                or stage in BOOKED_OR_LATER_STAGES
-            )
-            if not is_booked:
-                continue
-            bucket["booked"] += 1
-            by_month[m]["booked"] += 1
-            if att is True:
-                attended += 1
-                bucket["attended"] += 1
-                by_month[m]["attended"] += 1
-            elif att is False:
-                not_attended += 1
-                bucket["not_attended"] += 1
-            else:
-                pending += 1
-                bucket["pending"] += 1
+            by_month[m]["leads"] += 1
+            atts = bookings_by_lead.get(lead_id, [])
+            for att in atts:
+                bucket["booked"] += 1
+                by_month[m]["booked"] += 1
+                if att is True:
+                    attended += 1
+                    bucket["attended"] += 1
+                    by_month[m]["attended"] += 1
+                elif att is False:
+                    not_attended += 1
+                    bucket["not_attended"] += 1
+                else:
+                    pending += 1
+                    bucket["pending"] += 1
         # Bookings = attended + did not attend + awaiting a status change.
         booked = attended + not_attended + pending
         decided = attended + not_attended  # sessions with a recorded outcome

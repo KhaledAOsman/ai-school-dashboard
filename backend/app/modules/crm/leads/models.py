@@ -160,6 +160,9 @@ class Lead(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
 
+    bookings: Mapped[list["Booking"]] = relationship(
+        back_populates="lead", order_by="Booking.lecture_date, Booking.created_at", cascade="all, delete-orphan"
+    )
     stage_events: Mapped[list["LeadStageEvent"]] = relationship(
         back_populates="lead", order_by="LeadStageEvent.created_at", cascade="all, delete-orphan"
     )
@@ -169,6 +172,37 @@ class Lead(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<Lead {self.full_name} ({self.stage})>"
+
+
+class Booking(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """
+    One lecture booking. A customer (Lead, unique by phone) can have any
+    number of bookings - siblings sharing a phone, or the same person
+    attending several lectures. الحجوزات lists these rows; attendance is
+    recorded per booking. The booking-related columns on Lead mirror the
+    customer's latest booking (kept for the WhatsApp templates and the
+    schedule) - this table is the source of truth.
+    """
+    __tablename__ = "crm_bookings"
+
+    lead_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("crm_leads.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    teacher_slot_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("crm_teacher_slots.id", ondelete="SET NULL"), nullable=True
+    )
+    teacher_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    lecture_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    lecture_time: Mapped[time | None] = mapped_column(Time, nullable=True)
+    zoom_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # None = awaiting a decision, True = attended, False = did not attend
+    attended: Mapped[bool | None] = mapped_column(Boolean, nullable=True, index=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    lead: Mapped["Lead"] = relationship(back_populates="bookings")
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<Booking {self.lead_id} {self.lecture_date} attended={self.attended}>"
 
 
 class LeadStageEvent(Base, UUIDPrimaryKeyMixin):

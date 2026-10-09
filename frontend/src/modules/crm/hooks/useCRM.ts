@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { crmLeadApi, crmTeacherApi, crmDashboardApi, type LeadSearchParams, type CallOutcome, type LeadImportRow } from "@/modules/crm/services/crmApi";
+import { crmLeadApi, crmBookingApi, crmTeacherApi, crmDashboardApi, type LeadSearchParams, type CallOutcome, type LeadImportRow } from "@/modules/crm/services/crmApi";
 
 export function useCRMDashboardStats() {
   return useQuery({
@@ -104,6 +104,8 @@ function useInvalidateLead(id: string) {
     qc.invalidateQueries({ queryKey: ["crm-leads-search"] });
     qc.invalidateQueries({ queryKey: ["crm-teachers"] }); // slot availability may have changed
     qc.invalidateQueries({ queryKey: ["crm-teacher-schedule"] });
+    qc.invalidateQueries({ queryKey: ["crm-bookings"] });
+    qc.invalidateQueries({ queryKey: ["crm-schedule"] });
   };
 }
 
@@ -117,14 +119,6 @@ export function useUpdateLead(id: string) {
       invalidate();
       qc.invalidateQueries({ queryKey: ["crm-lead-sources"] });
     },
-  });
-}
-
-export function useRescheduleLead(id: string) {
-  const invalidate = useInvalidateLead(id);
-  return useMutation({
-    mutationFn: ({ teacherSlotId, note }: { teacherSlotId: string; note?: string }) => crmLeadApi.reschedule(id, teacherSlotId, note),
-    onSuccess: invalidate,
   });
 }
 
@@ -181,11 +175,6 @@ export function useBookSlot(id: string) {
   });
 }
 
-export function useUnbookLead(id: string) {
-  const invalidate = useInvalidateLead(id);
-  return useMutation({ mutationFn: (note?: string) => crmLeadApi.unbook(id, note), onSuccess: invalidate });
-}
-
 export function useConfirmWhatsapp(id: string) {
   const invalidate = useInvalidateLead(id);
   return useMutation({ mutationFn: (note?: string) => crmLeadApi.confirmWhatsapp(id, note), onSuccess: invalidate });
@@ -204,10 +193,49 @@ export function useSendZoom(id: string) {
   });
 }
 
-export function useRecordAttendance(id: string) {
-  const invalidate = useInvalidateLead(id);
+/** الحجوزات: one row per booking (a customer may appear once per lecture). */
+export function useBookings(params: { page?: number; page_size?: number; search?: string; attendance?: "pending" | "attended" | "not_attended" } = {}) {
+  return useQuery({
+    queryKey: ["crm-bookings", params],
+    queryFn: () => crmBookingApi.list(params),
+    placeholderData: (prev) => prev,
+  });
+}
+
+function useInvalidateBookings() {
+  const qc = useQueryClient();
+  return () => {
+    qc.invalidateQueries({ queryKey: ["crm-bookings"] });
+    qc.invalidateQueries({ queryKey: ["crm-lead"] });
+    qc.invalidateQueries({ queryKey: ["crm-leads"] });
+    qc.invalidateQueries({ queryKey: ["crm-leads-search"] });
+    qc.invalidateQueries({ queryKey: ["crm-teachers"] });
+    qc.invalidateQueries({ queryKey: ["crm-teacher-schedule"] });
+    qc.invalidateQueries({ queryKey: ["crm-schedule"] });
+    qc.invalidateQueries({ queryKey: ["crm-dashboard-stats"] });
+  };
+}
+
+/** Attendance is recorded per booking. */
+export function useRecordAttendance() {
+  const invalidate = useInvalidateBookings();
   return useMutation({
-    mutationFn: ({ attended, note }: { attended: boolean | null; note?: string }) => crmLeadApi.recordAttendance(id, attended, note),
+    mutationFn: ({ bookingId, attended, note }: { bookingId: string; attended: boolean | null; note?: string }) =>
+      crmBookingApi.recordAttendance(bookingId, attended, note),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUnbookBooking() {
+  const invalidate = useInvalidateBookings();
+  return useMutation({ mutationFn: ({ bookingId, note }: { bookingId: string; note?: string }) => crmBookingApi.unbook(bookingId, note), onSuccess: invalidate });
+}
+
+export function useRescheduleBooking() {
+  const invalidate = useInvalidateBookings();
+  return useMutation({
+    mutationFn: ({ bookingId, teacherSlotId, note }: { bookingId: string; teacherSlotId: string; note?: string }) =>
+      crmBookingApi.reschedule(bookingId, teacherSlotId, note),
     onSuccess: invalidate,
   });
 }
