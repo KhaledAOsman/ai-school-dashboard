@@ -43,7 +43,7 @@ export function LoginPage() {
     <div className="grid min-h-screen grid-cols-1 bg-white lg:grid-cols-[minmax(460px,5fr)_7fr]" dir="rtl">
       {/* Form side */}
       <div className="flex flex-col px-6 py-8 sm:px-16">
-        <img src="/logo.png" alt="AiSchool" className="h-11 w-auto self-start object-contain" />
+        <img src="/logo.png" alt="AiSchool" className="h-16 w-auto self-start object-contain" />
 
         <div className="mx-auto flex w-full max-w-[420px] flex-1 animate-fade-in flex-col justify-center py-10">
           <span className="mb-5 inline-flex w-fit items-center rounded-full bg-brand-50 px-5 py-2 text-[14px] font-semibold text-brand-600">

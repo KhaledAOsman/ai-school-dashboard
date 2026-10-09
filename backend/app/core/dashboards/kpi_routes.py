@@ -12,22 +12,27 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth.dependencies import CurrentUser
 from app.core.permissions.dependencies import require_permission
 from app.core.permissions.registry import DASHBOARDS_KPI_VIEW, DASHBOARDS_MANAGE
 from app.database.session import get_db
-from app.modules.marketing.service import KpiService, build_phases
+from app.modules.marketing.service import KpiService
 
 router = APIRouter(prefix="/kpi-dashboard", tags=["kpi-dashboard"])
 
 
 class KpiSettingsRequest(BaseModel):
-    project_start_date: date | None = None
-    full_launch_date: date | None = None
+    """Year-1 phase window (inclusive dates) and management targets."""
+    phase_start: date | None = None
+    phase_end_inclusive: date | None = None
+    subscribers: int | None = Field(default=None, ge=1, le=1_000_000)
+    max_cac: float | None = Field(default=None, gt=0, le=10_000_000)
+    min_conversion: float | None = Field(default=None, ge=0, le=100)
+    min_attendance: float | None = Field(default=None, ge=0, le=100)
 
 
 @router.get("/summary")
@@ -36,9 +41,10 @@ async def kpi_summary(
     user: CurrentUser = Depends(require_permission(DASHBOARDS_KPI_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    """period like '2026-H2' (H1 = Jan-Jun, H2 = Jul-Dec); defaults to the
-    current half-year. Returns the period, the previous period for
-    comparison, and the project phase map."""
+    """period: '2026-Q4' (calendar quarter), 'phase' (the Year-1 phase window),
+    'all' (since launch) or a legacy half-year '2026-H2'. Defaults to the
+    current quarter. Returns the period, the previous period for comparison
+    (quarters only), the phase goals and the available period options."""
     return await KpiService(db).summary(period)
 
 
@@ -47,7 +53,9 @@ async def get_kpi_settings(
     user: CurrentUser = Depends(require_permission(DASHBOARDS_KPI_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    return build_phases(await KpiService(db).get_settings())
+    out = await KpiService(db).get_settings()
+    out.pop("_phase_end", None)
+    return out
 
 
 @router.patch("/settings")
@@ -56,5 +64,11 @@ async def update_kpi_settings(
     user: CurrentUser = Depends(require_permission(DASHBOARDS_MANAGE)),
     db: AsyncSession = Depends(get_db),
 ):
-    values = {k: (v.isoformat() if v else None) for k, v in payload.model_dump(exclude_unset=True).items()}  # PATCH: untouched dates stay as they are
-    return build_phases(await KpiService(db).update_settings(values))
+    svc = KpiService(db)
+    values = payload.model_dump(exclude_unset=True)  # PATCH: untouched fields stay as they are
+    current = await svc.get_settings()
+    start = values.get("phase_start", current["phase_start"]) or current["phase_start"]
+    end = values.get("phase_end_inclusive", current["phase_end_inclusive"]) or current["phase_end_inclusive"]
+    if end < start:
+        raise HTTPException(status_code=422, detail="تاريخ نهاية المرحلة يجب أن يكون بعد تاريخ البداية")
+    return await svc.update_settings(values)

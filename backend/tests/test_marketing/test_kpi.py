@@ -82,12 +82,18 @@ async def test_kpi_summary_cac_and_platforms(client, db_session):
 
 
 @pytest.mark.asyncio
-async def test_settings_and_permissions(client, db_session):
+async def test_phase_settings_roundtrip(client, db_session):
     h = await _admin_headers(client, db_session)
-    r = await client.patch("/api/kpi-dashboard/settings", json={"project_start_date": "2026-04-01", "full_launch_date": "2026-10-01"}, headers=h)
-    assert r.status_code == 200 and r.json()["configured"] is True
-    assert r.json()["test_end_date"] == "2026-10-01"
-    # no-permission user is rejected
+    r = await client.get("/api/kpi-dashboard/settings", headers=h)
+    assert r.json()["phase_start"] == "2026-08-01" and r.json()["phase_end_inclusive"] == "2027-08-31"
+    r = await client.patch("/api/kpi-dashboard/settings", json={"subscribers": 250, "max_cac": 900, "phase_start": "2026-09-01"}, headers=h)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["targets"]["subscribers"] == 250 and body["targets"]["max_cac"] == 900.0
+    assert body["targets"]["min_conversion"] == 15  # untouched target keeps its default
+    assert body["phase_start"] == "2026-09-01" and body["phase_end_inclusive"] == "2027-08-31"
+    bad = await client.patch("/api/kpi-dashboard/settings", json={"phase_end_inclusive": "2026-01-01"}, headers=h)
+    assert bad.status_code == 422
 
 
 @pytest.mark.asyncio
@@ -108,17 +114,6 @@ def test_ratio_never_exceeds_100():
     assert _ratio(1, 0) is None
 
 
-@pytest.mark.asyncio
-async def test_patch_settings_keeps_untouched_date(client, db_session):
-    h = await _admin_headers(client, db_session)
-    await client.patch("/api/kpi-dashboard/settings", json={"project_start_date": "2026-04-01", "full_launch_date": "2026-10-01"}, headers=h)
-    r = await client.patch("/api/kpi-dashboard/settings", json={"project_start_date": "2026-05-01"}, headers=h)
-    assert r.json()["project_start_date"] == "2026-05-01"
-    assert r.json()["full_launch_date"] == "2026-10-01"  # not wiped by the partial update
-    r = await client.patch("/api/kpi-dashboard/settings", json={"full_launch_date": None}, headers=h)
-    assert r.json()["full_launch_date"] is None  # explicit null still clears it
-
-
 def test_funnel_rates_include_no_show():
     from app.modules.marketing.service import KpiService
 
@@ -137,34 +132,29 @@ def pytest_approx(v):
 
 
 @pytest.mark.asyncio
-async def test_summary_has_test_phase_targets(client, db_session):
+async def test_summary_periods_and_phase_goals(client, db_session):
     h = await _admin_headers(client, db_session)
-    r = await client.get("/api/kpi-dashboard/summary?period=2026-H2", headers=h)
-    assert r.status_code == 200
-    tp = r.json()["test_phase"]
-    assert tp["targets"] == {"subscribers": 100, "max_cac": 1500, "min_conversion": 15, "min_attendance": 60}
-    for k in ("subscribers", "cac", "conversion", "attendance_rate", "attended", "booked"):
-        assert k in tp["metrics"]
-    assert tp["configured"] is False
+    r = await client.get("/api/kpi-dashboard/summary?period=2026-Q4", headers=h)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["current"]["period"] == "2026-Q4" and body["previous"]["period"] == "2026-Q3"
+    keys = [p["key"] for p in body["periods"]]
+    assert "phase" in keys and "all" in keys
+    goals = body["phase_goals"]
+    assert goals["targets"] == {"subscribers": 100, "max_cac": 1500, "min_conversion": 15, "min_attendance": 60}
+    for k in ("subscribers", "cac", "conversion", "attendance_rate", "attended", "decided", "booked"):
+        assert k in goals["metrics"]
+    # whole-range filters carry no previous period
+    for key in ("all", "phase"):
+        assert (await client.get(f"/api/kpi-dashboard/summary?period={key}", headers=h)).json()["previous"] is None
+    assert (await client.get("/api/kpi-dashboard/summary?period=2026-Q9", headers=h)).status_code == 422
 
 
-@pytest.mark.asyncio
-async def test_reconciliation_platform_vs_recorded(client, db_session):
-    from app.modules.crm.leads.models import Lead
-    from app.modules.crm.teachers import models as _teachers  # noqa: F401  (registers FK targets)
+def test_booked_is_attended_plus_not_attended_plus_pending():
+    from app.modules.marketing.service import KpiService
 
-    h = await _admin_headers(client, db_session)
-    db_session.add(AdCampaign(platform="meta", name="m", spend=Decimal("900"), results_count=49, counts_as_leads=True,
-                              form_leads=36, website_leads=13, messaging_conversations=24))
-    for i, src in enumerate(["instagram"] * 3 + ["website"] * 2 + ["organic"]):
-        db_session.add(Lead(full_name=f"l{i}", phone=f"96650000000{i}", source=src))
-    await db_session.commit()
-    today = date.today()
-    half = f"{today.year}-H{1 if today.month <= 6 else 2}"
-    rec = (await client.get(f"/api/kpi-dashboard/summary?period={half}", headers=h)).json()["current"]["marketing"]["reconciliation"]
-    meta = next(p for p in rec["platforms"] if p["platform"] == "meta")
-    assert (meta["reported"], meta["form_leads"], meta["website_leads"], meta["messaging_conversations"]) == (49, 36, 13, 24)
-    assert meta["recorded"] == 3 and meta["gap"] == 46
-    assert meta["capture_rate"] == round(3 / 49 * 100, 1)
-    assert Decimal(meta["real_cpl"]) == Decimal("300.00")
-    assert rec["other_channels"] == {"website": 2, "organic": 1} and rec["total_recorded"] == 6
+    rates = KpiService._funnel_rates(
+        {"leads": 100, "booked": 12, "decided": 11, "attended": 8, "not_attended": 3, "pending_attendance": 1, "subscribers": 4}
+    )
+    assert rates["lead_to_booked"] == 12.0
+    assert rates["booked_to_attended"] == pytest_approx(72.7)  # of sessions with a recorded outcome

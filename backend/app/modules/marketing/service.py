@@ -27,7 +27,11 @@ from app.modules.marketing.schemas import (
 
 ZERO = Decimal("0")
 PLATFORMS = ("snapchat", "meta", "tiktok")
-SETTING_KEYS = ("project_start_date", "full_launch_date")
+SETTING_KEYS = (
+    "project_start_date", "full_launch_date",  # legacy
+    "phase_start", "phase_end",
+    "target_subscribers", "target_max_cac", "target_min_conversion", "target_min_attendance",
+)
 
 
 def _not_found(what: str) -> HTTPException:
@@ -180,8 +184,53 @@ def platform_totals(campaigns) -> list[PlatformTotals]:
 
 # --------------------------------------------------------------------- KPIs
 
+# The project went live on this date. Registrations made earlier (pre-launch
+# website sign-ups that still attended a lecture) are absorbed by the first
+# period, otherwise bookings would not match the attendance sheet.
+LAUNCH_PERIOD_START = date(2026, 7, 1)
+
+# Year-1 phase defaults (editable by the system administrator).
+DEFAULT_PHASE_START = date(2026, 8, 1)
+DEFAULT_PHASE_END = date(2027, 9, 1)  # exclusive (phase runs through August 2027)
+
+# Management targets for the phase (editable).
+TEST_PHASE_TARGETS = {
+    "subscribers": 100,        # customers (paid subscribers) to reach
+    "max_cac": 1500,           # acquisition cost per customer must stay below (SAR)
+    "min_conversion": 15,      # % of those who ATTENDED the lecture that subscribe
+    "min_attendance": 60,      # % of recorded sessions that attended
+}
+_TARGET_KEYS = {
+    "target_subscribers": ("subscribers", int),
+    "target_max_cac": ("max_cac", float),
+    "target_min_conversion": ("min_conversion", float),
+    "target_min_attendance": ("min_attendance", float),
+}
+
+_AR_MONTHS = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"]
+_AR_QUARTER = {1: "الأول", 2: "الثاني", 3: "الثالث", 4: "الرابع"}
+FAR_FUTURE = date(2100, 1, 1)
+
+
+def _quarter_bounds(year: int, q: int) -> tuple[date, date]:
+    """Inclusive start, EXCLUSIVE end of calendar quarter q (1-4)."""
+    start = date(year, 3 * (q - 1) + 1, 1)
+    end = date(year + 1, 1, 1) if q == 4 else date(year, 3 * q + 1, 1)
+    return start, end
+
+
+def _quarter_label(year: int, q: int) -> str:
+    s, e = _quarter_bounds(year, q)
+    last = date.fromordinal(e.toordinal() - 1)
+    return f"الربع {_AR_QUARTER[q]} {year} ({_AR_MONTHS[s.month - 1]} – {_AR_MONTHS[last.month - 1]})"
+
+
+def _month_label(d: date) -> str:
+    return f"{_AR_MONTHS[d.month - 1]} {d.year}"
+
+
 def parse_period(period: str | None) -> tuple[int, int]:
-    """'2026-H2' -> (2026, 2). Defaults to the current half-year."""
+    """Legacy half-year parser: '2026-H2' -> (2026, 2)."""
     if not period:
         today = date.today()
         return today.year, 1 if today.month <= 6 else 2
@@ -192,28 +241,16 @@ def parse_period(period: str | None) -> tuple[int, int]:
             raise ValueError
         return year, half
     except ValueError:
-        raise HTTPException(status_code=422, detail="صيغة الفترة غير صحيحة، المثال: 2026-H2")
+        raise HTTPException(status_code=422, detail="صيغة الفترة غير صحيحة، المثال: 2026-Q4")
 
 
 def period_bounds(year: int, half: int) -> tuple[date, date]:
-    """Inclusive start, EXCLUSIVE end."""
+    """Inclusive start, EXCLUSIVE end of a half-year."""
     return (date(year, 1, 1), date(year, 7, 1)) if half == 1 else (date(year, 7, 1), date(year + 1, 1, 1))
 
 
 def previous_period(year: int, half: int) -> tuple[int, int]:
     return (year, 1) if half == 2 else (year - 1, 2)
-
-
-# First half-year of the project: earlier lead records are counted in it.
-LAUNCH_PERIOD_START = date(2026, 7, 1)
-
-# Management targets for the 6-month test phase.
-TEST_PHASE_TARGETS = {
-    "subscribers": 100,        # customers (paid subscribers) to reach
-    "max_cac": 1500,           # acquisition cost per customer must stay below (SAR)
-    "min_conversion": 15,      # % of those who ATTENDED the lecture that subscribe
-    "min_attendance": 60,      # % of booked leads that attend the lecture
-}
 
 
 def _ratio(a: int | Decimal, b: int | Decimal) -> float | None:
@@ -227,89 +264,190 @@ def _ratio(a: int | Decimal, b: int | Decimal) -> float | None:
     return round(value, 1) if value <= 100 else None
 
 
+def _d(v: str | None) -> date | None:
+    try:
+        return date.fromisoformat(v) if v else None
+    except ValueError:
+        return None
+
+
 class KpiService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_settings(self) -> dict[str, str | None]:
+    # ------------------------------------------------------------ settings
+    async def _raw_settings(self) -> dict[str, str | None]:
         rows = (await self.db.execute(select(AppSetting).where(AppSetting.key.in_(SETTING_KEYS)))).scalars().all()
         found = {r.key: r.value for r in rows}
         return {k: found.get(k) for k in SETTING_KEYS}
 
-    async def update_settings(self, values: dict[str, str | None]) -> dict[str, str | None]:
-        for key, val in values.items():
-            if key not in SETTING_KEYS:
-                continue
+    async def get_settings(self) -> dict:
+        """Phase window + targets (defaults when never edited)."""
+        raw = await self._raw_settings()
+        start = _d(raw.get("phase_start")) or DEFAULT_PHASE_START
+        end = _d(raw.get("phase_end")) or DEFAULT_PHASE_END  # exclusive
+        if end <= start:
+            end = DEFAULT_PHASE_END if DEFAULT_PHASE_END > start else date(start.year + 1, start.month, 1)
+        targets = dict(TEST_PHASE_TARGETS)
+        for key, (name, cast) in _TARGET_KEYS.items():
+            v = raw.get(key)
+            if v not in (None, ""):
+                try:
+                    targets[name] = cast(float(v)) if cast is int else cast(v)
+                except ValueError:
+                    pass
+        return {
+            "phase_start": start,
+            "phase_end_inclusive": date.fromordinal(end.toordinal() - 1),
+            "targets": targets,
+            "_phase_end": end,
+        }
+
+    async def update_settings(self, values: dict) -> dict:
+        """values: phase_start / phase_end_inclusive (dates) and
+        subscribers / max_cac / min_conversion / min_attendance."""
+        mapping: dict[str, str | None] = {}
+        if "phase_start" in values:
+            v = values["phase_start"]
+            mapping["phase_start"] = v.isoformat() if v else None
+        if "phase_end_inclusive" in values:
+            v = values["phase_end_inclusive"]
+            mapping["phase_end"] = date.fromordinal(v.toordinal() + 1).isoformat() if v else None
+        for key, (name, _cast) in _TARGET_KEYS.items():
+            if name in values:
+                mapping[key] = None if values[name] is None else str(values[name])
+        for key, val in mapping.items():
             row = await self.db.get(AppSetting, key)
             if row is None:
                 self.db.add(AppSetting(key=key, value=val or None))
             else:
                 row.value = val or None
         await self.db.commit()
-        return await self.get_settings()
+        out = await self.get_settings()
+        out.pop("_phase_end", None)
+        return out
 
-    async def _period_metrics(self, year: int, half: int) -> dict:
-        start, end = period_bounds(year, half)
-        data = await self._range_metrics(start, end)
-        data.update({"year": year, "half": half, "period": f"{year}-H{half}"})
-        return data
+    # ------------------------------------------------------------- periods
+    def period_options(self, settings: dict) -> list[dict]:
+        today = date.today()
+        opts: list[dict] = []
+        y, q = LAUNCH_PERIOD_START.year, (LAUNCH_PERIOD_START.month - 1) // 3 + 1
+        cy, cq = today.year, (today.month - 1) // 3 + 1
+        while (y, q) <= (cy, cq):
+            opts.append({"key": f"{y}-Q{q}", "label": _quarter_label(y, q), "group": "quarter"})
+            q += 1
+            if q == 5:
+                y, q = y + 1, 1
+        opts.reverse()
+        opts.append({"key": "phase", "label": f"المرحلة الأولى ({_AR_MONTHS[settings['phase_start'].month - 1]} {settings['phase_start'].year} – {_AR_MONTHS[settings['phase_end_inclusive'].month - 1]} {settings['phase_end_inclusive'].year})", "group": "range"})
+        opts.append({"key": "all", "label": "كل الفترات", "group": "range"})
+        return opts
 
-    async def _range_metrics(self, start: date, end: date, include_undated: bool | None = None) -> dict:
+    def resolve_period(self, period: str | None, settings: dict) -> dict:
+        """-> key,label,start,end(exclusive), prev (dict|None)."""
+        today = date.today()
+        key = (period or "").strip()
+        if not key:
+            key = f"{today.year}-Q{(today.month - 1) // 3 + 1}"
+        low = key.lower()
+        if low == "all":
+            return {"key": "all", "label": "كل الفترات", "start": LAUNCH_PERIOD_START, "end": FAR_FUTURE, "prev": None}
+        if low == "phase":
+            return {"key": "phase", "label": "المرحلة الأولى", "start": settings["phase_start"], "end": settings["_phase_end"], "prev": None}
+        up = key.upper()
+        if "-Q" in up:
+            try:
+                ys, qs = up.split("-Q")
+                year, q = int(ys), int(qs)
+                if q not in (1, 2, 3, 4):
+                    raise ValueError
+            except ValueError:
+                raise HTTPException(status_code=422, detail="صيغة الفترة غير صحيحة، المثال: 2026-Q4")
+            s, e = _quarter_bounds(year, q)
+            py, pq = (year, q - 1) if q > 1 else (year - 1, 4)
+            ps, pe = _quarter_bounds(py, pq)
+            return {"key": f"{year}-Q{q}", "label": _quarter_label(year, q), "start": s, "end": e,
+                    "prev": {"key": f"{py}-Q{pq}", "label": _quarter_label(py, pq), "start": ps, "end": pe}}
+        year, half = parse_period(key)  # legacy half-year
+        s, e = period_bounds(year, half)
+        py, ph = previous_period(year, half)
+        ps, pe = period_bounds(py, ph)
+        return {"key": f"{year}-H{half}", "label": f"{'النصف الأول' if half == 1 else 'النصف الثاني'} {year}", "start": s, "end": e,
+                "prev": {"key": f"{py}-H{ph}", "label": f"{'النصف الأول' if ph == 1 else 'النصف الثاني'} {py}", "start": ps, "end": pe}}
+
+    # ------------------------------------------------------------- metrics
+    async def _range_metrics(self, start: date, end: date, absorb_until: date, include_undated: bool | None = None, detail: bool = False) -> dict:
         """Funnel / revenue / marketing metrics for [start, end)."""
         start_dt = datetime(start.year, start.month, start.day, tzinfo=timezone.utc)
-        end_dt = datetime(end.year, end.month, end.day, tzinfo=timezone.utc)
+        end_dt = datetime(min(end, FAR_FUTURE).year, min(end, FAR_FUTURE).month, min(end, FAR_FUTURE).day, tzinfo=timezone.utc)
 
-        # ---- CRM funnel: cohort of leads created in the period
-        # Records registered before the launch half-year (pre-launch website
-        # sign-ups that still attended a lecture) belong to the launch cohort,
-        # otherwise bookings would not match the attendance sheet. The half
-        # before launch therefore has an empty lead cohort.
+        # CRM funnel: cohort of leads created in the period. A range that
+        # starts at launch (up to the phase start) also owns earlier
+        # registrations; a range that ends at/before launch has none.
         cohort_start, cohort_end = start_dt, end_dt
-        if start == LAUNCH_PERIOD_START:
+        if LAUNCH_PERIOD_START <= start <= max(absorb_until, LAUNCH_PERIOD_START):
             cohort_start = datetime(2000, 1, 1, tzinfo=timezone.utc)
-        elif end == LAUNCH_PERIOD_START:
+        elif end <= LAUNCH_PERIOD_START:
             cohort_end = cohort_start
         in_period = (Lead.created_at >= cohort_start, Lead.created_at < cohort_end)
-        leads = (await self.db.execute(select(func.count(Lead.id)).where(*in_period))).scalar_one()
-        booked = (
+
+        rows = (
             await self.db.execute(
-                select(func.count(Lead.id)).where(
-                    *in_period,
-                    # someone with an attendance record was necessarily booked,
-                    # even when their lecture date was never captured
-                    or_(Lead.lecture_date.isnot(None), Lead.teacher_slot_id.isnot(None), Lead.attended.isnot(None)),
-                )
+                select(Lead.created_at, Lead.source, Lead.attended, Lead.lecture_date, Lead.teacher_slot_id).where(*in_period)
             )
-        ).scalar_one()
-        attended = (
-            await self.db.execute(select(func.count(Lead.id)).where(*in_period, Lead.attended.is_(True)))
-        ).scalar_one()
-        # attended=False is an explicit "did not attend" record; NULL on a
-        # booked lead means attendance was not recorded yet (or postponed).
-        not_attended = (
-            await self.db.execute(select(func.count(Lead.id)).where(*in_period, Lead.attended.is_(False)))
-        ).scalar_one()
-        # "Bookings" in the KPI = sessions with a recorded outcome, so
-        # booked == attended + not_attended always holds. Booked leads whose
-        # attendance is not recorded yet (upcoming / postponed) are reported
-        # separately as pending and are not counted as bookings.
-        pending_attendance = max(booked - attended - not_attended, 0)
-        booked = attended + not_attended
+        ).all()
+        leads = attended = not_attended = pending = 0
+        by_source: dict[str, dict[str, int]] = defaultdict(lambda: {"leads": 0, "booked": 0, "attended": 0, "not_attended": 0, "pending": 0})
+        by_month: dict[date, dict[str, int]] = defaultdict(lambda: {"leads": 0, "booked": 0, "attended": 0, "subscribers": 0, "revenue": 0})
+        for created_at, source, att, lec_date, slot in rows:
+            leads += 1
+            src = source or "other"
+            bucket = by_source[src]
+            bucket["leads"] += 1
+            # month bucket (registrations before the range start fall in its first month)
+            m = date(created_at.year, created_at.month, 1)
+            if m < date(start.year, start.month, 1):
+                m = date(start.year, start.month, 1)
+            by_month[m]["leads"] += 1
+            # someone with an attendance record was necessarily booked, even
+            # when their lecture date was never captured
+            is_booked = lec_date is not None or slot is not None or att is not None
+            if not is_booked:
+                continue
+            bucket["booked"] += 1
+            by_month[m]["booked"] += 1
+            if att is True:
+                attended += 1
+                bucket["attended"] += 1
+                by_month[m]["attended"] += 1
+            elif att is False:
+                not_attended += 1
+                bucket["not_attended"] += 1
+            else:
+                pending += 1
+                bucket["pending"] += 1
+        # Bookings = attended + did not attend + awaiting a status change.
+        booked = attended + not_attended + pending
+        decided = attended + not_attended  # sessions with a recorded outcome
 
         # ---- Subscribers & revenue
-        sub_row = (
+        sub_rows = (
             await self.db.execute(
-                select(
-                    func.count(Subscription.id),
-                    func.coalesce(func.sum(Subscription.amount_paid), 0),
-                    func.coalesce(func.sum(Subscription.discount_amount), 0),
-                ).where(Subscription.subscribed_at >= start, Subscription.subscribed_at < end)
+                select(Subscription.subscribed_at, Subscription.amount_paid, Subscription.discount_amount).where(
+                    Subscription.subscribed_at >= start, Subscription.subscribed_at < end
+                )
             )
-        ).one()
-        subscribers, revenue, discounts = int(sub_row[0]), Decimal(sub_row[1]), Decimal(sub_row[2])
+        ).all()
+        subscribers = len(sub_rows)
+        revenue = sum((Decimal(r[1] or 0) for r in sub_rows), ZERO)
+        discounts = sum((Decimal(r[2] or 0) for r in sub_rows), ZERO)
+        for sub_at, paid, _disc in sub_rows:
+            m = date(sub_at.year, sub_at.month, 1)
+            by_month[m]["subscribers"] += 1
+            by_month[m]["revenue"] += int(Decimal(paid or 0))
 
         # ---- Marketing. Campaigns with explicit dates are matched by
-        # overlap; undated (lifetime) campaigns belong to the CURRENT half
+        # overlap; undated (lifetime) campaigns belong to the CURRENT period
         # only - we never guess a historical split.
         today = date.today()
         is_current = (start <= today < end) if include_undated is None else include_undated
@@ -328,22 +466,14 @@ class KpiService:
         platforms = platform_totals(used)
         spend = sum((p.spend for p in platforms), ZERO)
 
-        # ---- Reconciliation: what the ad platforms report vs. what is
-        # actually recorded as a lead (with a phone number) in the CRM.
-        src_rows = (
-            await self.db.execute(select(Lead.source, func.count(Lead.id)).where(*in_period).group_by(Lead.source))
-        ).all()
-        by_src = {(r[0] or "other"): int(r[1]) for r in src_rows}
+        # Leads per platform come from the CRM (a lead = a person whose name
+        # and phone were registered), not from the ad account's results.
         crm_platform = {"instagram": "meta", "snapchat": "snapchat", "tiktok": "tiktok"}
         recorded = {p: 0 for p in PLATFORMS}
-        for src, n in by_src.items():
+        for src, b in by_source.items():
             if src in crm_platform:
-                recorded[crm_platform[src]] += n
-        # A lead = a person whose details we registered (name + phone). Ad
-        # "results" also count website events and message conversations, which
-        # are interactions, not leads - so leads / cost-per-lead below come from
-        # the CRM, not from the ad account's results figure.
-        account = {p.platform: p for p in platforms}  # figures as the ad accounts report them
+                recorded[crm_platform[src]] += b["leads"]
+        account = {p.platform: p for p in platforms}
         platforms = [
             p.model_copy(update={
                 "leads": recorded[p.platform],
@@ -359,30 +489,31 @@ class KpiService:
             recon_rows.append({
                 "platform": p.platform,
                 "spend": p.spend,
-                "reported": acc.leads,                      # "results" in the ad account
+                "reported": acc.leads,
                 "form_leads": acc.form_leads,
-                "website_leads": acc.website_leads,         # events, not leads
-                "messaging_conversations": acc.messaging_conversations,  # conversations, not leads
-                "recorded": rec,                            # leads with registered details
+                "website_leads": acc.website_leads,
+                "messaging_conversations": acc.messaging_conversations,
+                "recorded": rec,
                 "capture_rate": round(rec / acc.leads * 100, 1) if acc.leads else None,
                 "gap": acc.leads - rec,
                 "real_cpl": p.cost_per_lead,
             })
         reconciliation = {
             "platforms": recon_rows,
-            "other_channels": {"website": by_src.get("website", 0), "organic": by_src.get("organic", 0)},
-            "total_recorded": sum(by_src.values()),
+            "other_channels": {"website": by_source.get("website", {}).get("leads", 0), "organic": by_source.get("organic", {}).get("leads", 0)},
+            "total_recorded": leads,
         }
 
-        return {
+        out = {
             "start": start,
-            "end_inclusive": date.fromordinal(end.toordinal() - 1),
+            "end_inclusive": date.fromordinal(min(end, FAR_FUTURE).toordinal() - 1) if end < FAR_FUTURE else today,
             "funnel": {
                 "leads": leads,
                 "booked": booked,
+                "decided": decided,
                 "attended": attended,
                 "not_attended": not_attended,
-                "pending_attendance": pending_attendance,
+                "pending_attendance": pending,
                 "subscribers": subscribers,
             },
             "revenue": {
@@ -403,95 +534,76 @@ class KpiService:
                 "reconciliation": reconciliation,
             },
         }
+        if detail:
+            out["sources"] = [{"source": s, **v} for s, v in sorted(by_source.items(), key=lambda kv: -kv[1]["leads"])]
+            # monthly series from range start up to the current month
+            last_month = date(today.year, today.month, 1)
+            first = date(start.year, start.month, 1)
+            limit = date(end.year, end.month, 1) if end < FAR_FUTURE else last_month
+            months, m = [], first
+            while m <= min(limit, max(last_month, first)) and len(months) < 60:
+                if m < end:
+                    b = by_month.get(m, {"leads": 0, "booked": 0, "attended": 0, "subscribers": 0, "revenue": 0})
+                    months.append({"month": m.isoformat(), "label": _month_label(m), **b})
+                m = date(m.year + (m.month == 12), m.month % 12 + 1, 1)
+            out["series"] = months
+        return out
 
     @staticmethod
     def _funnel_rates(f: dict) -> dict:
+        decided = f.get("decided", f["attended"] + f["not_attended"])
         return {
             "lead_to_booked": _ratio(f["booked"], f["leads"]),
-            "booked_to_attended": _ratio(f["attended"], f["booked"]),
-            "booked_to_not_attended": _ratio(f["not_attended"], f["booked"]),
+            "booked_to_attended": _ratio(f["attended"], decided),      # of sessions with a recorded outcome
+            "booked_to_not_attended": _ratio(f["not_attended"], decided),
             "attended_to_subscriber": _ratio(f["subscribers"], f["attended"]),
             "overall": _ratio(f["subscribers"], f["leads"]),
         }
 
     async def summary(self, period: str | None) -> dict:
-        year, half = parse_period(period)
-        current = await self._period_metrics(year, half)
-        py, ph = previous_period(year, half)
-        previous = await self._period_metrics(py, ph)
-        current["funnel_rates"] = self._funnel_rates(current["funnel"])
-        previous["funnel_rates"] = self._funnel_rates(previous["funnel"])
-
         settings = await self.get_settings()
-        phases = build_phases(settings)
+        sel = self.resolve_period(period, settings)
+        absorb = settings["phase_start"]
+        current = await self._range_metrics(sel["start"], sel["end"], absorb, detail=True)
+        current.update({"period": sel["key"], "label": sel["label"]})
+        current["funnel_rates"] = self._funnel_rates(current["funnel"])
+        previous = None
+        if sel["prev"]:
+            p = sel["prev"]
+            previous = await self._range_metrics(p["start"], p["end"], absorb)
+            previous.update({"period": p["key"], "label": p["label"]})
+            previous["funnel_rates"] = self._funnel_rates(previous["funnel"])
+        goals = await self._phase_goals(settings)
+        public = {k: v for k, v in settings.items() if not k.startswith("_")}
         return {
             "current": current,
             "previous": previous,
-            "phases": phases,
-            "test_phase": await self._test_phase(phases, (year, half)),
+            "periods": self.period_options(settings),
+            "selected": sel["key"],
+            "settings": public,
+            "phase_goals": goals,
         }
 
-    async def _test_phase(self, phases: dict, selected: tuple[int, int]) -> dict:
-        """Cumulative results over the whole test phase vs. management targets.
-        Uses project_start_date .. +6 months; when the start date is not set
-        yet it falls back to the selected half-year and says so."""
-        start, end = phases["project_start_date"], phases["test_end_date"]
-        configured = bool(start and end)
-        if not configured:
-            start, end = period_bounds(*selected)
+    async def _phase_goals(self, settings: dict) -> dict:
+        """Cumulative results over the whole phase window vs. the targets."""
+        start, end = settings["phase_start"], settings["_phase_end"]
         today = date.today()
-        m = await self._range_metrics(start, end, include_undated=start <= today)
+        m = await self._range_metrics(start, end, settings["phase_start"], include_undated=start <= today)
         rates = self._funnel_rates(m["funnel"])
         f = m["funnel"]
         return {
-            "configured": configured,
             "start": start,
-            "end_inclusive": date.fromordinal(end.toordinal() - 1),
+            "end_inclusive": settings["phase_end_inclusive"],
             "includes_cumulative": m["marketing"]["includes_cumulative"],
-            "targets": TEST_PHASE_TARGETS,
+            "targets": settings["targets"],
             "metrics": {
                 "subscribers": f["subscribers"],
                 "cac": m["marketing"]["cac"],
                 "total_spend": m["marketing"]["total_spend"],
-                "conversion": rates["attended_to_subscriber"],  # subscribers / attended
-                "attendance_rate": rates["booked_to_attended"],  # attended / booked
+                "conversion": rates["attended_to_subscriber"],   # subscribers / attended
+                "attendance_rate": rates["booked_to_attended"],  # attended / recorded sessions
                 "attended": f["attended"],
+                "decided": f["decided"],
                 "booked": f["booked"],
             },
         }
-
-
-def build_phases(settings: dict[str, str | None]) -> dict:
-    """Test phase = first 6 months from project start; full ramp-up starts at
-    full_launch_date (summer holidays). Dates are optional until management
-    provides them - the UI shows a prompt when missing."""
-    def _d(v: str | None) -> date | None:
-        try:
-            return date.fromisoformat(v) if v else None
-        except ValueError:
-            return None
-
-    start = _d(settings.get("project_start_date"))
-    launch = _d(settings.get("full_launch_date"))
-    test_end = None
-    if start:
-        m = start.month - 1 + 6
-        y, mo = start.year + m // 12, m % 12 + 1
-        day = min(start.day, 28)
-        test_end = date(y, mo, day)
-    today = date.today()
-    current = None
-    if start:
-        if launch and today >= launch:
-            current = "full_launch"
-        elif today >= start:
-            current = "test"
-        else:
-            current = "not_started"
-    return {
-        "project_start_date": start,
-        "test_end_date": test_end,
-        "full_launch_date": launch,
-        "current_phase": current,
-        "configured": bool(start and launch),
-    }

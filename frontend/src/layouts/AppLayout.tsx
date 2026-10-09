@@ -222,8 +222,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
           menuOpen ? "translate-x-0" : "translate-x-full"
         )}
       >
-        <div className="flex h-[72px] items-center justify-between border-b border-ink-100 px-6 lg:h-[80px]">
-          <img src="/logo.png" alt="AiSchool" className="h-10 w-auto object-contain" />
+        <div className="flex h-[84px] items-center justify-between border-b border-ink-100 px-5 lg:h-[96px]">
+          <img src="/logo.png" alt="AiSchool" className="h-14 w-auto object-contain lg:h-16" />
           <button type="button" onClick={() => setMenuOpen(false)} aria-label="إغلاق القائمة" className="rounded-full p-2 text-ink-600 hover:bg-ink-100 lg:hidden">
             <X size={22} />
           </button>
@@ -328,7 +328,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           >
             <Menu size={24} />
           </button>
-          <img src="/logo.png" alt="AiSchool" className="h-8 w-auto object-contain" />
+          <img src="/logo.png" alt="AiSchool" className="h-11 w-auto object-contain" />
         </header>
         <main className="thin-scrollbar min-w-0 flex-1">
           <div className="mx-auto max-w-[1360px] px-4 py-5 sm:px-6 sm:py-8 lg:px-10">{children}</div>

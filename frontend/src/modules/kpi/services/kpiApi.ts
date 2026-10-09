@@ -3,7 +3,10 @@ import type { Platform, PlatformTotals } from "@/modules/marketing/services/mark
 
 export interface FunnelCounts {
   leads: number;
+  /** bookings = attended + not_attended + pending_attendance */
   booked: number;
+  /** sessions with a recorded outcome (attended + not_attended) */
+  decided: number;
   attended: number;
   not_attended: number;
   pending_attendance: number;
@@ -18,10 +21,28 @@ export interface FunnelRates {
   overall: number | null;
 }
 
+export interface SeriesPoint {
+  month: string;
+  label: string;
+  leads: number;
+  booked: number;
+  attended: number;
+  subscribers: number;
+  revenue: number;
+}
+
+export interface SourceRow {
+  source: string;
+  leads: number;
+  booked: number;
+  attended: number;
+  not_attended: number;
+  pending: number;
+}
+
 export interface PeriodMetrics {
-  year: number;
-  half: 1 | 2;
   period: string;
+  label: string;
   start: string;
   end_inclusive: string;
   funnel: FunnelCounts;
@@ -43,6 +64,8 @@ export interface PeriodMetrics {
     platforms: PlatformTotals[];
     reconciliation: Reconciliation;
   };
+  series?: SeriesPoint[];
+  sources?: SourceRow[];
 }
 
 export interface ReconciliationRow {
@@ -64,20 +87,30 @@ export interface Reconciliation {
   total_recorded: number;
 }
 
-export interface Phases {
-  project_start_date: string | null;
-  test_end_date: string | null;
-  full_launch_date: string | null;
-  current_phase: "not_started" | "test" | "full_launch" | null;
-  configured: boolean;
+export interface PeriodOption {
+  key: string;
+  label: string;
+  group: "quarter" | "range";
 }
 
-export interface TestPhase {
-  configured: boolean;
+export interface Targets {
+  subscribers: number;
+  max_cac: number;
+  min_conversion: number;
+  min_attendance: number;
+}
+
+export interface KpiSettings {
+  phase_start: string;
+  phase_end_inclusive: string;
+  targets: Targets;
+}
+
+export interface PhaseGoals {
   start: string;
   end_inclusive: string;
   includes_cumulative: boolean;
-  targets: { subscribers: number; max_cac: number; min_conversion: number; min_attendance: number };
+  targets: Targets;
   metrics: {
     subscribers: number;
     cac: string | null;
@@ -85,20 +118,32 @@ export interface TestPhase {
     conversion: number | null;
     attendance_rate: number | null;
     attended: number;
+    decided: number;
     booked: number;
   };
 }
 
 export interface KpiSummary {
   current: PeriodMetrics;
-  previous: PeriodMetrics;
-  phases: Phases;
-  test_phase: TestPhase;
+  previous: PeriodMetrics | null;
+  periods: PeriodOption[];
+  selected: string;
+  settings: KpiSettings;
+  phase_goals: PhaseGoals;
+}
+
+export interface KpiSettingsUpdate {
+  phase_start?: string | null;
+  phase_end_inclusive?: string | null;
+  subscribers?: number | null;
+  max_cac?: number | null;
+  min_conversion?: number | null;
+  min_attendance?: number | null;
 }
 
 export const kpiApi = {
   summary: async (period?: string): Promise<KpiSummary> =>
     (await api.get("/kpi-dashboard/summary", { params: period ? { period } : {} })).data,
-  updateSettings: async (payload: { project_start_date: string | null; full_launch_date: string | null }): Promise<Phases> =>
+  updateSettings: async (payload: KpiSettingsUpdate): Promise<KpiSettings> =>
     (await api.patch("/kpi-dashboard/settings", payload)).data,
 };
