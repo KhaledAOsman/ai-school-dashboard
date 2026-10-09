@@ -1,8 +1,8 @@
 """Booking flow: booked-without-appointment leads join الحجوزات; attended -> مهتمون.
 
 Data-only migration (no customer data inside):
-* old "تم الحجز" leads flagged legacy_booked (no appointment) become normal
-  bookings (stage booked) so they show in الحجوزات for manual review;
+* (old "تم الحجز" leads without an appointment are NOT bookings - they stay
+  in العملاء المحتملون until someone confirms them with «تم الحجز»);
 * leads whose attendance was recorded as attended move to the new
   "interested" stage (عملاء مهتمون); "did not attend" stay in الحجوزات.
 
@@ -23,14 +23,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute(
-        """
-        UPDATE crm_leads
-        SET stage = 'booked', legacy_booked = false
-        WHERE legacy_booked = true
-          AND stage IN ('new', 'contacted', 'not_answered')
-        """
-    )
     op.execute(
         """
         UPDATE crm_leads
