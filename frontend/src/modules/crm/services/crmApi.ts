@@ -9,13 +9,14 @@ export type LeadStage =
   | "confirmed_call"
   | "zoom_sent"
   | "attendance_recorded"
+  | "interested"
   | "report_sent"
   | "follow_up"
   | "converted"
   | "lost"
   | "not_interested";
 
-export type LeadGroup = "leads" | "bookings" | "interested" | "legacy";
+export type LeadGroup = "leads" | "bookings" | "interested";
 
 export type CallOutcome = "contacted" | "not_answered";
 
@@ -119,6 +120,8 @@ export interface LeadSearchParams {
   sort_by?: "created_at" | "full_name" | "stage";
   sort_dir?: "asc" | "desc";
   mine_only?: boolean;
+  /** bookings only: pending = awaiting a decision, not_attended = لم يحضر */
+  attendance?: "pending" | "not_attended";
 }
 
 export interface LeadImportRow {
@@ -238,8 +241,13 @@ export const crmLeadApi = {
     const { data } = await api.post(`/crm/leads/${id}/call-attempt`, { outcome, note });
     return data;
   },
-  book: async (id: string, teacher_slot_id: string): Promise<Lead> => {
-    const { data } = await api.post(`/crm/leads/${id}/book`, { teacher_slot_id });
+  /** With a slot id: books that appointment. Without: plain «تم الحجز» (moves to الحجوزات). */
+  book: async (id: string, teacher_slot_id?: string): Promise<Lead> => {
+    const { data } = await api.post(`/crm/leads/${id}/book`, { teacher_slot_id: teacher_slot_id ?? null });
+    return data;
+  },
+  unbook: async (id: string, note?: string): Promise<Lead> => {
+    const { data } = await api.post(`/crm/leads/${id}/unbook`, { note });
     return data;
   },
   reschedule: async (id: string, teacher_slot_id: string, note?: string): Promise<Lead> => {
@@ -258,12 +266,8 @@ export const crmLeadApi = {
     const { data } = await api.post(`/crm/leads/${id}/send-zoom`, { zoom_link, note });
     return data;
   },
-  recordAttendance: async (id: string, attended: boolean, note?: string): Promise<Lead> => {
+  recordAttendance: async (id: string, attended: boolean | null, note?: string): Promise<Lead> => {
     const { data } = await api.post(`/crm/leads/${id}/attendance`, { attended, note });
-    return data;
-  },
-  promoteLegacyBooking: async (id: string, attended?: boolean | null): Promise<Lead> => {
-    const { data } = await api.post(`/crm/leads/${id}/promote-legacy-booking`, { attended: attended ?? null });
     return data;
   },
   deleteLead: async (id: string): Promise<void> => {

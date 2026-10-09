@@ -1,7 +1,7 @@
 /**
  * "عملاء مهتمون" (interested clients) - leads whose report has been sent
- * (stage in INTERESTED_GROUP_STAGES: report_sent, follow_up, converted,
- * lost). This is where the real sales-conversion work happens: repeated
+ * (stage in INTERESTED_GROUP_STAGES: interested, report_sent, follow_up,
+ * converted, lost). This is where the real sales-conversion work happens: repeated
  * follow-up attempts, tracked with a visible counter, then either convert
  * or mark lost. Closing a lead after 3+ follow-up attempts requires an
  * extra confirmation step, since that's a real decision to give up on a

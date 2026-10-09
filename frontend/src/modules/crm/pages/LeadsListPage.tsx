@@ -17,7 +17,6 @@ import {
   useReassignLead,
   useUpdateLead,
   useBookSlot,
-  usePromoteLegacyBooking,
   useNotInterestedLead,
 } from "@/modules/crm/hooks/useCRM";
 import type { LeadStage, CallOutcome, LeadSource } from "@/modules/crm/services/crmApi";
@@ -40,7 +39,8 @@ export const STAGE_LABEL: Record<LeadStage, string> = {
   confirmed_whatsapp: "تأكيد واتساب",
   confirmed_call: "تأكيد هاتفي",
   zoom_sent: "تم إرسال الزوم",
-  attendance_recorded: "تم تسجيل الحضور",
+  attendance_recorded: "لم يحضر",
+  interested: "عميل مهتم",
   report_sent: "تم إرسال التقرير",
   follow_up: "متابعة",
   converted: "تم التحويل",
@@ -56,7 +56,8 @@ export const STAGE_TONE: Record<LeadStage, "neutral" | "brand" | "success" | "wa
   confirmed_whatsapp: "brand",
   confirmed_call: "brand",
   zoom_sent: "brand",
-  attendance_recorded: "warning",
+  attendance_recorded: "danger",
+  interested: "success",
   report_sent: "warning",
   follow_up: "warning",
   converted: "success",
@@ -105,10 +106,6 @@ function StatusDropdown({ leadId, currentStage }: { leadId: string; currentStage
 function BookingStatusDropdown({ leadId }: { leadId: string }) {
   const notInterested = useNotInterestedLead(leadId);
   const bookSlot = useBookSlot(leadId);
-  const promote = usePromoteLegacyBooking(leadId);
-  // Old customers who were booked before the scheduling system existed have
-  // no appointment: only a system administrator can move them to الحجوزات.
-  const canBookWithoutAppointment = usePermission(PERMISSIONS.CRM_LEAD_LEGACY_BOOKING);
   const [showSchedule, setShowSchedule] = useState(false);
 
   return (
@@ -119,15 +116,15 @@ function BookingStatusDropdown({ leadId }: { leadId: string }) {
           const value = e.target.value;
           if (value === "not_interested") notInterested.mutate(undefined);
           else if (value === "booked") setShowSchedule(true);
-          else if (value === "booked_no_appointment") promote.mutate(undefined);
+          else if (value === "booked_direct") bookSlot.mutate(undefined);
         }}
-        disabled={notInterested.isPending || promote.isPending}
+        disabled={notInterested.isPending || bookSlot.isPending}
         className="w-full cursor-pointer whitespace-nowrap rounded-lg border-2 px-2 py-2 text-[12.5px] font-semibold outline-none transition-colors bg-ink-50 border-ink-200 text-ink-700 hover:border-brand-300 focus:border-brand-400 focus:ring-1 focus:ring-brand-400"
       >
         <option value="">تحديد الحجز...</option>
         <option value="not_interested">غير مهتم</option>
-        <option value="booked">حجز موعد</option>
-        {canBookWithoutAppointment && <option value="booked_no_appointment">تم الحجز (بدون موعد)</option>}
+        <option value="booked_direct">تم الحجز</option>
+        <option value="booked">حجز موعد محدد</option>
       </select>
       {showSchedule && (
         <TeacherScheduleModal onClose={() => setShowSchedule(false)} isBooking={bookSlot.isPending} onConfirm={(slotId) => bookSlot.mutateAsync(slotId)} />

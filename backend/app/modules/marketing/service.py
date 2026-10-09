@@ -187,6 +187,12 @@ def platform_totals(campaigns) -> list[PlatformTotals]:
 # The project went live on this date. Registrations made earlier (pre-launch
 # website sign-ups that still attended a lecture) are absorbed by the first
 # period, otherwise bookings would not match the attendance sheet.
+# stages that mean "a lecture was booked" even when no date / slot / outcome was captured
+BOOKED_OR_LATER_STAGES = frozenset({
+    "booked", "confirmed_whatsapp", "confirmed_call", "zoom_sent", "attendance_recorded",
+    "interested", "report_sent", "follow_up", "converted",
+})
+
 LAUNCH_PERIOD_START = date(2026, 7, 1)
 
 # Year-1 phase defaults (editable by the system administrator).
@@ -425,13 +431,13 @@ class KpiService:
 
         rows = (
             await self.db.execute(
-                select(Lead.created_at, Lead.source, Lead.attended, Lead.lecture_date, Lead.teacher_slot_id).where(*in_period)
+                select(Lead.created_at, Lead.source, Lead.attended, Lead.lecture_date, Lead.teacher_slot_id, Lead.stage).where(*in_period)
             )
         ).all()
         leads = attended = not_attended = pending = 0
         by_source: dict[str, dict[str, int]] = defaultdict(lambda: {"leads": 0, "booked": 0, "attended": 0, "not_attended": 0, "pending": 0})
         by_month: dict[date, dict[str, int]] = defaultdict(lambda: {"leads": 0, "booked": 0, "attended": 0, "subscribers": 0, "revenue": 0})
-        for created_at, source, att, lec_date, slot in rows:
+        for created_at, source, att, lec_date, slot, stage in rows:
             leads += 1
             src = source or "other"
             bucket = by_source[src]
@@ -443,7 +449,10 @@ class KpiService:
             by_month[m]["leads"] += 1
             # someone with an attendance record was necessarily booked, even
             # when their lecture date was never captured
-            is_booked = lec_date is not None or slot is not None or att is not None
+            is_booked = (
+                lec_date is not None or slot is not None or att is not None
+                or stage in BOOKED_OR_LATER_STAGES
+            )
             if not is_booked:
                 continue
             bucket["booked"] += 1

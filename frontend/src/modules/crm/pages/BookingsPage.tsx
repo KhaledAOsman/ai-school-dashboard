@@ -1,41 +1,49 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Send, Calendar } from "lucide-react";
+import { Calendar } from "lucide-react";
 import { translate } from "@/i18n";
-import { useLeadsSearch, useRecordAttendance, useSendReport, useUpdateLead, useRescheduleLead } from "@/modules/crm/hooks/useCRM";
+import { useLeadsSearch, useRecordAttendance, useUnbookLead, useUpdateLead, useRescheduleLead } from "@/modules/crm/hooks/useCRM";
 import { usePermission } from "@/permissions/usePermission";
 import { PERMISSIONS } from "@/permissions/constants";
-import { STAGE_LABEL, STAGE_TONE } from "@/modules/crm/pages/LeadsListPage";
 import { TeacherScheduleModal } from "@/modules/crm/pages/TeacherScheduleModal";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 
-/** Attendance dropdown: حضر / لم يحضر / تأجيل - تأجيل opens the schedule
- * modal instead of writing an attended value. */
-function AttendanceDropdown({ leadId }: { leadId: string }) {
+/** Attendance status for one booking. The select always shows the current
+ * state: بانتظار (not decided yet) / لم يحضر. Choosing «تم الحضور» turns the
+ * lead into an interested client and removes it from this table; «بانتظار»
+ * undoes a previous choice; تأجيل opens the schedule modal. */
+function AttendanceDropdown({ leadId, attended, disabled }: { leadId: string; attended: boolean | null; disabled?: boolean }) {
   const recordAttendance = useRecordAttendance(leadId);
   const reschedule = useRescheduleLead(leadId);
+  const unbook = useUnbookLead(leadId);
   const [showSchedule, setShowSchedule] = useState(false);
+  const current = attended === false ? "not_attended" : "pending";
+  const tone = attended === false ? "border-danger-300 text-danger-700" : "border-ink-200 text-ink-800";
 
   return (
     <>
       <select
-        value=""
+        value={current}
         onChange={(e) => {
-          if (e.target.value === "attended") recordAttendance.mutate({ attended: true });
-          else if (e.target.value === "not_attended") recordAttendance.mutate({ attended: false });
-          else if (e.target.value === "postpone") setShowSchedule(true);
+          const v = e.target.value;
+          if (v === "attended") recordAttendance.mutate({ attended: true });
+          else if (v === "not_attended") recordAttendance.mutate({ attended: false });
+          else if (v === "pending") recordAttendance.mutate({ attended: null });
+          else if (v === "postpone") setShowSchedule(true);
+          else if (v === "unbook" && window.confirm("إلغاء الحجز وإرجاع العميل إلى العملاء المحتملين؟")) unbook.mutate(undefined);
         }}
-        disabled={recordAttendance.isPending}
-        className="w-full cursor-pointer whitespace-nowrap rounded-lg border border-ink-200 bg-white px-2 py-2 text-[14px] font-medium text-ink-800 outline-none transition-colors hover:border-brand-300 focus:border-brand-400 focus:ring-1 focus:ring-brand-400"
+        disabled={disabled || recordAttendance.isPending || unbook.isPending}
+        className={`w-full cursor-pointer whitespace-nowrap rounded-lg border bg-white px-2 py-2 text-[14px] font-semibold outline-none transition-colors hover:border-brand-300 focus:border-brand-400 focus:ring-1 focus:ring-brand-400 ${tone}`}
       >
-        <option value="">تحديد الحضور...</option>
-        <option value="attended">تم الحضور</option>
+        <option value="pending">بانتظار تغيّر الحالة</option>
+        <option value="attended">تم الحضور ← عميل مهتم</option>
         <option value="not_attended">لم يتم الحضور</option>
         <option value="postpone">تأجيل</option>
+        <option value="unbook">إلغاء الحجز (عميل محتمل)</option>
       </select>
+      {recordAttendance.isError && <p className="mt-1 text-[12px] text-danger-600">تعذر الحفظ، حاول مرة أخرى</p>}
       {showSchedule && (
         <TeacherScheduleModal
           onClose={() => setShowSchedule(false)}
@@ -44,16 +52,6 @@ function AttendanceDropdown({ leadId }: { leadId: string }) {
         />
       )}
     </>
-  );
-}
-
-function ReportButton({ leadId, stage, attended }: { leadId: string; stage: string; attended: boolean | null }) {
-  const sendReport = useSendReport(leadId);
-  if (stage !== "attendance_recorded" || attended !== true) return <span className="text-xs text-ink-300">—</span>;
-  return (
-    <Button size="sm" variant="primary" isLoading={sendReport.isPending} onClick={() => sendReport.mutate(undefined)} className="w-full whitespace-nowrap !px-2 !text-[13px]">
-      <Send size={12} />إرسال التقرير
-    </Button>
   );
 }
 
@@ -85,11 +83,18 @@ function InlineNoteEdit({ leadId, currentNote }: { leadId: string; currentNote: 
 export function BookingsPage() {
   const canManage = usePermission(PERMISSIONS.CRM_LEAD_MANAGE);
 
-  const { data, isLoading } = useLeadsSearch({ page: 1, page_size: 200, group: "bookings" });
+  const [filter, setFilter] = useState<"all" | "pending" | "not_attended">("all");
+  const [page, setPage] = useState(1);
+  const { data, isLoading } = useLeadsSearch({ page, page_size: 200, group: "bookings", attendance: filter === "all" ? undefined : filter });
+  // totals for the summary line (cheap count-only queries, always unfiltered)
+  const total = useLeadsSearch({ page: 1, page_size: 1, group: "bookings" }).data?.total;
+  const nPending = useLeadsSearch({ page: 1, page_size: 1, group: "bookings", attendance: "pending" }).data?.total;
+  const nNot = useLeadsSearch({ page: 1, page_size: 1, group: "bookings", attendance: "not_attended" }).data?.total;
+  const all = data?.items ?? [];
 
   // Always sorted soonest-first regardless of what the API returns, so
   // the nearest upcoming lecture is always at the top of the list.
-  const sorted = (data?.items ?? []).slice().sort((a, b) => {
+  const sorted = all.slice().sort((a, b) => {
     const d = (a.lecture_date ?? "9999-99-99").localeCompare(b.lecture_date ?? "9999-99-99");
     return d !== 0 ? d : (a.lecture_time ?? "").localeCompare(b.lecture_time ?? "");
   });
@@ -110,7 +115,15 @@ export function BookingsPage() {
     <div className="max-w-none">
       <div className="mb-6">
         <h1 className="text-[26px] font-bold tracking-tight text-ink-900">الحجوزات</h1>
-        <p className="mt-1 text-sm text-ink-500">{data ? `${data.total.toLocaleString("ar-SA-u-nu-latn")} محاضرة محجوزة` : "المحاضرات المحجوزة بانتظار الحضور والتقرير، مرتبة من الأقرب للأبعد"}</p>
+        <p className="mt-1 text-sm text-ink-500">{total != null && nPending != null && nNot != null ? `${total.toLocaleString("ar-SA-u-nu-latn")} حجز = ${nPending.toLocaleString("ar-SA-u-nu-latn")} بانتظار + ${nNot.toLocaleString("ar-SA-u-nu-latn")} لم يحضروا` : "المحاضرات المحجوزة بانتظار تأكيد الحضور"}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {([["all", "الكل"], ["pending", "بانتظار تغيّر الحالة"], ["not_attended", "لم يحضروا"]] as const).map(([k, label]) => (
+            <button key={k} onClick={() => { setFilter(k); setPage(1); }}
+              className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold transition-colors ${filter === k ? "border-brand-500 bg-white text-brand-700" : "border-ink-200 bg-white text-ink-500 hover:border-brand-300"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <Card className="overflow-hidden p-0">
@@ -125,9 +138,8 @@ export function BookingsPage() {
               <div className="col-span-2 text-start">الاسم</div>
               <div className="col-span-1">الهاتف</div>
               <div className="col-span-1">المدرّس</div>
-              <div className="col-span-3">الحضور</div>
-              <div className="col-span-2">ملاحظات</div>
-              <div className="col-span-2">التقرير</div>
+              <div className="col-span-3">حالة الحضور</div>
+              <div className="col-span-4">ملاحظات</div>
             </div>
             <div className="divide-y divide-ink-100">
               {sorted.map((lead) => (
@@ -139,12 +151,20 @@ export function BookingsPage() {
                   <Link to={`/crm/leads/${lead.id}`} className="col-span-2 truncate text-start text-[15px] font-medium text-ink-900 hover:text-brand-600">{lead.full_name}</Link>
                   <div className="ltr-content col-span-1 text-[13px] leading-tight text-ink-500 break-all" title={lead.phone}>{lead.phone}</div>
                   <div className="col-span-1 truncate text-[14px] text-ink-600" title={lead.teacher_name || ""}>{lead.teacher_name || "—"}</div>
-                  <div className="col-span-3">{canManage ? <AttendanceDropdown leadId={lead.id} /> : <Badge tone={STAGE_TONE[lead.stage]} dot={false}>{STAGE_LABEL[lead.stage]}</Badge>}</div>
-                  <div className="col-span-2"><InlineNoteEdit leadId={lead.id} currentNote={lead.notes} /></div>
-                  <div className="col-span-2">{canManage ? <ReportButton leadId={lead.id} stage={lead.stage} attended={lead.attended} /> : null}</div>
+                  <div className="col-span-3"><AttendanceDropdown leadId={lead.id} attended={lead.attended} disabled={!canManage} /></div>
+                  <div className="col-span-4"><InlineNoteEdit leadId={lead.id} currentNote={lead.notes} /></div>
                 </div>
               ))}
             </div>
+            {data && data.total_pages > 1 && (
+              <div className="flex items-center justify-between border-t border-ink-100 px-6 py-3">
+                <p className="text-xs text-ink-500">صفحة {data.page} من {data.total_pages}</p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>السابق</Button>
+                  <Button size="sm" variant="outline" disabled={page >= data.total_pages} onClick={() => setPage((p) => p + 1)}>التالي</Button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </Card>

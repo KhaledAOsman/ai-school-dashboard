@@ -176,9 +176,14 @@ export function useLogCallAttempt(id: string) {
 export function useBookSlot(id: string) {
   const invalidate = useInvalidateLead(id);
   return useMutation({
-    mutationFn: (teacherSlotId: string) => crmLeadApi.book(id, teacherSlotId),
+    mutationFn: (teacherSlotId?: string) => crmLeadApi.book(id, teacherSlotId),
     onSuccess: invalidate,
   });
+}
+
+export function useUnbookLead(id: string) {
+  const invalidate = useInvalidateLead(id);
+  return useMutation({ mutationFn: (note?: string) => crmLeadApi.unbook(id, note), onSuccess: invalidate });
 }
 
 export function useConfirmWhatsapp(id: string) {
@@ -202,17 +207,7 @@ export function useSendZoom(id: string) {
 export function useRecordAttendance(id: string) {
   const invalidate = useInvalidateLead(id);
   return useMutation({
-    mutationFn: ({ attended, note }: { attended: boolean; note?: string }) => crmLeadApi.recordAttendance(id, attended, note),
-    onSuccess: invalidate,
-  });
-}
-
-/** System administrator: move a lead to الحجوزات without an appointment,
- * optionally recording حضر / لم يحضر in the same step. */
-export function usePromoteLegacyBooking(id: string) {
-  const invalidate = useInvalidateLead(id);
-  return useMutation({
-    mutationFn: (attended?: boolean | null) => crmLeadApi.promoteLegacyBooking(id, attended),
+    mutationFn: ({ attended, note }: { attended: boolean | null; note?: string }) => crmLeadApi.recordAttendance(id, attended, note),
     onSuccess: invalidate,
   });
 }

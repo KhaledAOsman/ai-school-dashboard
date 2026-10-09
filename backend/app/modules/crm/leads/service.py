@@ -8,8 +8,8 @@ Each advance-stage method here does three things in one transaction:
 3. Commits.
 
 Stages move a lead between three UI groups (see models.py):
-group 1 (leads) -> book_slot -> group 2 (bookings) -> send_report ->
-group 3 (interested). Call attempts are logged while in group 1 and only
+group 1 (leads) -> book -> group 2 (bookings) -> attended -> group 3
+(interested); "did not attend" stays in group 2. Call attempts are logged while in group 1 and only
 not_answered/unreachable change lead.stage (connecting is the trigger to
 book, not a stage of its own). follow_up can be logged repeatedly, and a
 lead marked "did not attend" can still continue to follow-up rather than
@@ -27,10 +27,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit.service import AuditService
 from app.core.permissions.object_policy import ensure_found
 from app.core.users.repository import UserRepository
-from app.modules.crm.leads.models import LEADS_GROUP_STAGES, Lead, LeadCallAttempt, LeadStage, LeadStageEvent
+from app.modules.crm.leads.models import BOOKINGS_GROUP_STAGES, INTERESTED_GROUP_STAGES, Lead, LeadCallAttempt, LeadStage, LeadStageEvent
 from app.modules.crm.leads.repository import LeadRepository
 from app.modules.crm.leads.schemas import (
-    LeadPromoteLegacyRequest,
+    LeadBookRequest,
     LeadAttendanceRequest,
     LeadBulkAssignRequest,
     LeadBulkImportRequest,
@@ -225,6 +225,30 @@ class LeadService:
         return await self._to_response(lead)
 
     # ---- Group 2: booking / reschedule ----
+    async def book(self, *, lead_id: uuid.UUID, payload: LeadBookRequest, user_id: uuid.UUID) -> LeadResponse:
+        """Moves a lead into الحجوزات. With a teacher slot it consumes the
+        slot (book_slot); without one it is a plain "تم الحجز" - the lead is
+        recorded as booked right away (phone is all that is needed) and the
+        lecture details can be filled in or reviewed later."""
+        if payload.teacher_slot_id:
+            return await self.book_slot(lead_id=lead_id, teacher_slot_id=payload.teacher_slot_id, user_id=user_id)
+        lead = await self.repo.get_by_id(lead_id)
+        ensure_found(lead, "Lead")
+        if lead.stage in INTERESTED_GROUP_STAGES or lead.stage in BOOKINGS_GROUP_STAGES:
+            raise HTTPException(status.HTTP_409_CONFLICT, "هذا العميل محجوز بالفعل")
+        lead.legacy_booked = False
+        lead.stage = LeadStage.BOOKED.value
+        if payload.teacher_name:
+            lead.teacher_name = payload.teacher_name
+        if payload.lecture_date:
+            lead.lecture_date = payload.lecture_date
+        if payload.lecture_time:
+            lead.lecture_time = payload.lecture_time
+        self._record_stage_event(lead=lead, stage=LeadStage.BOOKED.value, user_id=user_id, note="تم الحجز")
+        await self.db.commit()
+        lead = await self.repo.get_by_id(lead_id)
+        return await self._to_response(lead)
+
     async def book_slot(
         self, *, lead_id: uuid.UUID, teacher_slot_id: uuid.UUID, user_id: uuid.UUID, reschedule_note: str | None = None
     ) -> LeadResponse:
@@ -260,6 +284,28 @@ class LeadService:
 
         await self._notify_whatsapp(trigger="lecture_booked", lead=lead, user_id=user_id)
 
+        return await self._to_response(lead)
+
+    async def unbook(self, *, lead_id: uuid.UUID, user_id: uuid.UUID, note: str | None = None) -> LeadResponse:
+        """إلغاء الحجز: used while reviewing الحجوزات - sends a booking that
+        should not be there back to العملاء المحتملون (frees its slot, clears
+        any attendance)."""
+        lead = await self.repo.get_by_id(lead_id)
+        ensure_found(lead, "Lead")
+        if lead.stage not in BOOKINGS_GROUP_STAGES:
+            raise HTTPException(status.HTTP_409_CONFLICT, "هذا العميل ليس ضمن الحجوزات")
+        if lead.teacher_slot_id:
+            old_slot = await self.slot_repo.get_by_id(lead.teacher_slot_id)
+            if old_slot and old_slot.booked_lead_id == lead.id:
+                old_slot.is_booked = False
+                old_slot.booked_lead_id = None
+        lead.teacher_slot_id = None
+        lead.attended = None
+        lead.legacy_booked = False
+        lead.stage = LeadStage.CONTACTED.value
+        self._record_stage_event(lead=lead, stage=lead.stage, user_id=user_id, note=note or "إلغاء الحجز")
+        await self.db.commit()
+        lead = await self.repo.get_by_id(lead_id)
         return await self._to_response(lead)
 
     async def reschedule(self, *, lead_id: uuid.UUID, teacher_slot_id: uuid.UUID, user_id: uuid.UUID, note: str | None) -> LeadResponse:
@@ -328,41 +374,25 @@ class LeadService:
 
     # ---- Attendance ----
     async def record_attendance(self, *, lead_id: uuid.UUID, payload: LeadAttendanceRequest, user_id: uuid.UUID) -> LeadResponse:
+        """حضر -> the lead becomes an interested client (leaves الحجوزات and
+        appears in عملاء مهتمون). لم يحضر -> stays in الحجوزات, visibly marked.
+        None -> undo: back to waiting for a decision (booked)."""
         lead = await self.repo.get_by_id(lead_id)
         ensure_found(lead, "Lead")
         lead.attended = payload.attended
-        lead.stage = LeadStage.ATTENDANCE_RECORDED.value
-        self._record_stage_event(
-            lead=lead, stage=LeadStage.ATTENDANCE_RECORDED.value, user_id=user_id,
-            note=payload.note or ("Attended" if payload.attended else "Did not attend"),
-        )
-        await self.db.commit()
-        lead = await self.repo.get_by_id(lead_id)
-        return await self._to_response(lead)
-
-    async def promote_legacy_booking(
-        self, *, lead_id: uuid.UUID, user_id: uuid.UUID, attended: bool | None, note: str | None
-    ) -> LeadResponse:
-        """System-administrator action: an old "تم الحجز" lead with no
-        appointment becomes a real booking (stage booked), optionally with
-        the attendance outcome recorded in the same step."""
-        lead = await self.repo.get_by_id(lead_id)
-        ensure_found(lead, "Lead")
-        if not (lead.legacy_booked or lead.stage in LEADS_GROUP_STAGES):
-            raise HTTPException(status_code=409, detail="هذا العميل تجاوز مرحلة العملاء المحتملين بالفعل")
         lead.legacy_booked = False
-        if attended is None:
-            lead.stage = LeadStage.BOOKED.value
-            event_note = note or "تحويل من الحجوزات القديمة بدون موعد إلى الحجوزات"
-        else:
-            lead.attended = attended
+        if payload.attended is True:
+            # never push someone already further along (follow-up, converted...) backwards
+            if lead.stage not in INTERESTED_GROUP_STAGES:
+                lead.stage = LeadStage.INTERESTED.value
+            note = payload.note or "حضر المحاضرة"
+        elif payload.attended is False:
             lead.stage = LeadStage.ATTENDANCE_RECORDED.value
-            event_note = note or ("تحويل من الحجز القديم: حضر" if attended else "تحويل من الحجز القديم: لم يحضر")
-        self._record_stage_event(lead=lead, stage=lead.stage, user_id=user_id, note=event_note)
-        await self.audit.record(
-            user_id=user_id, action="crm_lead.legacy_booking_promoted", resource_type="Lead", resource_id=str(lead.id),
-            new_value={"attended": attended},
-        )
+            note = payload.note or "لم يحضر"
+        else:
+            lead.stage = LeadStage.BOOKED.value
+            note = payload.note or "بانتظار تغيّر الحالة"
+        self._record_stage_event(lead=lead, stage=lead.stage, user_id=user_id, note=note)
         await self.db.commit()
         lead = await self.repo.get_by_id(lead_id)
         return await self._to_response(lead)
@@ -499,12 +529,12 @@ class LeadService:
         date_to,
         sort_by: str,
         sort_dir: str,
-        legacy_only: bool = False,
+        attendance: str | None = None,
     ) -> PaginatedLeadResponse:
         leads, total = await self.repo.list_paginated(
             page=page, page_size=page_size, search=search, stage=stage, stages=stages, source=source,
             assigned_to=assigned_to, date_from=date_from, date_to=date_to,
-            sort_by=sort_by, sort_dir=sort_dir, legacy_only=legacy_only,
+            sort_by=sort_by, sort_dir=sort_dir, attendance=attendance,
         )
         items = [await self._to_response(l) for l in leads]
         total_pages = max(1, (total + page_size - 1) // page_size)

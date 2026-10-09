@@ -10,7 +10,6 @@ const DashboardPage = lazy(() => import("@/dashboard/DashboardPage").then((m) =>
 const FinanceSectionPage = lazy(() => import("@/modules/finance/pages/FinanceSectionPage").then((m) => ({ default: m.FinanceSectionPage })));
 const LeadsListPage = lazy(() => import("@/modules/crm/pages/LeadsListPage").then((m) => ({ default: m.LeadsListPage })));
 const BookingsPage = lazy(() => import("@/modules/crm/pages/BookingsPage").then((m) => ({ default: m.BookingsPage })));
-const LegacyBookingsPage = lazy(() => import("@/modules/crm/pages/LegacyBookingsPage").then((m) => ({ default: m.LegacyBookingsPage })));
 const InterestedPage = lazy(() => import("@/modules/crm/pages/InterestedPage").then((m) => ({ default: m.InterestedPage })));
 const LeadDetailPage = lazy(() => import("@/modules/crm/pages/LeadDetailPage").then((m) => ({ default: m.LeadDetailPage })));
 const CRMTeachersPage = lazy(() => import("@/modules/crm/pages/CRMTeachersPage").then((m) => ({ default: m.CRMTeachersPage })));
@@ -125,16 +124,6 @@ export function App() {
                 <ProtectedRoute>
                   <AppLayout>
                     <BookingsPage />
-                  </AppLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/crm/legacy-bookings"
-              element={
-                <ProtectedRoute>
-                  <AppLayout>
-                    <LegacyBookingsPage />
                   </AppLayout>
                 </ProtectedRoute>
               }

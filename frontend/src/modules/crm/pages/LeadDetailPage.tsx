@@ -8,7 +8,6 @@ import {
   useConfirmWhatsapp,
   useConfirmCall,
   useRecordAttendance,
-  useSendReport,
   useLogFollowUp,
   useConvertLead,
   useLoseLead,
@@ -76,10 +75,16 @@ function BookingPanel({ leadId }: { leadId: string }) {
       <CardHeader>
         <CardTitle>حجز موعد المحاضرة</CardTitle>
       </CardHeader>
-      <Button variant="primary" onClick={() => setShowSchedule(true)}>
-        <Calendar size={15} />
-        فتح جدول المواعيد
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="primary" isLoading={bookSlot.isPending} onClick={() => bookSlot.mutate(undefined)}>
+          <CheckCircle2 size={15} />
+          تم الحجز
+        </Button>
+        <Button variant="outline" onClick={() => setShowSchedule(true)}>
+          <Calendar size={15} />
+          حجز موعد محدد
+        </Button>
+      </div>
       {showSchedule && (
         <TeacherScheduleModal
           onClose={() => setShowSchedule(false)}
@@ -181,7 +186,6 @@ export function LeadDetailPage() {
   const confirmWhatsapp = useConfirmWhatsapp(id!);
   const confirmCall = useConfirmCall(id!);
   const recordAttendance = useRecordAttendance(id!);
-  const sendReport = useSendReport(id!);
   const logFollowUp = useLogFollowUp(id!);
   const convertLead = useConvertLead(id!);
   const loseLead = useLoseLead(id!);
@@ -293,7 +297,7 @@ export function LeadDetailPage() {
             </Card>
           )}
 
-          {lead.stage === "zoom_sent" && canManage && (
+          {["booked", "confirmed_whatsapp", "confirmed_call", "zoom_sent", "attendance_recorded"].includes(lead.stage) && canManage && (
             <Card>
               <p className="mb-3 text-sm text-ink-600">هل حضر العميل المحاضرة؟</p>
               <div className="flex flex-wrap gap-2">
@@ -316,16 +320,6 @@ export function LeadDetailPage() {
             </Card>
           )}
 
-          {lead.stage === "attendance_recorded" && lead.attended && canManage && (
-            <Card>
-              <p className="mb-3 text-sm text-ink-600">إرسال تقرير المحاضرة للعميل</p>
-              <Button variant="primary" isLoading={sendReport.isPending} onClick={() => sendReport.mutate(undefined)}>
-                <Send size={15} />
-                تم إرسال التقرير
-              </Button>
-            </Card>
-          )}
-
           {lead.stage === "attendance_recorded" && !lead.attended && canManage && (
             <Card>
               <p className="mb-3 text-sm text-ink-600">لم يحضر العميل — يمكن تأجيل الموعد</p>
@@ -333,7 +327,7 @@ export function LeadDetailPage() {
             </Card>
           )}
 
-          {(lead.stage === "report_sent" || lead.stage === "follow_up") && canManage && (
+          {(lead.stage === "interested" || lead.stage === "report_sent" || lead.stage === "follow_up") && canManage && (
             <Card>
               <p className="mb-3 text-sm text-ink-600">تسجيل محاولة متابعة لتحويل العميل (يمكن تكرارها أكثر من مرة)</p>
               <div className="mb-3 flex gap-2">

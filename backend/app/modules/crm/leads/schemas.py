@@ -28,7 +28,12 @@ class LeadBookRequest(BaseModel):
     group 1 (leads) into group 2 (bookings). The slot must currently be
     unbooked; booking it consumes it (marks is_booked=True) so it stops
     appearing as available."""
-    teacher_slot_id: uuid.UUID
+    teacher_slot_id: uuid.UUID | None = None
+    # Without a slot the lead is simply moved to الحجوزات ("تم الحجز"); the
+    # lecture details below are optional extras to record what is known.
+    teacher_name: str | None = Field(default=None, max_length=200)
+    lecture_date: date | None = None
+    lecture_time: time | None = None
 
 
 class LeadRescheduleRequest(BaseModel):
@@ -46,16 +51,10 @@ class LeadAdvanceRequest(BaseModel):
     note: str | None = None
 
 
-class LeadPromoteLegacyRequest(BaseModel):
-    """Turns an old booked-without-appointment lead into a real booking.
-    attended: None = just move it to الحجوزات (attendance chosen there);
-    True / False = also record حضر / لم يحضر in the same step."""
-    attended: bool | None = None
-    note: str | None = None
-
-
 class LeadAttendanceRequest(BaseModel):
-    attended: bool
+    """attended True -> becomes an interested client; False -> stays in
+    الحجوزات marked "لم يحضر"; None -> back to waiting for a decision."""
+    attended: bool | None
     note: str | None = None
 
 

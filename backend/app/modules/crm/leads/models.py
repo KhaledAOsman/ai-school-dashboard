@@ -10,9 +10,10 @@ actually reached the person. Booking a slot moves the lead into group 2
 regardless of which of these three it was sitting at.
 
 GROUP 2 - "الحجوزات" (booked, awaiting the lecture outcome): BOOKED,
-CONFIRMED_WHATSAPP, CONFIRMED_CALL, ZOOM_SENT, ATTENDANCE_RECORDED.
-Sending the post-lecture report (only reachable after attended=True) moves
-the lead into group 3.
+CONFIRMED_WHATSAPP, CONFIRMED_CALL, ZOOM_SENT, ATTENDANCE_RECORDED
+(ATTENDANCE_RECORDED here means "did not attend" - the row stays visible).
+Confirming attendance (attended=True) moves the lead straight into group 3
+as INTERESTED.
 
 GROUP 3 - "عملاء مهتمون" (interested clients - the real sales-conversion
 work): REPORT_SENT, FOLLOW_UP, then the terminal CONVERTED/LOST.
@@ -60,6 +61,7 @@ class LeadStage(str, enum.Enum):
     ATTENDANCE_RECORDED = "attendance_recorded"  # تم تسجيل الحضور (حضر/لم يحضر)
 
     # Group 3: interested clients
+    INTERESTED = "interested"  # عميل مهتم - تأكّد حضوره المحاضرة (يدخل مجموعة "عملاء مهتمون")
     REPORT_SENT = "report_sent"  # تم إرسال تقرير المحاضرة (يدخل مجموعة "عملاء مهتمون")
     FOLLOW_UP = "follow_up"  # متابعة لتحويله لعميل فعلي (قد تتكرر عدة مرات)
     CONVERTED = "converted"  # تم التحويل لعميل فعلي (نهاية ناجحة)
@@ -80,6 +82,7 @@ BOOKINGS_GROUP_STAGES: list[str] = [
     LeadStage.ATTENDANCE_RECORDED.value,
 ]
 INTERESTED_GROUP_STAGES: list[str] = [
+    LeadStage.INTERESTED.value,
     LeadStage.REPORT_SENT.value,
     LeadStage.FOLLOW_UP.value,
     LeadStage.CONVERTED.value,
@@ -94,6 +97,7 @@ STAGE_ORDER: list[str] = [
     LeadStage.CONFIRMED_CALL.value,
     LeadStage.ZOOM_SENT.value,
     LeadStage.ATTENDANCE_RECORDED.value,
+    LeadStage.INTERESTED.value,
     LeadStage.REPORT_SENT.value,
     LeadStage.FOLLOW_UP.value,
 ]

@@ -144,7 +144,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const canViewFinanceSection = canViewExpenses || canViewCategories || canViewReports || canViewBudget || canViewStaff;
   const canViewLeads = usePermission(PERMISSIONS.CRM_LEAD_VIEW);
   const canViewCRMTeachers = usePermission(PERMISSIONS.CRM_TEACHER_VIEW);
-  const canManageLegacyBookings = usePermission(PERMISSIONS.CRM_LEAD_LEGACY_BOOKING);
   const canViewCRMSection = canViewLeads || canViewCRMTeachers;
   const canViewUsers = usePermission(PERMISSIONS.USERS_VIEW);
   const canViewRoles = usePermission(PERMISSIONS.ROLES_VIEW);
@@ -282,7 +281,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
               {canViewLeads && <NavItem indented to="/crm/all-leads" icon={Users} label="كل العملاء" />}
               {canViewLeads && <NavItem indented to="/crm/leads" icon={UserPlus} label="العملاء المحتملون" />}
               {canViewLeads && <NavItem indented to="/crm/bookings" icon={CalendarCheck} label="الحجوزات" />}
-              {canViewLeads && canManageLegacyBookings && <NavItem indented to="/crm/legacy-bookings" icon={CalendarCheck} label="تم الحجز بدون موعد" />}
               {canViewLeads && <NavItem indented to="/crm/interested" icon={Star} label="عملاء مهتمون" />}
               {canViewLeads && <NavItem indented to="/crm/schedule" icon={Calendar} label="جدول المواعيد" />}
               {canViewCRMTeachers && <NavItem indented to="/crm/teachers" icon={GraduationCap} label="المعلمين والمواعيد" />}
