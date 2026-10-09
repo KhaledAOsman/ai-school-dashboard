@@ -431,22 +431,30 @@ class KpiService:
 
         rows = (
             await self.db.execute(
-                select(Lead.created_at, Lead.source, Lead.attended, Lead.lecture_date, Lead.teacher_slot_id, Lead.stage).where(*in_period)
+                select(Lead.created_at, Lead.source, Lead.attended, Lead.lecture_date, Lead.teacher_slot_id, Lead.stage, Lead.phone).where(*in_period)
             )
         ).all()
         leads = attended = not_attended = pending = 0
         by_source: dict[str, dict[str, int]] = defaultdict(lambda: {"leads": 0, "booked": 0, "attended": 0, "not_attended": 0, "pending": 0})
         by_month: dict[date, dict[str, int]] = defaultdict(lambda: {"leads": 0, "booked": 0, "attended": 0, "subscribers": 0, "revenue": 0})
-        for created_at, source, att, lec_date, slot, stage in rows:
-            leads += 1
+        seen_phones: set[str] = set()
+        for created_at, source, att, lec_date, slot, stage, phone in rows:
+            # one person may hold several bookings (siblings / repeat attendance)
+            # on the same phone: count the lead once, every booking separately
+            first_of_phone = phone not in seen_phones
+            seen_phones.add(phone)
+            if first_of_phone:
+                leads += 1
             src = source or "other"
             bucket = by_source[src]
-            bucket["leads"] += 1
+            if first_of_phone:
+                bucket["leads"] += 1
             # month bucket (registrations before the range start fall in its first month)
             m = date(created_at.year, created_at.month, 1)
             if m < date(start.year, start.month, 1):
                 m = date(start.year, start.month, 1)
-            by_month[m]["leads"] += 1
+            if first_of_phone:
+                by_month[m]["leads"] += 1
             # someone with an attendance record was necessarily booked, even
             # when their lecture date was never captured
             is_booked = (
