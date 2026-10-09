@@ -40,7 +40,7 @@ export const STAGE_LABEL: Record<LeadStage, string> = {
   confirmed_call: "تأكيد هاتفي",
   zoom_sent: "تم إرسال الزوم",
   attendance_recorded: "لم يحضر",
-  interested: "عميل مهتم",
+  interested: "تم الحضور",
   report_sent: "تم إرسال التقرير",
   follow_up: "متابعة",
   converted: "تم التحويل",

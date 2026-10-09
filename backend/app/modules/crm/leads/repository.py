@@ -200,13 +200,17 @@ class LeadRepository:
         _total, pending, attended, not_attended = (await self.db.execute(counts_stmt)).one()
 
         stmt = apply(base)
+        # an attended booking has moved on to عملاء مهتمون, so الحجوزات lists only
+        # the open ones (waiting + did not attend) unless "attended" is asked for
         if attendance == "pending":
             stmt = stmt.where(Booking.attended.is_(None))
         elif attendance == "attended":
             stmt = stmt.where(Booking.attended.is_(True))
         elif attendance == "not_attended":
             stmt = stmt.where(Booking.attended.is_(False))
-        total = {None: _total, "pending": pending, "attended": attended, "not_attended": not_attended}.get(attendance, _total)
+        else:
+            stmt = stmt.where(or_(Booking.attended.is_(None), Booking.attended.is_(False)))
+        total = {"pending": pending, "attended": attended, "not_attended": not_attended}.get(attendance, pending + not_attended)
         stmt = stmt.order_by(Booking.lecture_date.desc().nulls_last(), Booking.lecture_time.desc().nulls_last(), Lead.full_name)
         stmt = stmt.offset((page - 1) * page_size).limit(page_size)
         rows = (await self.db.execute(stmt)).all()

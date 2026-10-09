@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions.object_policy import ensure_found
@@ -98,6 +99,20 @@ class CRMTeacherService:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot delete a slot that has already been booked")
         await self.slot_repo.delete(slot)
         await self.db.commit()
+
+    async def delete_teacher(self, *, teacher_id: uuid.UUID) -> None:
+        """Permanently removes a teacher and all of their slots. Bookings
+        already made with this teacher stay in الحجوزات: they keep the
+        teacher's name, date and time as a snapshot (their slot link is
+        simply cleared)."""
+        teacher = await self.repo.get_by_id(teacher_id)
+        ensure_found(teacher, "Teacher")
+        try:
+            await self.db.delete(teacher)
+            await self.db.commit()
+        except IntegrityError:
+            await self.db.rollback()
+            raise HTTPException(status.HTTP_409_CONFLICT, "لا يمكن حذف هذا المعلم لوجود بيانات مرتبطة به")
 
     async def deactivate_teacher(self, *, teacher_id: uuid.UUID) -> CRMTeacher:
         teacher = await self.repo.get_by_id(teacher_id)

@@ -40,6 +40,18 @@ export function useUpdateCRMTeacher(teacherId: string) {
   });
 }
 
+export function useDeleteCRMTeacher() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (teacherId: string) => crmTeacherApi.remove(teacherId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["crm-teachers"] });
+      qc.invalidateQueries({ queryKey: ["crm-teacher-schedule"] });
+      qc.invalidateQueries({ queryKey: ["crm-dashboard-stats"] });
+    },
+  });
+}
+
 export function useAddTeacherSlot(teacherId: string) {
   const qc = useQueryClient();
   return useMutation({

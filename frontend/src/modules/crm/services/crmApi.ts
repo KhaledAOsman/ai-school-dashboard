@@ -235,6 +235,9 @@ export const crmTeacherApi = {
   deleteSlot: async (slotId: string): Promise<void> => {
     await api.delete(`/crm/teachers/slots/${slotId}`);
   },
+  remove: async (teacherId: string): Promise<void> => {
+    await api.delete(`/crm/teachers/${teacherId}`);
+  },
   deactivate: async (teacherId: string): Promise<void> => {
     await api.post(`/crm/teachers/${teacherId}/deactivate`);
   },

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
-import { Plus, GraduationCap, CalendarPlus, Video, Pencil } from "lucide-react";
+import { Plus, GraduationCap, CalendarPlus, Video, Pencil, Trash2 } from "lucide-react";
 import { translate } from "@/i18n";
-import { useCRMTeachers, useCreateCRMTeacher, useUpdateCRMTeacher, useAddTeacherSlot } from "@/modules/crm/hooks/useCRM";
+import { useCRMTeachers, useCreateCRMTeacher, useUpdateCRMTeacher, useAddTeacherSlot, useDeleteCRMTeacher } from "@/modules/crm/hooks/useCRM";
 import { usePermission } from "@/permissions/usePermission";
 import { PERMISSIONS } from "@/permissions/constants";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -109,6 +109,7 @@ function ZoomLinkRow({ teacherId, zoomLink, canManage }: { teacherId: string; zo
 export function CRMTeachersPage() {
   const { data: teachers, isLoading } = useCRMTeachers();
   const createTeacher = useCreateCRMTeacher();
+  const deleteTeacher = useDeleteCRMTeacher();
   const canManage = usePermission(PERMISSIONS.CRM_TEACHER_MANAGE);
 
   const [showForm, setShowForm] = useState(false);
@@ -176,7 +177,27 @@ export function CRMTeachersPage() {
             <Card key={t.id} className="p-5">
               <div className="flex items-center justify-between">
                 <h3 className="text-[16px] font-semibold text-ink-900">{t.full_name}</h3>
-                {canManage && <AddSlotInline teacherId={t.id} />}
+                <div className="flex items-center gap-2">
+                  {canManage && <AddSlotInline teacherId={t.id} />}
+                  {canManage && (
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      isLoading={deleteTeacher.isPending && deleteTeacher.variables === t.id}
+                      onClick={async () => {
+                        if (!window.confirm(`حذف المعلم «${t.full_name}» وكل مواعيده نهائياً؟ الحجوزات المسجّلة معه تبقى محفوظة باسمه.`)) return;
+                        try {
+                          await deleteTeacher.mutateAsync(t.id);
+                        } catch (e: any) {
+                          window.alert(e?.response?.data?.detail || "تعذر الحذف");
+                        }
+                      }}
+                    >
+                      <Trash2 size={14} />
+                      حذف
+                    </Button>
+                  )}
+                </div>
               </div>
               <div className="mt-2.5">
                 <ZoomLinkRow teacherId={t.id} zoomLink={t.zoom_link} canManage={canManage} />

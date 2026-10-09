@@ -98,6 +98,18 @@ async def update_teacher(
     return await service.update_teacher(teacher_id=teacher_id, payload=payload)
 
 
+@router.delete("/{teacher_id}", status_code=204)
+async def delete_teacher(
+    teacher_id: uuid.UUID,
+    user: CurrentUser = Depends(require_permission(CRM_TEACHER_MANAGE)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Permanently deletes a teacher and their slots (existing bookings keep
+    the teacher's name / date / time)."""
+    service = CRMTeacherService(db)
+    await service.delete_teacher(teacher_id=teacher_id)
+
+
 @router.post("/{teacher_id}/deactivate", response_model=CRMTeacherResponse)
 async def deactivate_teacher(
     teacher_id: uuid.UUID,

@@ -39,7 +39,7 @@ export function AttendanceDropdown({ bookingId, attended, disabled }: { bookingI
         className={`w-full cursor-pointer whitespace-nowrap rounded-lg border bg-white px-2 py-2 text-[14px] font-semibold outline-none transition-colors hover:border-brand-300 focus:border-brand-400 focus:ring-1 focus:ring-brand-400 ${tone}`}
       >
         <option value="pending">بانتظار تغيّر الحالة</option>
-        <option value="attended">تم الحضور ← عميل مهتم</option>
+        <option value="attended">تم الحضور (ينتقل إلى عملاء مهتمون)</option>
         <option value="not_attended">لم يتم الحضور</option>
         <option value="postpone">تأجيل</option>
         <option value="unbook">إلغاء هذا الحجز</option>
@@ -84,7 +84,7 @@ function InlineNoteEdit({ leadId, currentNote }: { leadId: string; currentNote: 
 export function BookingsPage() {
   const canManage = usePermission(PERMISSIONS.CRM_LEAD_MANAGE);
 
-  const [filter, setFilter] = useState<"all" | "pending" | "attended" | "not_attended">("all");
+  const [filter, setFilter] = useState<"all" | "pending" | "not_attended">("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const { data, isLoading } = useBookings({ page, page_size: 100, search: search || undefined, attendance: filter === "all" ? undefined : filter });
@@ -110,11 +110,11 @@ export function BookingsPage() {
         <h1 className="text-[26px] font-bold tracking-tight text-ink-900">الحجوزات</h1>
         <p className="mt-1 text-sm text-ink-500">
           {data && all != null
-            ? `${fmt(all)} حجز = ${fmt(data.pending)} بانتظار + ${fmt(data.attended)} حضروا + ${fmt(data.not_attended)} لم يحضروا`
+            ? `${fmt(all)} حجز = ${fmt(data.pending)} بانتظار + ${fmt(data.not_attended)} لم يحضروا + ${fmt(data.attended)} حضروا (انتقلوا إلى عملاء مهتمون)`
             : "كل حجز محاضرة سجل مستقل — العميل الواحد قد يكون له أكثر من حجز"}
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          {([["all", "الكل"], ["pending", "بانتظار تغيّر الحالة"], ["attended", "حضروا"], ["not_attended", "لم يحضروا"]] as const).map(([k, label]) => (
+          {([["all", "الكل"], ["pending", "بانتظار تغيّر الحالة"], ["not_attended", "لم يحضروا"]] as const).map(([k, label]) => (
             <button key={k} onClick={() => { setFilter(k); setPage(1); }}
               className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold transition-colors ${filter === k ? "border-brand-500 bg-white text-brand-700" : "border-ink-200 bg-white text-ink-500 hover:border-brand-300"}`}>
               {label}
