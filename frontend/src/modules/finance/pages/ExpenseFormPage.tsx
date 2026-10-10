@@ -323,7 +323,7 @@ export function ExpenseFormPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField label="الشخص (لو الدفعة لفريلانسر)" hint="بيربط الدفعة بسجل الشخص ويظهر في صفحة الموظفين">
+              <FormField label="الشخص (لو الدفعة لفرد في الفريق)" hint="بيربط الدفعة بسجل الشخص ويظهر في صفحة الموظفين">
                 <Select
                   value={staffId}
                   onChange={(e) => {

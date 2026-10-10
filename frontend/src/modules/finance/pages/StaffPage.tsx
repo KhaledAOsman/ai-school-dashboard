@@ -205,7 +205,7 @@ export function StaffPage() {
         <div>
           <h1 className="text-[26px] font-bold tracking-tight text-ink-900">الموظفين</h1>
           <p className="mt-1 text-sm text-ink-500">
-            {totalHeadcount} فرد — إجمالي المدفوع لهم {formatSAR(grandTotalPaid)} (الأجر متغيّر كل شهر، بيتسجّل من «مصروف جديد»)
+            {totalHeadcount} فرد — إجمالي المدفوع لهم {formatSAR(grandTotalPaid)} (الأجر بالإنجاز، بيتسجّل من «مصروف جديد»)
           </p>
         </div>
         {canCreate && !showForm && (

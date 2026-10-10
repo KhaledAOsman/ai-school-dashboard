@@ -44,10 +44,10 @@ BEGIN
   SELECT gen_random_uuid(), 'تصميم ملفات العرض', 'تصميم ملفات العرض', '5210', (SELECT id FROM expense_categories WHERE code = '5200' ORDER BY created_at LIMIT 1), 5210, false, admin_id, now(), now()
   WHERE NOT EXISTS (SELECT 1 FROM expense_categories WHERE code = '5210');
   INSERT INTO expense_categories (id, name, name_ar, code, parent_id, display_order, is_archived, created_by, created_at, updated_at)
-  SELECT gen_random_uuid(), 'مصممو الجرافيك (فريلانسر)', 'مصممو الجرافيك (فريلانسر)', '5220', (SELECT id FROM expense_categories WHERE code = '5200' ORDER BY created_at LIMIT 1), 5220, false, admin_id, now(), now()
+  SELECT gen_random_uuid(), 'مصممو الجرافيك', 'مصممو الجرافيك', '5220', (SELECT id FROM expense_categories WHERE code = '5200' ORDER BY created_at LIMIT 1), 5220, false, admin_id, now(), now()
   WHERE NOT EXISTS (SELECT 1 FROM expense_categories WHERE code = '5220');
   INSERT INTO expense_categories (id, name, name_ar, code, parent_id, display_order, is_archived, created_by, created_at, updated_at)
-  SELECT gen_random_uuid(), 'أجور الفريلانسرز الشهرية (متغيرة)', 'أجور الفريلانسرز الشهرية (متغيرة)', '5300', NULL, 5300, false, admin_id, now(), now()
+  SELECT gen_random_uuid(), 'أجور الفريق (بالإنجاز)', 'أجور الفريق (بالإنجاز)', '5300', NULL, 5300, false, admin_id, now(), now()
   WHERE NOT EXISTS (SELECT 1 FROM expense_categories WHERE code = '5300');
   INSERT INTO expense_categories (id, name, name_ar, code, parent_id, display_order, is_archived, created_by, created_at, updated_at)
   SELECT gen_random_uuid(), 'المعلمون', 'المعلمون', '5310', (SELECT id FROM expense_categories WHERE code = '5300' ORDER BY created_at LIMIT 1), 5310, false, admin_id, now(), now()

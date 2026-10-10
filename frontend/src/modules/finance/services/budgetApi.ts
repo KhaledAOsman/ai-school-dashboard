@@ -109,7 +109,7 @@ export interface StaffMember {
   currency: string;
   is_active: boolean;
   created_at: string;
-  /** Freelancers are paid per month on variable amounts: what was actually paid out. */
+  /** Team members are paid per delivered work: what was actually paid out. */
   total_paid: string;
   payments_count: number;
   last_paid_on: string | null;
