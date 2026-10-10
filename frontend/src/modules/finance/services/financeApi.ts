@@ -120,6 +120,21 @@ export interface ExpenseCreatePayload {
   submit_now?: boolean;
 }
 
+export interface FinanceOverview {
+  month: string | null;
+  months: string[];
+  expenses: string;
+  invoices: number;
+  pending_amount: string;
+  pending_count: number;
+  revenue: string;
+  subscriptions: number;
+  net: string;
+  by_account: { category_id: string; code: string | null; name: string; total: string; budget_line: string | null }[];
+  budget: { id: string; name: string; budget: string; spent: string; remaining: string }[];
+  recent: Expense[];
+}
+
 export interface AccountTotal {
   category_id: string;
   subcategory_id: string | null;
@@ -268,6 +283,10 @@ export const financeApi = {
   },
   getMonthlyTrend: async (monthsBack = 12) => {
     const { data } = await api.get("/finance/reports/monthly-trend", { params: { months_back: monthsBack } });
+    return data;
+  },
+  getOverview: async (month: string | null): Promise<FinanceOverview> => {
+    const { data } = await api.get("/finance/reports/overview", { params: month ? { month } : {} });
     return data;
   },
   getRecentExpenses: async (limit = 10): Promise<Expense[]> => {

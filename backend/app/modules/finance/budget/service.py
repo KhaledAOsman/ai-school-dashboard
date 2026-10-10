@@ -48,8 +48,28 @@ class BudgetLineService:
             categories.append(category)
         return categories
 
+    async def _assert_not_budgeted_elsewhere(self, category_ids: list[uuid.UUID], exclude_id: uuid.UUID | None = None) -> None:
+        """An account belongs to ONE budget line, so its spend is never counted twice."""
+        from sqlalchemy import select
+        from app.modules.finance.budget.models import budget_line_categories
+        stmt = (
+            select(BudgetLine.name)
+            .join(budget_line_categories, budget_line_categories.c.budget_line_id == BudgetLine.id)
+            .where(
+                budget_line_categories.c.category_id.in_(category_ids),
+                BudgetLine.is_archived.is_(False),
+                BudgetLine.status.notin_(("archived", "rejected")),
+            )
+        )
+        if exclude_id:
+            stmt = stmt.where(BudgetLine.id != exclude_id)
+        clash = (await self.db.execute(stmt)).first()
+        if clash:
+            raise HTTPException(status.HTTP_409_CONFLICT, f"أحد الحسابات مربوط بالفعل ببند «{clash[0]}»")
+
     async def create(self, *, payload: BudgetLineCreateRequest, user_id: uuid.UUID) -> BudgetLine:
         categories = await self._resolve_categories(payload.category_ids)
+        await self._assert_not_budgeted_elsewhere(payload.category_ids)
 
         budget_line = BudgetLine(
             name=payload.name,
@@ -116,6 +136,7 @@ class BudgetLineService:
         if payload.period_end is not None:
             budget_line.period_end = payload.period_end
         if payload.category_ids is not None:
+            await self._assert_not_budgeted_elsewhere(payload.category_ids, exclude_id=budget_line.id)
             budget_line.categories = await self._resolve_categories(payload.category_ids)
 
         new_snapshot = {

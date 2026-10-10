@@ -10,7 +10,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
-from sqlalchemy import cast, func, select
+from sqlalchemy import cast, func, or_, select
 from sqlalchemy import TIMESTAMP
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -170,3 +170,114 @@ class FinanceReportService:
         )
         result = await self.db.execute(stmt)
         return [{"period": row.period, "total": row.total, "count": row.count} for row in result.all()]
+
+    # ------------------------------------------------------------------ overview
+    async def overview(self, *, month: str | None) -> dict:
+        """Management overview for one month (or the whole period when month is
+        None). Costs count in the month they belong to (period_month, else the
+        payment month) and only once approved - the same basis as the income
+        statement - so every number here ties back to the books."""
+        from app.modules.finance.budget.models import BudgetLine, budget_line_categories
+        from app.modules.marketing.models import Subscription
+
+        amonth = func.coalesce(A.period_month, func.to_char(A.expense_date, "YYYY-MM"))
+        smonth = func.to_char(Subscription.subscribed_at, "YYYY-MM")
+        live = (A.is_archived.is_(False),)
+
+        exp_months = {m for (m,) in (await self.db.execute(select(amonth).where(*live).distinct())).all() if m}
+        sub_months = {m for (m,) in (await self.db.execute(select(smonth).distinct())).all() if m}
+        months = sorted(exp_months | sub_months, reverse=True)
+
+        def in_period(col):
+            return (col == month,) if month else ()
+
+        async def one(stmt):
+            return (await self.db.execute(stmt)).one()
+
+        approved_total, invoices = await one(
+            select(func.coalesce(func.sum(A.amount), 0), func.count(func.distinct(A.expense_id)))
+            .where(*live, A.status == "approved", *in_period(amonth))
+        )
+        pending_total, pending_count = await one(
+            select(func.coalesce(func.sum(A.amount), 0), func.count(func.distinct(A.expense_id)))
+            .where(*live, A.status.in_(("draft", "pending_approval")), *in_period(amonth))
+        )
+        revenue, subs_count = await one(
+            select(func.coalesce(func.sum(Subscription.amount_paid), 0), func.count(Subscription.id))
+            .where(*in_period(smonth))
+        )
+
+        # approved spend per account group
+        rows = (await self.db.execute(
+            select(ExpenseCategory.id, ExpenseCategory.code, ExpenseCategory.name, func.sum(A.amount))
+            .join(expense_allocations, A.category_id == ExpenseCategory.id)
+            .where(*live, A.status == "approved", *in_period(amonth))
+            .group_by(ExpenseCategory.id, ExpenseCategory.code, ExpenseCategory.name)
+        )).all()
+        line_of: dict[uuid.UUID, str] = {}
+        lines = (await self.db.execute(
+            select(BudgetLine).where(BudgetLine.status == "approved", BudgetLine.is_archived.is_(False))
+        )).scalars().all()
+        links = (await self.db.execute(select(budget_line_categories))).all()
+        for bl_id, cat_id in links:
+            bl = next((b for b in lines if b.id == bl_id), None)
+            if bl:
+                line_of[cat_id] = bl.name
+        by_account = sorted(
+            [{"category_id": r[0], "code": r[1], "name": r[2], "total": r[3], "budget_line": line_of.get(r[0])} for r in rows],
+            key=lambda r: (r["code"] or "~"),
+        )
+
+        # budget vs actual for the period
+        budget = []
+        for bl in lines:
+            cats = [c for b, c in links if b == bl.id]
+            spent = (await self.db.execute(
+                select(func.coalesce(func.sum(A.amount), 0)).where(
+                    *live, A.status == "approved", *in_period(amonth),
+                    or_(A.category_id.in_(cats), A.subcategory_id.in_(cats)),
+                )
+            )).scalar_one() if cats else Decimal("0")
+            start = bl.period_start.strftime("%Y-%m") if bl.period_start else None
+            end = bl.period_end.strftime("%Y-%m") if bl.period_end else None
+            amt = Decimal(bl.budgeted_amount)
+            if bl.period != "monthly":
+                period_budget = amt
+            elif month:
+                active = (start is None or start <= month) and (end is None or month <= end)
+                period_budget = amt if active else Decimal("0")
+            else:
+                first = start or (min(exp_months) if exp_months else date.today().strftime("%Y-%m"))
+                last = max([date.today().strftime("%Y-%m")] + list(exp_months))
+                if end:
+                    last = min(last, end)
+                y, m = int(first[:4]), int(first[5:7])
+                n = 0
+                while (y, m) <= (int(last[:4]), int(last[5:7])):
+                    n += 1
+                    y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+                period_budget = amt * max(n, 1)
+            budget.append({"id": bl.id, "name": bl.name, "budget": period_budget, "spent": spent,
+                           "remaining": period_budget - Decimal(spent)})
+
+        recent = (await self.db.execute(
+            select(Expense)
+            .where(Expense.is_archived.is_(False), *in_period(func.coalesce(Expense.period_month, func.to_char(Expense.expense_date, "YYYY-MM"))))
+            .order_by(Expense.expense_date.desc(), Expense.created_at.desc())
+            .limit(8)
+        )).scalars().all()
+
+        return {
+            "month": month,
+            "months": months,
+            "expenses": approved_total,
+            "invoices": invoices,
+            "pending_amount": pending_total,
+            "pending_count": pending_count,
+            "revenue": revenue,
+            "subscriptions": subs_count,
+            "net": Decimal(revenue) - Decimal(approved_total),
+            "by_account": by_account,
+            "budget": budget,
+            "recent": recent,
+        }

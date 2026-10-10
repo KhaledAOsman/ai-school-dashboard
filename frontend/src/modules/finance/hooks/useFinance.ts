@@ -156,6 +156,22 @@ export function useMonthlyTrend(monthsBack = 12) {
   });
 }
 
+export function useFinanceOverview(month: string | null) {
+  return useQuery({
+    queryKey: ["finance-overview", month],
+    queryFn: () => financeApi.getOverview(month),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useUpdateCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...payload }: { id: string; name?: string; code?: string | null }) => financeApi.updateCategory(id, payload),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["categories"] }),
+  });
+}
+
 export function useRecentExpenses(limit = 10) {
   return useQuery({
     queryKey: ["recent-expenses", limit],

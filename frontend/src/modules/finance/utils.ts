@@ -2,7 +2,7 @@
 import type { Category } from "@/modules/finance/services/financeApi";
 
 export function formatSAR(value: string | number | null | undefined): string {
-  return `${Number(value ?? 0).toLocaleString("ar-SA-u-nu-latn", { maximumFractionDigits: 2, minimumFractionDigits: 0 })} ر.س`;
+  return `${Number(value ?? 0).toLocaleString("ar-SA-u-nu-latn", { maximumFractionDigits: 2, minimumFractionDigits: 2 })} ر.س`;
 }
 
 /** Integer cents, so sums of decimal amounts never drift ("0.1 + 0.2"). */

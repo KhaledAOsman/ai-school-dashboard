@@ -53,13 +53,13 @@ class BudgetLineRepository:
         )
         return (
             or_(A.category_id.in_(cats), A.subcategory_id.in_(cats)),
-            A.status != "cancelled",
+            A.status == "approved",
             A.is_archived.is_(False),
         )
 
     async def spent_amount_for(self, budget_line_id: uuid.UUID) -> float:
-        """Committed spend (draft/pending/approved, not cancelled) on the
-        accounts this budget line covers, counted per invoice line."""
+        """Approved spend on the accounts this budget line covers, counted
+        per invoice line (same basis as the income statement)."""
         result = await self.db.execute(
             select(func.coalesce(func.sum(A.amount), 0)).where(*self._line_scope(budget_line_id))
         )

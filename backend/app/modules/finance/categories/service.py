@@ -28,18 +28,47 @@ class CategoryService:
         self.repo = CategoryRepository(db)
         self.audit = AuditService(db)
 
+    async def _assert_code_free(self, code: str, exclude_id: uuid.UUID | None = None) -> None:
+        from sqlalchemy import select
+        stmt = select(ExpenseCategory.id).where(ExpenseCategory.code == code, ExpenseCategory.is_archived.is_(False))
+        if exclude_id:
+            stmt = stmt.where(ExpenseCategory.id != exclude_id)
+        if (await self.db.execute(stmt)).first():
+            raise HTTPException(status.HTTP_409_CONFLICT, f"كود الحساب {code} مستخدم بالفعل")
+
+    async def _next_code(self, parent: ExpenseCategory | None) -> str:
+        """Expense accounts are 4-digit codes: groups step by 100 (5100, 5200...),
+        sub-accounts by 10 inside their group (5210, 5220...)."""
+        from sqlalchemy import select
+        codes = [c for c in (await self.db.execute(select(ExpenseCategory.code))).scalars() if c and c.isdigit()]
+        if parent is None:
+            roots = [int(c) for c in codes if len(c) == 4 and c.endswith("00") and c.startswith("5") and c != "5999"]
+            nxt = (max(roots) + 100) if roots else 5100
+            return str(min(nxt, 5900))
+        base = int(parent.code) if parent.code and parent.code.isdigit() else None
+        if base is None:
+            return None  # type: ignore[return-value]
+        subs = [int(c) for c in codes if len(c) == 4 and base < int(c) < base + 100]
+        return str((max(subs) + 10) if subs else base + 10)
+
     async def create(
         self, *, payload: CategoryCreateRequest, user_id: uuid.UUID
     ) -> ExpenseCategory:
+        parent = None
         if payload.parent_id:
             parent = await self.repo.get_by_id(payload.parent_id)
             if parent is None:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "Parent category not found")
+            if parent.parent_id is not None:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "الحساب الفرعي لازم يكون تحت حساب رئيسي")
+        code = (payload.code or "").strip() or await self._next_code(parent)
+        if code:
+            await self._assert_code_free(code)
 
         category = ExpenseCategory(
             name=payload.name,
-            name_ar=payload.name_ar,
-            code=payload.code or None,
+            name_ar=payload.name_ar or payload.name,
+            code=code or None,
             parent_id=payload.parent_id,
             display_order=payload.display_order,
             created_by=user_id,
@@ -68,9 +97,12 @@ class CategoryService:
 
         if payload.name is not None:
             category.name = payload.name
-        if payload.name_ar is not None:
+            category.name_ar = payload.name if payload.name_ar is None else payload.name_ar
+        elif payload.name_ar is not None:
             category.name_ar = payload.name_ar
-        if payload.code is not None:
+        if payload.code is not None and (payload.code or None) != category.code:
+            if payload.code:
+                await self._assert_code_free(payload.code, exclude_id=category.id)
             category.code = payload.code or None
         if payload.display_order is not None:
             category.display_order = payload.display_order

@@ -9,13 +9,13 @@ import {
   useExpenses,
   useUpdateExpense,
 } from "@/modules/finance/hooks/useFinance";
-import { useStaff, useStaffDepartments } from "@/modules/finance/hooks/useBudget";
+import { useBudgetLines, useStaff, useStaffDepartments } from "@/modules/finance/hooks/useBudget";
 import { usePermission } from "@/permissions/usePermission";
 import { PERMISSIONS } from "@/permissions/constants";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FormField, Input, Select, Textarea } from "@/components/ui/Field";
-import { formatSAR, fromCents, toCents } from "@/modules/finance/utils";
+import { formatSAR, fromCents, periodLabel, toCents } from "@/modules/finance/utils";
 import type { Category } from "@/modules/finance/services/financeApi";
 
 interface Line {
@@ -171,6 +171,38 @@ export function ExpenseFormPage() {
   const totalCents = lines.reduce((sum, l) => sum + toCents(l.amount), 0);
   const total = fromCents(totalCents);
   const mainAccount = byId.get(subcategoryId || categoryId);
+  // Budget impact: every line is charged to an account; the account's group
+  // belongs to (at most) one approved budget line.
+  const { data: budgetLines } = useBudgetLines({ status: "approved" });
+  const budgetMonth = periodMonth || expenseDate.slice(0, 7);
+  const budgetImpact = useMemo(() => {
+    const rootOf = new Map<string, string>();
+    for (const r of roots) {
+      rootOf.set(r.id, r.id);
+      for (const c of r.children) rootOf.set(c.id, r.id);
+    }
+    const lineOfRoot = new Map<string, (typeof budgetLines extends (infer T)[] | undefined ? T : never)>();
+    for (const bl of budgetLines ?? []) for (const c of bl.categories) lineOfRoot.set(rootOf.get(c.id) ?? c.id, bl);
+    const per = new Map<string, number>();
+    let outside = 0;
+    for (const l of lines) {
+      const acc = l.accountId || subcategoryId || categoryId;
+      if (!acc || !l.amount) continue;
+      const bl = lineOfRoot.get(rootOf.get(acc) ?? acc);
+      const cents = toCents(l.amount);
+      if (bl) per.set(bl.id, (per.get(bl.id) ?? 0) + cents);
+      else outside += cents;
+    }
+    const rows = Array.from(per.entries()).map(([id, cents]) => {
+      const bl = (budgetLines ?? []).find((b) => b.id === id)!;
+      const m = bl.monthly.find((x) => x.month === budgetMonth);
+      const budget = m ? Number(m.budget) : Number(bl.budgeted_amount);
+      const spent = m ? Number(m.spent) : 0;
+      return { id, name: bl.name, budget, spent, invoice: cents / 100, after: budget - spent - cents / 100 };
+    });
+    return { rows, outside: outside / 100 };
+  }, [budgetLines, roots, lines, categoryId, subcategoryId, budgetMonth]);
+
   const mainAccountName = mainAccount ? (mainAccount.code ? `${mainAccount.code} · ${mainAccount.name}` : mainAccount.name) : "حساب الفاتورة";
 
   function setLine(index: number, patch: Partial<Line>) {
@@ -386,6 +418,33 @@ export function ExpenseFormPage() {
           </div>
           <p className="mt-2 text-[12.5px] text-ink-500">الخصم يتسجّل بالسالب (مثال: ‎-50).</p>
         </Card>
+
+        {(budgetImpact.rows.length > 0 || budgetImpact.outside > 0) && (
+          <Card>
+            <h2 className="mb-3 text-[16px] font-bold text-ink-900">أثر الفاتورة على الميزانية — {periodLabel(budgetMonth)}</h2>
+            <div className="divide-y divide-ink-100 text-sm">
+              {budgetImpact.rows.map((r) => (
+                <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+                  <span className="font-medium text-ink-800">{r.name}</span>
+                  <span className="text-ink-500">
+                    مصروف <span className="ltr-content text-ink-800">{formatSAR(r.spent)}</span> من{" "}
+                    <span className="ltr-content text-ink-800">{formatSAR(r.budget)}</span> · الفاتورة{" "}
+                    <span className="ltr-content font-semibold text-ink-900">{formatSAR(r.invoice)}</span> ·{" "}
+                    <span className={r.after < 0 ? "font-semibold text-danger-600" : "text-ink-700"}>
+                      {r.after < 0 ? `هتتجاوز بـ ${formatSAR(-r.after)}` : `يتبقى ${formatSAR(r.after)}`}
+                    </span>
+                  </span>
+                </div>
+              ))}
+              {budgetImpact.outside > 0 && (
+                <div className="flex items-center justify-between py-2.5">
+                  <span className="text-ink-600">خارج بنود الميزانية</span>
+                  <span className="ltr-content font-semibold text-ink-800">{formatSAR(budgetImpact.outside)}</span>
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
 
         <Card>
           <h2 className="mb-4 text-[16px] font-bold text-ink-900">التحويل وإثباته</h2>

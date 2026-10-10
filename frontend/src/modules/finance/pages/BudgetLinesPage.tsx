@@ -51,6 +51,8 @@ const PERIOD_LABEL: Record<string, string> = {
 };
 
 function BudgetLineCard({ line }: { line: BudgetLineWithSpend }) {
+  const { data: allCats } = useCategories();
+  const codeOf = new Map((allCats ?? []).flatMap((c) => [[c.id, c.code], ...c.children.map((k) => [k.id, k.code] as [string, string | null])] as [string, string | null][]));
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [showEditAmount, setShowEditAmount] = useState(false);
@@ -93,6 +95,7 @@ function BudgetLineCard({ line }: { line: BudgetLineWithSpend }) {
                 to={`/finance/chart-of-accounts?category=${c.id}`}
                 className="rounded-full bg-ink-100 px-2.5 py-0.5 text-xs font-medium text-ink-600 transition-colors hover:bg-ink-200"
               >
+                {codeOf.get(c.id) ? <span className="ltr-content ml-1 text-ink-400">{codeOf.get(c.id)}</span> : null}
                 {c.name}
               </Link>
             ))}
@@ -271,7 +274,12 @@ function MonthlySpend({ line }: { line: BudgetLineWithSpend }) {
 
 function CreateBudgetLineForm({ onDone }: { onDone: () => void }) {
   const { data: categories } = useCategories();
+  const { data: allLines } = useBudgetLines({});
   const createLine = useCreateBudgetLine();
+  const [startMonth, setStartMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  // an account group belongs to ONE budget line, so actual spend is never counted twice
+  const taken = new Map<string, string>();
+  for (const bl of allLines ?? []) if (bl.status !== "archived" && bl.status !== "rejected") for (const c of bl.categories) taken.set(c.id, bl.name);
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -281,13 +289,13 @@ function CreateBudgetLineForm({ onDone }: { onDone: () => void }) {
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const flatCategories = (categories ?? []).flatMap((c) => [c, ...c.children]);
+  const groups = [...(categories ?? [])].sort((a, b) => (a.code ?? "~").localeCompare(b.code ?? "~"));
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     if (categoryIds.length === 0) {
-      setError("اختر تصنيفًا واحدًا على الأقل");
+      setError("اختر حساب واحد على الأقل من شجرة الحسابات");
       return;
     }
     try {
@@ -298,6 +306,7 @@ function CreateBudgetLineForm({ onDone }: { onDone: () => void }) {
         period,
         budgeted_amount: amount,
         category_ids: categoryIds,
+        period_start: startMonth ? `${startMonth}-01` : null,
       });
       onDone();
     } catch {
@@ -337,26 +346,31 @@ function CreateBudgetLineForm({ onDone }: { onDone: () => void }) {
           </FormField>
         </div>
 
-        <FormField label="التصنيفات المرتبطة (يمكن اختيار أكثر من واحد)">
-          <div className="flex flex-wrap gap-2 rounded-lg bg-ink-50 p-3">
-            {flatCategories.map((c) => {
+        <FormField label="يبدأ من شهر">
+          <Input type="month" value={startMonth} onChange={(e) => setStartMonth(e.target.value)} className="ltr-content" />
+        </FormField>
+
+        <FormField label="الحسابات اللي البند بيغطيها (من شجرة الحسابات)" hint="أي فاتورة على الحسابات دي بتتخصم من البند تلقائي. الحساب يتربط ببند واحد بس.">
+          <div className="divide-y divide-ink-100 rounded-lg border border-ink-100">
+            {groups.map((c) => {
               const selected = categoryIds.includes(c.id);
+              const owner = taken.get(c.id);
               return (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() =>
-                    setCategoryIds((prev) => (selected ? prev.filter((id) => id !== c.id) : [...prev, c.id]))
-                  }
-                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                    selected ? "bg-brand-600 text-white" : "bg-white text-ink-600 ring-1 ring-inset ring-ink-200 hover:bg-ink-100"
-                  }`}
-                >
-                  {c.name}
-                </button>
+                <label key={c.id} className={`flex items-center gap-3 px-3 py-2.5 text-sm ${owner ? "text-ink-400" : "cursor-pointer text-ink-800"}`}>
+                  <input
+                    type="checkbox"
+                    disabled={!!owner}
+                    checked={selected}
+                    onChange={() => setCategoryIds((prev) => (selected ? prev.filter((id) => id !== c.id) : [...prev, c.id]))}
+                    className="h-4 w-4 accent-brand-600"
+                  />
+                  <span className="ltr-content w-12 text-[12.5px] text-ink-400">{c.code}</span>
+                  <span className="flex-1">{c.name}</span>
+                  {owner && <span className="text-[12px]">ضمن «{owner}»</span>}
+                </label>
               );
             })}
-            {flatCategories.length === 0 && <p className="text-xs text-ink-400">أنشئ تصنيفًا أولًا من صفحة التصنيفات</p>}
+            {groups.length === 0 && <p className="p-3 text-xs text-ink-400">أضف حسابات أولًا من شجرة الحسابات</p>}
           </div>
         </FormField>
 
@@ -396,7 +410,7 @@ export function BudgetLinesPage() {
         <div>
           <h1 className="text-[26px] font-bold tracking-tight text-ink-900">بنود الميزانية</h1>
           <p className="mt-1 text-sm text-ink-500">
-            تخطيط الميزانيات (رواتب، اشتراكات، حملات تسويقية) واعتمادها قبل الصرف الفعلي
+            كل بند بيغطي مجموعة حسابات من شجرة الحسابات، والصرف الفعلي = الفواتير المعتمدة على الحسابات دي
           </p>
         </div>
         {canCreate && !showCreateForm && (

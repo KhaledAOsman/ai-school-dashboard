@@ -16,7 +16,6 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Receipt,
-  FolderTree,
   GitBranch,
   BookOpen,
   HandCoins,
@@ -252,7 +251,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
               {canViewReports && <NavItem indented to="/finance/overview" icon={LayoutDashboard} label="نظرة عامة" />}
               {canViewExpenses && <NavItem indented to="/finance/expenses" icon={Receipt} label={translate("ar", "nav_expenses")} />}
               {canViewBudget && <NavItem indented to="/finance/budget-lines" icon={Wallet} label="بنود الميزانية" />}
-              {canViewCategories && <NavItem indented to="/finance/categories" icon={FolderTree} label={translate("ar", "nav_categories")} />}
               {canViewCategories && <NavItem indented to="/finance/chart-of-accounts" icon={GitBranch} label="شجرة الحسابات" />}
               {canViewExpenses && <NavItem indented to="/finance/funding" icon={Landmark} label="التمويل" />}
               {canViewExpenses && <NavItem indented to="/finance/revenue" icon={HandCoins} label="الإيرادات" />}

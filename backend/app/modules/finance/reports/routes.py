@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import uuid
 from datetime import date
+from decimal import Decimal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth.dependencies import CurrentUser
@@ -13,6 +16,47 @@ from app.modules.finance.expenses.schemas import ExpenseResponse
 from app.modules.finance.reports.service import FinanceReportService
 
 router = APIRouter(prefix="/finance/reports", tags=["finance-reports"])
+
+
+class OverviewAccount(BaseModel):
+    category_id: uuid.UUID
+    code: str | None
+    name: str
+    total: Decimal
+    budget_line: str | None
+
+
+class OverviewBudget(BaseModel):
+    id: uuid.UUID
+    name: str
+    budget: Decimal
+    spent: Decimal
+    remaining: Decimal
+
+
+class OverviewResponse(BaseModel):
+    month: str | None
+    months: list[str]
+    expenses: Decimal
+    invoices: int
+    pending_amount: Decimal
+    pending_count: int
+    revenue: Decimal
+    subscriptions: int
+    net: Decimal
+    by_account: list[OverviewAccount]
+    budget: list[OverviewBudget]
+    recent: list[ExpenseResponse]
+
+
+@router.get("/overview", response_model=OverviewResponse)
+async def get_overview(
+    month: str | None = Query(default=None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
+    user: CurrentUser = Depends(require_permission(FINANCE_REPORT_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    """One month (or the whole period without ?month) for the finance overview."""
+    return await FinanceReportService(db).overview(month=month)
 
 
 @router.get("/summary")
