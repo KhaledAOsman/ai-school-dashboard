@@ -65,8 +65,18 @@ class BudgetLineResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MonthSpend(BaseModel):
+    month: str
+    spent: Decimal
+    budget: Decimal
+
+
 class BudgetLineWithSpendResponse(BudgetLineResponse):
     """Adds actual-vs-budget figures, computed by the service layer."""
     spent_amount: Decimal
     remaining_amount: Decimal
     spent_pct: float
+    # monthly lines: amount x months running, and the spend month by month
+    budget_to_date: Decimal | None = None
+    months_count: int = 1
+    monthly: list[MonthSpend] = []

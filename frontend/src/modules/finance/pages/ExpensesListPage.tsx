@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Download, ExternalLink, Filter, Plus, Receipt, Search } from "lucide-react";
+import { Download, ExternalLink, Filter, Pencil, Plus, Receipt, Search } from "lucide-react";
 import { translate } from "@/i18n";
 import { useCategories, useExpenses } from "@/modules/finance/hooks/useFinance";
 import { StatusBadge } from "@/modules/finance/components/StatusBadge";
@@ -34,6 +34,7 @@ export function ExpensesListPage() {
   const [month, setMonth] = useState("");
   const [query, setQuery] = useState("");
   const canCreate = usePermission(PERMISSIONS.FINANCE_EXPENSE_CREATE);
+  const canUpdate = usePermission(PERMISSIONS.FINANCE_EXPENSE_UPDATE);
 
   const { data: categories } = useCategories();
   const catMap = useMemo(() => flattenCategories(categories), [categories]);
@@ -146,7 +147,7 @@ export function ExpensesListPage() {
             <table className="w-full min-w-[820px] text-sm">
               <thead className="bg-ink-50/70">
                 <tr>
-                  {["التاريخ", "المستفيد / الوصف", "الحساب", "الفاتورة", "الدافع", "المبلغ", "الحالة"].map((h) => (
+                  {["التاريخ", "المستفيد / الوصف", "الحساب", "الفاتورة", "الدافع", "المبلغ", "الحالة", ""].map((h) => (
                     <th key={h} className="px-4 py-3 text-right text-xs font-semibold text-ink-500">
                       {h}
                     </th>
@@ -164,6 +165,12 @@ export function ExpensesListPage() {
                           {e.expense_date}
                         </Link>
                         {e.period_month && <span className="text-[12px] text-ink-400">عن {periodLabel(e.period_month)}</span>}
+                        {canUpdate && e.status !== "cancelled" && (
+                          <Link to={`/finance/expenses/${e.id}/edit`} className="mt-1 flex items-center gap-1 text-[12px] font-medium text-brand-600 sm:hidden">
+                            <Pencil size={12} />
+                            تعديل
+                          </Link>
+                        )}
                       </td>
                       <td className="px-4 py-3.5">
                         <Link to={`/finance/expenses/${e.id}`} className="block font-medium text-ink-900">
@@ -171,7 +178,7 @@ export function ExpensesListPage() {
                         </Link>
                         {e.vendor && e.description && <span className="line-clamp-1 text-[12.5px] text-ink-500">{e.description}</span>}
                       </td>
-                      <td className="px-4 py-3.5 text-ink-700">
+                      <td className="min-w-[190px] px-4 py-3.5 text-ink-700">
                         <span className="block">{cat?.name ?? "—"}</span>
                         {sub && <span className="text-[12.5px] text-ink-500">{sub.name}</span>}
                       </td>
@@ -196,6 +203,17 @@ export function ExpensesListPage() {
                       <td className="px-4 py-3.5">
                         <StatusBadge status={e.status} />
                       </td>
+                      <td className="px-2 py-3.5">
+                        {canUpdate && e.status !== "cancelled" && (
+                          <Link
+                            to={`/finance/expenses/${e.id}/edit`}
+                            title="تعديل"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-400 transition-colors hover:bg-ink-100 hover:text-brand-600"
+                          >
+                            <Pencil size={15} />
+                          </Link>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -205,7 +223,7 @@ export function ExpensesListPage() {
                   <td colSpan={5} className="px-4 py-3 text-sm font-semibold text-ink-700">
                     الإجمالي ({rows.filter((e) => e.status !== "cancelled").length} دفعة{rows.length >= LIMIT ? " — أول " + LIMIT + " فقط، ضيّق التصفية" : ""})
                   </td>
-                  <td colSpan={2} className="ltr-content px-4 py-3 text-right text-[15px] font-bold text-ink-900">
+                  <td colSpan={3} className="ltr-content px-4 py-3 text-right text-[15px] font-bold text-ink-900">
                     {formatSAR(fromCents(totalCents))}
                   </td>
                 </tr>

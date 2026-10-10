@@ -121,7 +121,7 @@ class FinanceReportService:
         result = await self.db.execute(
             select(Expense)
             .where(Expense.is_archived.is_(False))
-            .order_by(Expense.created_at.desc())
+            .order_by(Expense.expense_date.desc(), Expense.created_at.desc())
             .limit(limit)
         )
         return list(result.scalars().all())

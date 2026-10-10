@@ -40,9 +40,39 @@ function StaffPayments({ staffId }: { staffId: string }) {
   );
 }
 
+/** Fixed monthly salary, or empty = paid per achievement. */
+function SalaryEditor({ member }: { member: StaffMember }) {
+  const updateStaff = useUpdateStaff(member.id);
+  const [value, setValue] = useState(member.base_salary ? String(Number(member.base_salary)) : "");
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-t border-ink-100 py-2">
+      <span className="text-xs text-ink-500">راتب ثابت شهري:</span>
+      <Input
+        type="number"
+        min="0"
+        step="0.01"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="فاضي = بالإنجاز"
+        className="ltr-content h-8 w-32 text-left text-sm"
+      />
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        isLoading={updateStaff.isPending}
+        onClick={() => updateStaff.mutate({ base_salary: value.trim() ? value.trim() : "0" })}
+      >
+        حفظ
+      </Button>
+    </div>
+  );
+}
+
 function StaffRow({ member, canUpdate, canPay }: { member: StaffMember; canUpdate: boolean; canPay: boolean }) {
   const updateStaff = useUpdateStaff(member.id);
   const [open, setOpen] = useState(false);
+  const fixed = member.base_salary && Number(member.base_salary) > 0;
   return (
     <div className="py-2.5">
       <div className="flex items-center justify-between gap-3">
@@ -51,7 +81,12 @@ function StaffRow({ member, canUpdate, canPay }: { member: StaffMember; canUpdat
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
             <GraduationCap size={14} />
           </span>
-          <span className="truncate text-sm font-medium text-ink-900">{member.full_name}</span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-medium text-ink-900">{member.full_name}</span>
+            <span className="block text-[12px] text-ink-400">
+              {fixed ? <>راتب ثابت <span className="ltr-content">{formatSAR(member.base_salary)}</span></> : "بالإنجاز"}
+            </span>
+          </span>
           {!member.is_active && <Badge tone="neutral">غير نشط</Badge>}
         </button>
         <div className="flex shrink-0 items-center gap-4">
@@ -74,6 +109,7 @@ function StaffRow({ member, canUpdate, canPay }: { member: StaffMember; canUpdat
       {open && (
         <div className="mr-10 mt-2 rounded-lg bg-ink-50/60 px-3 py-1">
           <StaffPayments staffId={member.id} />
+          {canUpdate && <SalaryEditor member={member} />}
           <div className="flex gap-4 pb-2 pt-1 sm:hidden">
             {canPay && (
               <Link to={`/finance/expenses/new?staff=${member.id}`} className="text-xs font-medium text-brand-600">
@@ -182,6 +218,7 @@ export function StaffPage() {
   const [fullName, setFullName] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [email, setEmail] = useState("");
+  const [baseSalary, setBaseSalary] = useState("");
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -190,9 +227,11 @@ export function StaffPage() {
       full_name: fullName,
       department_id: departmentId,
       email: email || null,
+      base_salary: baseSalary.trim() || null,
     });
     setFullName("");
     setEmail("");
+    setBaseSalary("");
     setShowForm(false);
   }
 
@@ -205,11 +244,11 @@ export function StaffPage() {
         <div>
           <h1 className="text-[26px] font-bold tracking-tight text-ink-900">الموظفين</h1>
           <p className="mt-1 text-sm text-ink-500">
-            {totalHeadcount} فرد — إجمالي المدفوع لهم {formatSAR(grandTotalPaid)} (الأجر بالإنجاز، بيتسجّل من «مصروف جديد»)
+            {totalHeadcount} فرد — إجمالي المدفوع لهم {formatSAR(grandTotalPaid)}. التسويق وخدمة العملاء براتب ثابت (والزيادة بونص/عمولات)، والمحتوى والمعلمين بالإنجاز.
           </p>
         </div>
         {canCreate && !showForm && (
-          <Button variant="primary" size="lg" onClick={() => setShowForm(true)}>
+          <Button variant="primary" size="lg" className="shrink-0 whitespace-nowrap" onClick={() => setShowForm(true)}>
             <Plus size={17} />
             إضافة فرد
           </Button>
@@ -256,9 +295,14 @@ export function StaffPage() {
               />
             )}
 
-            <FormField label="البريد الإلكتروني (اختياري)" hint="مفيش راتب ثابت: كل دفعة بتتسجّل بمبلغها الفعلي من صفحة الفواتير.">
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="ltr-content text-left" />
-            </FormField>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label="راتب ثابت شهري (اختياري)" hint="سيبه فاضي لو بيتحاسب بالإنجاز (المحتوى والمعلمين).">
+                <Input type="number" min="0" step="0.01" value={baseSalary} onChange={(e) => setBaseSalary(e.target.value)} className="ltr-content text-left" />
+              </FormField>
+              <FormField label="البريد الإلكتروني (اختياري)">
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="ltr-content text-left" />
+              </FormField>
+            </div>
             <div className="flex gap-3">
               <Button type="submit" variant="primary" isLoading={createStaff.isPending}>
                 {translate("ar", "common_save")}

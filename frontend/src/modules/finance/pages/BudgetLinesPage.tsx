@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { FormField, Input, Select, Textarea } from "@/components/ui/Field";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { periodLabel } from "@/modules/finance/utils";
 
 function formatSAR(value: string | number): string {
   return `${Number(value).toLocaleString("ar-SA-u-nu-latn", { maximumFractionDigits: 2 })} ر.س`;
@@ -149,6 +150,12 @@ function BudgetLineCard({ line }: { line: BudgetLineWithSpend }) {
         <div className="mb-1.5 flex items-center justify-between text-xs">
           <span className="text-ink-500">
             صُرف <span className="ltr-content font-semibold text-ink-800">{formatSAR(line.spent_amount)}</span>
+            {line.period === "monthly" && line.budget_to_date != null && (
+              <>
+                {" "}من <span className="ltr-content font-semibold text-ink-800">{formatSAR(line.budget_to_date)}</span>
+                <span className="text-ink-400"> ({line.months_count} شهر × {formatSAR(line.budgeted_amount)})</span>
+              </>
+            )}
           </span>
           <span className={isOverBudget ? "font-semibold text-danger-600" : "text-ink-500"}>
             {isOverBudget ? "تجاوز الميزانية" : `متبقي ${formatSAR(line.remaining_amount)}`}
@@ -160,6 +167,7 @@ function BudgetLineCard({ line }: { line: BudgetLineWithSpend }) {
             style={{ width: `${pctClamped}%` }}
           />
         </div>
+        {line.monthly.length > 0 && <MonthlySpend line={line} />}
       </div>
 
       {line.status === "rejected" && line.rejection_reason && (
@@ -216,6 +224,48 @@ function BudgetLineCard({ line }: { line: BudgetLineWithSpend }) {
         </div>
       )}
     </Card>
+  );
+}
+
+/** Spend month by month against the monthly amount (salaries count in the month they belong to). */
+function MonthlySpend({ line }: { line: BudgetLineWithSpend }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-3">
+      <button onClick={() => setOpen((o) => !o)} className="link-underline text-xs font-medium text-brand-600">
+        {open ? "إخفاء الصرف الشهري" : "الصرف شهر بشهر"}
+      </button>
+      {open && (
+        <div className="mt-2 overflow-x-auto">
+          <table className="w-full min-w-[360px] text-[13px]">
+            <thead>
+              <tr className="text-ink-400">
+                <th className="py-1.5 text-right font-medium">الشهر</th>
+                <th className="py-1.5 text-right font-medium">المصروف</th>
+                <th className="py-1.5 text-right font-medium">الميزانية</th>
+                <th className="py-1.5 text-right font-medium">الفرق</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-ink-100">
+              {line.monthly.map((m) => {
+                const diff = Number(m.budget) - Number(m.spent);
+                return (
+                  <tr key={m.month}>
+                    <td className="py-1.5 text-ink-700">{periodLabel(m.month)}</td>
+                    <td className="ltr-content py-1.5 text-right font-semibold text-ink-800">{formatSAR(m.spent)}</td>
+                    <td className="ltr-content py-1.5 text-right text-ink-500">{formatSAR(m.budget)}</td>
+                    <td className={`ltr-content py-1.5 text-right ${diff < 0 ? "font-semibold text-danger-600" : "text-ink-500"}`}>
+                      {formatSAR(diff)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="mt-1.5 text-[12px] text-ink-400">الرواتب بتتحسب على الشهر اللي هي عنه، مش شهر التحويل.</p>
+        </div>
+      )}
+    </div>
   );
 }
 

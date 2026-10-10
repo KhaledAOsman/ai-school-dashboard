@@ -51,8 +51,9 @@ class StaffResponse(BaseModel):
     currency: str
     is_active: bool
     created_at: datetime
-    # Everyone here is paid per achievement (amount varies each payment), so
-    # instead of a fixed salary we report what was actually paid out.
+    # base_salary set = fixed monthly salary (marketing, customer service);
+    # empty = paid per achievement (content team, teachers). Either way we
+    # also report what was actually paid out.
     total_paid: Decimal = Decimal("0")
     payments_count: int = 0
     last_paid_on: date | None = None

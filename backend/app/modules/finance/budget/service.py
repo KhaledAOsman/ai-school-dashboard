@@ -10,7 +10,7 @@ update() whenever a payload includes a budget_line_id.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -156,11 +156,42 @@ class BudgetLineService:
         return await self.repo.list_all(**filters)
 
     async def spend_summary(self, budget_line: BudgetLine) -> dict:
+        """Actual vs budget. A monthly line is compared against its amount times
+        the number of months it has been running (start month -> this month),
+        and the spend is also returned month by month."""
         spent = await self.repo.spent_amount_for(budget_line.id)
         budgeted = float(budget_line.budgeted_amount)
-        remaining = budgeted - spent
-        pct = (spent / budgeted * 100) if budgeted > 0 else 0.0
-        return {"spent_amount": spent, "remaining_amount": remaining, "spent_pct": round(pct, 1)}
+        budget_to_date = budgeted
+        monthly: list[dict] = []
+        if budget_line.period == "monthly":
+            by_month = await self.repo.spent_by_month(budget_line.id)
+            today = date.today()
+            first = budget_line.period_start or (
+                date(int(min(by_month)[:4]), int(min(by_month)[5:7]), 1) if by_month else today
+            )
+            last = min(today, budget_line.period_end) if budget_line.period_end else today
+            if by_month:
+                mx = max(by_month)
+                last = max(last, date(int(mx[:4]), int(mx[5:7]), 1))
+            y, m = first.year, first.month
+            months: list[str] = []
+            while (y, m) <= (last.year, last.month):
+                months.append(f"{y:04d}-{m:02d}")
+                y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+            months += [k for k in by_month if k not in months]
+            months = sorted(months) or [f"{today.year:04d}-{today.month:02d}"]
+            budget_to_date = budgeted * len(months)
+            monthly = [{"month": k, "spent": round(by_month.get(k, 0.0), 2), "budget": budgeted} for k in months]
+        remaining = budget_to_date - spent
+        pct = (spent / budget_to_date * 100) if budget_to_date > 0 else 0.0
+        return {
+            "spent_amount": round(spent, 2),
+            "remaining_amount": round(remaining, 2),
+            "spent_pct": round(pct, 1),
+            "budget_to_date": round(budget_to_date, 2),
+            "months_count": len(monthly) or 1,
+            "monthly": monthly,
+        }
 
     async def _apply_transition(
         self,

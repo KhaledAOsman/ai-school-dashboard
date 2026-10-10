@@ -55,6 +55,9 @@ async def _to_response_with_spend(service: BudgetLineService, budget_line) -> Bu
         spent_amount=spend["spent_amount"],
         remaining_amount=spend["remaining_amount"],
         spent_pct=spend["spent_pct"],
+        budget_to_date=spend["budget_to_date"],
+        months_count=spend["months_count"],
+        monthly=spend["monthly"],
     )
 
 

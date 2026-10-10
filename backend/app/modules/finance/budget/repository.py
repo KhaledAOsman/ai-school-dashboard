@@ -60,3 +60,18 @@ class BudgetLineRepository:
             )
         )
         return float(result.scalar_one())
+
+    async def spent_by_month(self, budget_line_id: uuid.UUID) -> dict[str, float]:
+        """Spend per month the cost belongs to: period_month when set (salaries of
+        month N paid in N+1), otherwise the payment month."""
+        month = func.coalesce(Expense.period_month, func.to_char(Expense.expense_date, "YYYY-MM"))
+        result = await self.db.execute(
+            select(month, func.sum(Expense.amount))
+            .where(
+                Expense.budget_line_id == budget_line_id,
+                Expense.status != "cancelled",
+                Expense.is_archived.is_(False),
+            )
+            .group_by(month)
+        )
+        return {m: float(v) for m, v in result.all()}

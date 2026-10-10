@@ -104,7 +104,7 @@ class StaffService:
         if payload.phone is not None:
             staff.phone = payload.phone
         if payload.base_salary is not None:
-            staff.base_salary = payload.base_salary
+            staff.base_salary = payload.base_salary or None  # 0 = back to per-achievement
         if payload.is_active is not None:
             staff.is_active = payload.is_active
 

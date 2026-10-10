@@ -11,6 +11,10 @@ away from the registers the team actually works in. Rules:
   (e.g. May salaries transferred in June) - accrual basis
       end of period month:  Dr expense account    Cr 2110 / 2120 (accrued)
       payment date:         Dr 2110 / 2120        Cr 1110 cash   (or 2200)
+* approved expense paid BEFORE the month it belongs to (e.g. August's campaign
+  paid on 1 July) - prepayment
+      payment date:         Dr 1300 prepaid       Cr 1110 cash   (or 2200)
+      first day of period:  Dr expense account    Cr 1300 prepaid
 * partner funding        Dr 1110 cash        Cr 3100 partner funding
 * subscription revenue   Dr 1110 cash (+ Dr 4900 discount)   Cr 4100 revenue (gross)
 * manual entries         exactly as entered (voided ones are ignored)
@@ -37,6 +41,7 @@ from app.modules.finance.revenue.models import FinanceRevenue
 from app.modules.finance.staff.models import StaffMember
 
 CASH = "1110"
+PREPAID = "1300"
 STAFF_ACCRUED = "2110"
 OTHER_ACCRUED = "2120"
 PARTNER_PAYABLE = "2200"
@@ -142,15 +147,25 @@ async def build_entries(db: AsyncSession) -> list[Entry]:
         memo = (e.description or e.vendor or "مصروف").strip()
         paid_from = PARTNER_PAYABLE if (e.paid_by or "").strip() else CASH
         short = _short(e.id)
-        accrue = False
+        accrue = prepaid = False
         if e.period_month:
             try:
                 pe = _month_end(e.period_month)
                 accrue = (pe.year, pe.month) < (e.expense_date.year, e.expense_date.month)
+                prepaid = (pe.year, pe.month) > (e.expense_date.year, e.expense_date.month)
             except ValueError:
                 pe = None
-        if accrue:
-            liab = STAFF_ACCRUED if (e.staff_id or code.startswith(("52", "53", "55"))) else OTHER_ACCRUED
+        if prepaid:
+            ps = pe.replace(day=1)
+            entries.append(Entry(e.expense_date, f"EXP-{short}-P", "expense", str(e.id), f"دفع مقدّم: {memo}",
+                                 [Line(PREPAID, amount, ZERO, memo, party), Line(paid_from, ZERO, amount, memo, party)],
+                                 e.created_at, 4, code))
+            entries.append(Entry(ps, f"EXP-{short}-R", "expense", str(e.id), f"تحميل على الشهر: {memo}",
+                                 [Line(code, amount, ZERO, memo, party), Line(PREPAID, ZERO, amount, memo, party)],
+                                 e.created_at, 3, code))
+        elif accrue:
+            # wages: content team, marketing & graphic, customer service, teachers (5200-5500)
+            liab = STAFF_ACCRUED if (e.staff_id or code.startswith(("52", "53", "54", "55"))) else OTHER_ACCRUED
             entries.append(Entry(pe, f"EXP-{short}-A", "expense", str(e.id), f"استحقاق: {memo}",
                                  [Line(code, amount, ZERO, memo, party), Line(liab, ZERO, amount, memo, party)],
                                  e.created_at, 3, code))

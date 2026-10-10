@@ -41,6 +41,10 @@ export interface BudgetLineWithSpend extends BudgetLine {
   spent_amount: number;
   remaining_amount: number;
   spent_pct: number;
+  /** monthly lines: amount × months running (start month → this month) */
+  budget_to_date: number | null;
+  months_count: number;
+  monthly: { month: string; spent: number; budget: number }[];
 }
 
 export interface BudgetLineCreatePayload {
