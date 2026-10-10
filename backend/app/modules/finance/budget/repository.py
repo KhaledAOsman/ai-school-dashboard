@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.modules.finance.budget.models import BudgetLine, BudgetLineApproval
+from app.modules.finance.budget.models import BudgetLine, BudgetLineApproval, budget_line_categories
+from app.modules.finance.expenses.allocations import A
 from app.modules.finance.expenses.models import Expense
 
 
@@ -44,34 +45,31 @@ class BudgetLineRepository:
     def add_approval_event(self, event: BudgetLineApproval) -> None:
         self.db.add(event)
 
+    def _line_scope(self, budget_line_id: uuid.UUID):
+        """Invoice lines charged to an account the budget line covers (a
+        budget line spans whole account groups, e.g. 5200 + 5300 + 5400)."""
+        cats = select(budget_line_categories.c.category_id).where(
+            budget_line_categories.c.budget_line_id == budget_line_id
+        )
+        return (
+            or_(A.category_id.in_(cats), A.subcategory_id.in_(cats)),
+            A.status != "cancelled",
+            A.is_archived.is_(False),
+        )
+
     async def spent_amount_for(self, budget_line_id: uuid.UUID) -> float:
-        """
-        Sum of all non-cancelled expenses posted against this budget line -
-        includes draft/pending/approved so a manager can see committed
-        spend building up even before final approval, matching how real
-        budget tracking works (a submitted-but-not-yet-approved expense
-        still represents an intent to spend against the line).
-        """
+        """Committed spend (draft/pending/approved, not cancelled) on the
+        accounts this budget line covers, counted per invoice line."""
         result = await self.db.execute(
-            select(func.coalesce(func.sum(Expense.amount), 0)).where(
-                Expense.budget_line_id == budget_line_id,
-                Expense.status != "cancelled",
-                Expense.is_archived.is_(False),
-            )
+            select(func.coalesce(func.sum(A.amount), 0)).where(*self._line_scope(budget_line_id))
         )
         return float(result.scalar_one())
 
     async def spent_by_month(self, budget_line_id: uuid.UUID) -> dict[str, float]:
         """Spend per month the cost belongs to: period_month when set (salaries of
         month N paid in N+1), otherwise the payment month."""
-        month = func.coalesce(Expense.period_month, func.to_char(Expense.expense_date, "YYYY-MM"))
+        month = func.coalesce(A.period_month, func.to_char(A.expense_date, "YYYY-MM"))
         result = await self.db.execute(
-            select(month, func.sum(Expense.amount))
-            .where(
-                Expense.budget_line_id == budget_line_id,
-                Expense.status != "cancelled",
-                Expense.is_archived.is_(False),
-            )
-            .group_by(month)
+            select(month, func.sum(A.amount)).where(*self._line_scope(budget_line_id)).group_by(month)
         )
         return {m: float(v) for m, v in result.all()}

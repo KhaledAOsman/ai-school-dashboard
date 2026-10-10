@@ -11,6 +11,7 @@ class RevenueCreateRequest(BaseModel):
     revenue_date: date
     amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
     discount_amount: Decimal = Field(default=Decimal("0"), ge=0, max_digits=14, decimal_places=2)
+    fees_amount: Decimal = Field(default=Decimal("0"), ge=0, max_digits=14, decimal_places=2)
     currency: str = Field(default="SAR", min_length=3, max_length=3)
     customer_name: str | None = Field(default=None, max_length=200)
     package_name: str | None = Field(default=None, max_length=200)
@@ -24,6 +25,7 @@ class RevenueUpdateRequest(BaseModel):
     revenue_date: date | None = None
     amount: Decimal | None = Field(default=None, gt=0, max_digits=14, decimal_places=2)
     discount_amount: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=2)
+    fees_amount: Decimal | None = Field(default=None, ge=0, max_digits=14, decimal_places=2)
     customer_name: str | None = Field(default=None, max_length=200)
     package_name: str | None = Field(default=None, max_length=200)
     invoice_number: str | None = Field(default=None, max_length=100)
@@ -37,7 +39,8 @@ class RevenueResponse(BaseModel):
     revenue_date: date
     amount: Decimal
     discount_amount: Decimal
-    gross_amount: Decimal
+    fees_amount: Decimal = Decimal("0")
+    gross_amount: Decimal  # amount + fees = what the gateway settled
     currency: str
     revenue_type: str
     customer_name: str | None
@@ -48,3 +51,22 @@ class RevenueResponse(BaseModel):
     note: str | None
     source: str | None
     created_at: datetime
+
+
+class RevenueMonth(BaseModel):
+    month: str
+    subscriptions_count: int
+    subscriptions_paid: Decimal
+    discounts: Decimal
+    collected: Decimal
+    fees: Decimal
+
+
+class RevenueSummary(BaseModel):
+    subscriptions_count: int
+    subscriptions_paid: Decimal   # revenue (net of discounts) from the subscriptions section
+    discounts: Decimal
+    collected: Decimal            # deposited into the bank
+    fees: Decimal                 # gateway commission / bank charges
+    outstanding: Decimal          # paid by students, not yet deposited (account 1200)
+    months: list[RevenueMonth]

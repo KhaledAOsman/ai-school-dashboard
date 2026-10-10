@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { accountingApi, type JournalParams, type ManualJournalPayload, type RevenuePayload } from "@/modules/finance/services/accountingApi";
 
 // Books are derived from live registers, so never serve a stale copy.
-const fresh = { staleTime: 0, refetchOnMount: "always" as const };
+const fresh = { staleTime: 15_000 };
 
 export const useAccountingAccounts = () => useQuery({ queryKey: ["accounting", "accounts"], queryFn: accountingApi.accounts, ...fresh });
 export const useJournal = (params: JournalParams) =>
@@ -36,6 +36,8 @@ export function useVoidJournal() {
 
 export const useRevenue = (params: { date_from?: string; date_to?: string; q?: string }) =>
   useQuery({ queryKey: ["revenue", params], queryFn: () => accountingApi.listRevenue(params), ...fresh });
+export const useRevenueSummary = () =>
+  useQuery({ queryKey: ["revenue", "summary"], queryFn: accountingApi.revenueSummary, ...fresh });
 export function useCreateRevenue() {
   const qc = useQueryClient();
   return useMutation({

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { AlertCircle, ArrowRight, Plus, Trash2, Wallet } from "lucide-react";
+import { AlertCircle, ArrowRight, Plus, Trash2 } from "lucide-react";
 import { translate } from "@/i18n";
 import {
   useCategories,
@@ -9,22 +9,54 @@ import {
   useExpenses,
   useUpdateExpense,
 } from "@/modules/finance/hooks/useFinance";
-import { useBudgetLines, useStaff } from "@/modules/finance/hooks/useBudget";
+import { useStaff, useStaffDepartments } from "@/modules/finance/hooks/useBudget";
+import { usePermission } from "@/permissions/usePermission";
+import { PERMISSIONS } from "@/permissions/constants";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FormField, Input, Select, Textarea } from "@/components/ui/Field";
 import { formatSAR, fromCents, toCents } from "@/modules/finance/utils";
+import type { Category } from "@/modules/finance/services/financeApi";
 
 interface Line {
   label: string;
   amount: string;
+  accountId: string; // "" = the invoice's account
+  staffId?: string | null; // kept as-is when editing (e.g. one payroll transfer split per person)
+  url?: string | null;
+}
+
+const EXTERNAL = "__external";
+const TRANSFER_FEE = "17.25";
+const emptyLine = (): Line => ({ label: "", amount: "", accountId: "" });
+
+/** Accounts a line can be charged to: leaf accounts, grouped under their group. */
+function AccountOptions({ categories }: { categories: Category[] }) {
+  return (
+    <>
+      {categories.map((root) =>
+        root.children.length > 0 ? (
+          <optgroup key={root.id} label={root.code ? `${root.code} · ${root.name}` : root.name}>
+            {root.children.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.code ? `${c.code} · ${c.name}` : c.name}
+              </option>
+            ))}
+          </optgroup>
+        ) : (
+          <option key={root.id} value={root.id}>
+            {root.code ? `${root.code} · ${root.name}` : root.name}
+          </option>
+        )
+      )}
+    </>
+  );
 }
 
 /**
- * One form for both creating and editing a payment / invoice. Everything the
- * bookkeeping needs lives here: invoice number + date + link, who paid, the
- * month it is for, and (for variable pay) itemised lines that must add up to
- * the amount.
+ * One invoice = one actual payment/transfer. A transfer often carries several
+ * costs (salary + bonus + commission + the bank's transfer fee): each one is a
+ * line charged to its own account, and the invoice total is their sum.
  */
 export function ExpenseFormPage() {
   const navigate = useNavigate();
@@ -33,19 +65,19 @@ export function ExpenseFormPage() {
   const isEdit = !!id;
 
   const { data: categories } = useCategories();
-  const { data: approvedBudgetLines } = useBudgetLines({ status: "approved" });
   const { data: staff } = useStaff();
+  const { data: departments } = useStaffDepartments();
   const { data: existing } = useExpense(id);
-  const { data: allExpenses } = useExpenses({ limit: 500 });
+  const { data: recent } = useExpenses({ limit: 200 });
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense(id ?? "");
+  const canApprove = usePermission(PERMISSIONS.FINANCE_EXPENSE_APPROVE);
+  const canSubmit = usePermission(PERMISSIONS.FINANCE_EXPENSE_SUBMIT);
 
-  const [amount, setAmount] = useState("");
   const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [categoryId, setCategoryId] = useState("");
   const [subcategoryId, setSubcategoryId] = useState("");
-  const [budgetLineId, setBudgetLineId] = useState("");
-  const [staffId, setStaffId] = useState(searchParams.get("staff") ?? "");
+  const [payee, setPayee] = useState(searchParams.get("staff") ?? ""); // staff id or EXTERNAL
   const [vendor, setVendor] = useState("");
   const [description, setDescription] = useState("");
   const [notes, setNotes] = useState("");
@@ -54,20 +86,17 @@ export function ExpenseFormPage() {
   const [invoiceUrl, setInvoiceUrl] = useState("");
   const [paidBy, setPaidBy] = useState("");
   const [periodMonth, setPeriodMonth] = useState("");
-  const [itemised, setItemised] = useState(false);
-  const [lines, setLines] = useState<Line[]>([{ label: "", amount: "" }]);
+  const [lines, setLines] = useState<Line[]>([emptyLine()]);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
-  // Editing: fill the form once from the saved expense.
+  // Editing: fill the form once from the saved invoice.
   useEffect(() => {
     if (!isEdit || !existing || loaded) return;
-    setAmount(String(existing.amount));
     setExpenseDate(existing.expense_date);
     setCategoryId(existing.category_id);
     setSubcategoryId(existing.subcategory_id ?? "");
-    setBudgetLineId(existing.budget_line_id ?? "");
-    setStaffId(existing.staff_id ?? "");
+    setPayee(existing.staff_id ?? (existing.vendor ? EXTERNAL : ""));
     setVendor(existing.vendor ?? "");
     setDescription(existing.description ?? "");
     setNotes(existing.notes ?? "");
@@ -77,67 +106,134 @@ export function ExpenseFormPage() {
     setPaidBy(existing.paid_by ?? "");
     setPeriodMonth(existing.period_month ?? "");
     if (existing.breakdown && existing.breakdown.length > 0) {
-      setItemised(true);
-      setLines(existing.breakdown.map((l) => ({ label: l.label, amount: String(l.amount) })));
+      setLines(
+        existing.breakdown.map((l) => ({
+          label: l.label,
+          amount: String(l.amount),
+          accountId: l.account_id ?? "",
+          staffId: l.staff_id ?? null,
+          url: l.url ?? null,
+        }))
+      );
+    } else {
+      setLines([{ label: existing.description ?? "", amount: String(existing.amount), accountId: "" }]);
     }
     setLoaded(true);
   }, [isEdit, existing, loaded]);
 
-  // New payment for a person (from the staff page): prefill the payee name.
+  // A person opened from the staff page: fill in their department's account.
   useEffect(() => {
-    if (isEdit || !staffId || vendor) return;
-    const person = (staff ?? []).find((s) => s.id === staffId);
-    if (person) setVendor(person.full_name);
-  }, [isEdit, staffId, staff, vendor]);
+    if (isEdit || !payee || payee === EXTERNAL || categoryId || !staff || !departments) return;
+    const person = staff.find((s) => s.id === payee);
+    const dept = departments.find((d) => d.id === person?.department_id);
+    if (dept?.category_id) setCategoryId(dept.category_id);
+  }, [isEdit, payee, categoryId, staff, departments]);
 
-  const selectedCategory = categories?.find((c) => c.id === categoryId);
-  const selectedBudgetLine = approvedBudgetLines?.find((b) => b.id === budgetLineId);
+  const roots = useMemo(() => categories ?? [], [categories]);
+  const selectedCategory = roots.find((c) => c.id === categoryId);
+  const byId = useMemo(() => {
+    const m = new Map<string, { name: string; code: string | null }>();
+    for (const r of roots) {
+      m.set(r.id, { name: r.name, code: r.code });
+      for (const c of r.children) m.set(c.id, { name: c.name, code: c.code });
+    }
+    return m;
+  }, [roots]);
+
+  // People are filtered by the chosen account: each department is paid from one account group.
+  const people = useMemo(() => {
+    const all = staff ?? [];
+    if (!categoryId) return all;
+    const depts = new Set((departments ?? []).filter((d) => d.category_id === categoryId).map((d) => d.id));
+    if (depts.size === 0) return all;
+    return all.filter((s) => depts.has(s.department_id) || s.id === payee);
+  }, [staff, departments, categoryId, payee]);
+
+  // Picking a person fills in their department's account.
+  function choosePayee(value: string) {
+    setPayee(value);
+    if (value && value !== EXTERNAL) {
+      const person = (staff ?? []).find((s) => s.id === value);
+      const dept = (departments ?? []).find((d) => d.id === person?.department_id);
+      if (dept?.category_id && dept.category_id !== categoryId) {
+        setCategoryId(dept.category_id);
+        setSubcategoryId("");
+      }
+      if (person) setVendor(person.full_name);
+    }
+  }
+
   const payers = useMemo(
-    () => Array.from(new Set((allExpenses ?? []).map((e) => e.paid_by).filter((v): v is string => !!v))),
-    [allExpenses]
+    () => Array.from(new Set((recent ?? []).map((e) => e.paid_by).filter((v): v is string => !!v))),
+    [recent]
   );
 
-  const linesCents = lines.reduce((sum, l) => sum + toCents(l.amount), 0);
-  const finalAmount = itemised ? fromCents(linesCents) : amount;
+  const totalCents = lines.reduce((sum, l) => sum + toCents(l.amount), 0);
+  const total = fromCents(totalCents);
+  const mainAccount = byId.get(subcategoryId || categoryId);
+  const mainAccountName = mainAccount ? (mainAccount.code ? `${mainAccount.code} · ${mainAccount.name}` : mainAccount.name) : "حساب الفاتورة";
 
   function setLine(index: number, patch: Partial<Line>) {
     setLines((prev) => prev.map((l, i) => (i === index ? { ...l, ...patch } : l)));
   }
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
+  function addFeeLine() {
+    const feeAccount = roots.flatMap((r) => r.children).find((c) => c.code === "5710");
+    setLines((prev) => [...prev, { label: "رسوم التحويل الدولي", amount: TRANSFER_FEE, accountId: feeAccount?.id ?? "" }]);
+  }
 
-    const cleanLines = lines.filter((l) => l.label.trim() || l.amount.trim());
-    if (itemised) {
-      if (cleanLines.length === 0 || cleanLines.some((l) => !l.label.trim() || l.amount.trim() === "")) {
-        setError("كل بند لازم يكون له اسم ومبلغ");
-        return;
-      }
+  async function save(mode: "draft" | "submit" | "approve") {
+    setError(null);
+    if (!categoryId) {
+      setError("اختر الحساب");
+      return;
     }
-    if (!(toCents(finalAmount) > 0)) {
-      setError("المبلغ لازم يكون أكبر من صفر");
+    const clean = lines.filter((l) => l.label.trim() || l.amount.trim());
+    if (clean.length === 0 || clean.some((l) => l.amount.trim() === "")) {
+      setError("كل بند لازم يكون له مبلغ");
+      return;
+    }
+    if (!(totalCents > 0)) {
+      setError("إجمالي الفاتورة لازم يكون أكبر من صفر");
+      return;
+    }
+    if (payee === EXTERNAL && !vendor.trim()) {
+      setError("اكتب اسم الجهة");
       return;
     }
 
-    // When editing, an empty string clears a text field; when creating, send null.
+    const person = payee && payee !== EXTERNAL ? (staff ?? []).find((s) => s.id === payee) : undefined;
+    // A single plain line is just the invoice amount; otherwise keep every line with its account.
+    const single = clean.length === 1 && !clean[0].accountId && !clean[0].staffId && !clean[0].url;
+    const breakdown = single
+      ? isEdit
+        ? []
+        : null
+      : clean.map((l) => ({
+          label: l.label.trim() || description.trim() || "بند",
+          amount: fromCents(toCents(l.amount)),
+          account_id: l.accountId || null,
+          staff_id: l.staffId ?? null,
+          url: l.url ?? null,
+        }));
+
     const text = (v: string) => (isEdit ? v : v.trim() || null);
+    const desc = description.trim() || (single ? clean[0].label.trim() : "");
     const payload = {
-      amount: finalAmount,
+      amount: total,
       expense_date: expenseDate,
       category_id: categoryId,
       subcategory_id: subcategoryId || null,
-      budget_line_id: budgetLineId || null,
-      staff_id: staffId || null,
-      vendor: text(vendor),
-      description: text(description),
+      staff_id: person ? person.id : null,
+      vendor: person ? person.full_name : payee === EXTERNAL ? vendor.trim() : text(""),
+      description: text(desc),
       notes: text(notes),
       invoice_number: text(invoiceNumber),
       invoice_url: text(invoiceUrl),
       paid_by: text(paidBy),
       ...(invoiceDate ? { invoice_date: invoiceDate } : {}),
       ...(periodMonth ? { period_month: periodMonth } : {}),
-      breakdown: itemised ? cleanLines.map((l) => ({ label: l.label.trim(), amount: fromCents(toCents(l.amount)) })) : isEdit ? [] : null,
+      breakdown,
     };
 
     try {
@@ -145,19 +241,24 @@ export function ExpenseFormPage() {
         await updateExpense.mutateAsync({ ...payload, change_reason: "تعديل من نموذج الفاتورة" });
         navigate(`/finance/expenses/${id}`);
       } else {
-        const created = await createExpense.mutateAsync(payload);
+        const created = await createExpense.mutateAsync({
+          ...payload,
+          approve_now: mode === "approve",
+          submit_now: mode === "submit",
+        });
         navigate(`/finance/expenses/${created.id}`);
       }
     } catch (err) {
-      const message = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
-      setError(message ?? translate("ar", "common_error"));
+      const data = (err as { response?: { data?: { detail?: unknown; error?: { message?: string } } } })?.response?.data;
+      const detail = typeof data?.detail === "string" ? data.detail : undefined;
+      setError(data?.error?.message ?? detail ?? translate("ar", "common_error"));
     }
   }
 
   const saving = createExpense.isPending || updateExpense.isPending;
 
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-3xl">
       <button
         onClick={() => navigate(-1)}
         className="mb-4 flex items-center gap-1.5 text-sm font-medium text-ink-500 transition-colors hover:text-ink-800"
@@ -166,54 +267,149 @@ export function ExpenseFormPage() {
         رجوع
       </button>
 
-      <h1 className="mb-6 text-[26px] font-bold tracking-tight text-ink-900">
-        {isEdit ? "تعديل الفاتورة / الدفعة" : translate("ar", "expense_new")}
-      </h1>
+      <h1 className="mb-6 text-[26px] font-bold tracking-tight text-ink-900">{isEdit ? "تعديل الفاتورة" : "فاتورة / تحويل جديد"}</h1>
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          save(isEdit ? "draft" : canApprove ? "approve" : canSubmit ? "submit" : "draft");
+        }}
+        className="space-y-5"
+      >
         <Card>
-          <h2 className="mb-4 text-[16px] font-bold text-ink-900">بيانات الفاتورة</h2>
+          <h2 className="mb-4 text-[16px] font-bold text-ink-900">الحساب والمستفيد</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="رقم الفاتورة (اختياري)">
-              <Input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} className="ltr-content" />
+            <FormField label="الحساب">
+              <Select
+                required
+                value={categoryId}
+                onChange={(e) => {
+                  setCategoryId(e.target.value);
+                  setSubcategoryId("");
+                }}
+              >
+                <option value="">اختر الحساب</option>
+                {roots.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.code ? `${c.code} · ${c.name}` : c.name}
+                  </option>
+                ))}
+              </Select>
             </FormField>
-            <FormField label="تاريخ الفاتورة (اختياري)">
-              <Input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className="ltr-content" />
-            </FormField>
+            {selectedCategory && selectedCategory.children.length > 0 && (
+              <FormField label="الحساب الفرعي">
+                <Select value={subcategoryId} onChange={(e) => setSubcategoryId(e.target.value)}>
+                  <option value="">—</option>
+                  {selectedCategory.children.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.code ? `${c.code} · ${c.name}` : c.name}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+            )}
           </div>
-          <div className="mt-4">
-            <FormField label="رابط الفاتورة / إيصال التحويل (اختياري)" hint="رابط Drive أو أي مكان محفوظ فيه الفاتورة. تقدر كمان ترفع الملف من صفحة المصروف بعد الحفظ.">
-              <Input type="url" value={invoiceUrl} onChange={(e) => setInvoiceUrl(e.target.value)} className="ltr-content text-left" placeholder="https://" />
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField label="المستفيد" hint={categoryId ? "بيظهر فريق الحساب المختار بس" : undefined}>
+              <Select value={payee} onChange={(e) => choosePayee(e.target.value)}>
+                <option value="">—</option>
+                {people.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.full_name} — {s.department_name}
+                  </option>
+                ))}
+                <option value={EXTERNAL}>جهة خارجية (اشتراك، مورّد…)</option>
+              </Select>
             </FormField>
+            {payee === EXTERNAL && (
+              <FormField label="اسم الجهة">
+                <Input value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder="مثال: Zoom" />
+              </FormField>
+            )}
           </div>
         </Card>
 
         <Card>
-          <h2 className="mb-4 text-[16px] font-bold text-ink-900">الدفع</h2>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-[16px] font-bold text-ink-900">بنود الفاتورة</h2>
+            <p className="text-[13px] text-ink-600">
+              الإجمالي: <span className="ltr-content text-[15px] font-bold text-ink-900">{formatSAR(total)}</span>
+            </p>
+          </div>
+          <div className="space-y-3">
+            {lines.map((line, i) => (
+              <div key={i} className="grid grid-cols-12 gap-2 rounded-lg border border-ink-100 p-2.5 sm:border-0 sm:p-0">
+                <Input
+                  value={line.label}
+                  onChange={(e) => setLine(i, { label: e.target.value })}
+                  placeholder="البند (راتب، بونص، 7 فيديو…)"
+                  className="col-span-12 sm:col-span-4"
+                />
+                <div className="col-span-12 sm:col-span-5">
+                  <Select value={line.accountId} onChange={(e) => setLine(i, { accountId: e.target.value })} title="الحساب اللي البند بيتحمّل عليه">
+                    <option value="">{mainAccountName}</option>
+                    <AccountOptions categories={roots} />
+                  </Select>
+                </div>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={line.amount}
+                  onChange={(e) => setLine(i, { amount: e.target.value })}
+                  placeholder="المبلغ"
+                  className="ltr-content col-span-9 sm:col-span-2"
+                />
+                <button
+                  type="button"
+                  onClick={() => setLines((prev) => (prev.length === 1 ? [emptyLine()] : prev.filter((_, j) => j !== i)))}
+                  className="col-span-3 flex items-center justify-center rounded-lg text-ink-400 transition-colors hover:bg-ink-50 hover:text-danger-600 sm:col-span-1"
+                  title="حذف البند"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-4">
+            <button
+              type="button"
+              onClick={() => setLines((prev) => [...prev, emptyLine()])}
+              className="link-underline flex items-center gap-1.5 text-[13px] font-medium text-brand-600"
+            >
+              <Plus size={14} />
+              إضافة بند
+            </button>
+            <button type="button" onClick={addFeeLine} className="link-underline flex items-center gap-1.5 text-[13px] font-medium text-brand-600">
+              <Plus size={14} />
+              رسوم تحويل دولي (17.25)
+            </button>
+          </div>
+          <p className="mt-2 text-[12.5px] text-ink-500">الخصم يتسجّل بالسالب (مثال: ‎-50).</p>
+        </Card>
+
+        <Card>
+          <h2 className="mb-4 text-[16px] font-bold text-ink-900">التحويل وإثباته</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label={itemised ? "المبلغ (مجموع البنود)" : translate("ar", "expense_amount")}>
-              <Input
-                type="number"
-                step="0.01"
-                min="0.01"
-                required={!itemised}
-                readOnly={itemised}
-                value={itemised ? finalAmount : amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="ltr-content"
-                placeholder="0.00"
-              />
-            </FormField>
-            <FormField label="تاريخ الدفع">
+            <FormField label="تاريخ التحويل">
               <Input type="date" required value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} className="ltr-content" />
             </FormField>
-          </div>
-
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="الشهر اللي الدفعة عنه (اختياري)" hint="مثلاً راتب شهر 8 اتدفع في سبتمبر">
+            <FormField label="الشهر اللي الدفعة عنه" hint="مثلاً راتب شهر 8 اتحوّل في سبتمبر">
               <Input type="month" value={periodMonth} onChange={(e) => setPeriodMonth(e.target.value)} className="ltr-content" />
             </FormField>
-            <FormField label="مين دفع؟ (اختياري)" hint="سيبه فاضي لو دُفع من حساب المشروع">
+          </div>
+          <div className="mt-4">
+            <FormField label="رابط الفاتورة / إثبات التحويل" hint="رابط Drive. وتقدر ترفع الملف نفسه من صفحة الفاتورة بعد الحفظ.">
+              <Input type="url" value={invoiceUrl} onChange={(e) => setInvoiceUrl(e.target.value)} className="ltr-content text-left" placeholder="https://" />
+            </FormField>
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <FormField label="رقم الفاتورة">
+              <Input value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} className="ltr-content" />
+            </FormField>
+            <FormField label="تاريخ الفاتورة">
+              <Input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className="ltr-content" />
+            </FormField>
+            <FormField label="دفعه شريك؟" hint="فاضي = من حساب المشروع">
               <Input value={paidBy} onChange={(e) => setPaidBy(e.target.value)} list="payers-list" placeholder="اسم الشريك" />
               <datalist id="payers-list">
                 {payers.map((p) => (
@@ -222,151 +418,14 @@ export function ExpenseFormPage() {
               </datalist>
             </FormField>
           </div>
-
-          <div className="mt-5 border-t border-ink-100 pt-4">
-            <label className="flex cursor-pointer items-center gap-2.5 text-[14px] font-medium text-ink-800">
-              <input
-                type="checkbox"
-                checked={itemised}
-                onChange={(e) => {
-                  setItemised(e.target.checked);
-                  if (e.target.checked && lines.length === 1 && !lines[0].label && !lines[0].amount && amount) {
-                    setLines([{ label: "", amount }]);
-                  }
-                }}
-                className="h-4 w-4 accent-brand-600"
-              />
-              تقسيم المبلغ إلى بنود (أجر أساسي، فيديوهات، بونص، خصم…)
-            </label>
-
-            {itemised && (
-              <div className="mt-4 space-y-2.5">
-                {lines.map((line, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <Input
-                      value={line.label}
-                      onChange={(e) => setLine(i, { label: e.target.value })}
-                      placeholder="البند (مثال: 7 فيديو)"
-                      className="flex-1"
-                    />
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={line.amount}
-                      onChange={(e) => setLine(i, { amount: e.target.value })}
-                      placeholder="المبلغ"
-                      className="ltr-content w-32"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setLines((prev) => (prev.length === 1 ? prev : prev.filter((_, j) => j !== i)))}
-                      className="rounded-lg p-2 text-ink-400 transition-colors hover:bg-ink-50 hover:text-danger-600"
-                      title="حذف البند"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setLines((prev) => [...prev, { label: "", amount: "" }])}
-                    className="link-underline flex items-center gap-1.5 text-[13px] font-medium text-brand-600"
-                  >
-                    <Plus size={14} />
-                    إضافة بند
-                  </button>
-                  <p className="text-[13px] text-ink-600">
-                    المجموع: <span className="ltr-content font-bold text-ink-900">{formatSAR(finalAmount)}</span>
-                  </p>
-                </div>
-                <p className="text-[12.5px] text-ink-500">الخصم يتسجّل بمبلغ بالسالب (مثال: -50).</p>
-              </div>
-            )}
-          </div>
         </Card>
 
         <Card>
-          <h2 className="mb-4 text-[16px] font-bold text-ink-900">التصنيف والمستفيد</h2>
           <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField label={translate("ar", "expense_category")}>
-                <Select
-                  required
-                  value={categoryId}
-                  onChange={(e) => {
-                    setCategoryId(e.target.value);
-                    setSubcategoryId("");
-                  }}
-                >
-                  <option value="">اختر حساب</option>
-                  {(categories ?? []).map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.code ? `${c.code} · ${c.name}` : c.name}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
-
-              {selectedCategory && selectedCategory.children.length > 0 && (
-                <FormField label={translate("ar", "expense_subcategory")}>
-                  <Select value={subcategoryId} onChange={(e) => setSubcategoryId(e.target.value)}>
-                    <option value="">—</option>
-                    {selectedCategory.children.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.code ? `${c.code} · ${c.name}` : c.name}
-                      </option>
-                    ))}
-                  </Select>
-                </FormField>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField label="الشخص (لو الدفعة لفرد في الفريق)" hint="بيربط الدفعة بسجل الشخص ويظهر في صفحة الموظفين">
-                <Select
-                  value={staffId}
-                  onChange={(e) => {
-                    setStaffId(e.target.value);
-                    const person = (staff ?? []).find((s) => s.id === e.target.value);
-                    if (person && !vendor) setVendor(person.full_name);
-                  }}
-                >
-                  <option value="">بدون ربط بشخص</option>
-                  {(staff ?? []).map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.full_name} — {s.department_name}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
-              <FormField label="المستفيد / المورّد">
-                <Input value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder="الاسم أو الشركة" />
-              </FormField>
-            </div>
-
-            <FormField label="بند الميزانية (اختياري)" hint="يظهر هنا فقط البنود المعتمدة من المدير">
-              <Select value={budgetLineId} onChange={(e) => setBudgetLineId(e.target.value)}>
-                <option value="">بدون ربط بميزانية</option>
-                {(approvedBudgetLines ?? []).map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} — متبقي {formatSAR(b.remaining_amount)}
-                  </option>
-                ))}
-              </Select>
+            <FormField label="الوصف">
+              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="مثال: تحويل راتب شهر 8 — آية" />
             </FormField>
-
-            {selectedBudgetLine && (
-              <div className="flex items-center gap-2 rounded-lg bg-brand-50 px-3.5 py-2.5 text-xs text-brand-700 ring-1 ring-inset ring-brand-200/70">
-                <Wallet size={14} className="shrink-0" />
-                هذا المصروف سيُخصم من ميزانية "{selectedBudgetLine.name}" — المتبقي حاليًا {formatSAR(selectedBudgetLine.remaining_amount)}
-              </div>
-            )}
-
-            <FormField label={translate("ar", "expense_description")}>
-              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} placeholder="وصف مختصر" />
-            </FormField>
-            <FormField label="ملاحظات (اختياري)">
+            <FormField label="ملاحظات">
               <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
             </FormField>
           </div>
@@ -379,10 +438,27 @@ export function ExpenseFormPage() {
           </div>
         )}
 
-        <div className="flex gap-3">
-          <Button type="submit" variant="primary" isLoading={saving}>
-            {translate("ar", "common_save")}
-          </Button>
+        <div className="flex flex-wrap gap-3">
+          {isEdit ? (
+            <Button type="submit" variant="primary" isLoading={saving}>
+              حفظ التعديلات
+            </Button>
+          ) : (
+            <>
+              {canApprove ? (
+                <Button type="button" variant="primary" isLoading={saving} onClick={() => save("approve")}>
+                  حفظ واعتماد
+                </Button>
+              ) : canSubmit ? (
+                <Button type="button" variant="primary" isLoading={saving} onClick={() => save("submit")}>
+                  حفظ وإرسال للاعتماد
+                </Button>
+              ) : null}
+              <Button type="button" variant="outline" disabled={saving} onClick={() => save("draft")}>
+                حفظ كمسودة
+              </Button>
+            </>
+          )}
           <Button type="button" variant="ghost" onClick={() => navigate(-1)}>
             {translate("ar", "common_cancel")}
           </Button>

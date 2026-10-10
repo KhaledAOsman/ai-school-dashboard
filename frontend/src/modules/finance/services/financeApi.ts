@@ -17,10 +17,14 @@ export interface Category {
   children: Category[];
 }
 
-/** One itemised line of a payment (e.g. "7 فيديو" = 210, "خصم" = -50). */
+/** One line of an invoice/transfer (e.g. "راتب شهر 8" = 700, "بونص" = 50, "رسوم التحويل" = 17.25).
+ *  Each line may be charged to its own account; without one it uses the invoice's account. */
 export interface BreakdownLine {
   label: string;
   amount: string;
+  account_id?: string | null;
+  staff_id?: string | null;
+  url?: string | null;
 }
 
 export interface Expense {
@@ -110,6 +114,10 @@ export interface ExpenseCreatePayload {
   paid_by?: string | null;
   period_month?: string | null;
   breakdown?: BreakdownLine[] | null;
+  /** create only: save and approve in one step (needs the approve permission) */
+  approve_now?: boolean;
+  /** create only: save and send for approval */
+  submit_now?: boolean;
 }
 
 export interface AccountTotal {

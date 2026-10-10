@@ -7,6 +7,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.modules.finance.expenses.allocations import A
 from app.modules.finance.expenses.models import Expense, ExpenseApproval, ExpenseVersion
 
 
@@ -46,10 +47,11 @@ class ExpenseRepository:
             stmt = stmt.where(Expense.is_archived.is_(False))
         if status:
             stmt = stmt.where(Expense.status == status)
+        # an invoice matches an account when ANY of its lines is charged to it
         if category_id:
-            stmt = stmt.where(Expense.category_id == category_id)
+            stmt = stmt.where(Expense.id.in_(select(A.expense_id).where(A.category_id == category_id)))
         if subcategory_id:
-            stmt = stmt.where(Expense.subcategory_id == subcategory_id)
+            stmt = stmt.where(Expense.id.in_(select(A.expense_id).where(A.subcategory_id == subcategory_id)))
         if date_from:
             stmt = stmt.where(Expense.expense_date >= date_from)
         if date_to:
@@ -57,7 +59,7 @@ class ExpenseRepository:
         if created_by:
             stmt = stmt.where(Expense.created_by == created_by)
         if staff_id:
-            stmt = stmt.where(Expense.staff_id == staff_id)
+            stmt = stmt.where(Expense.id.in_(select(A.expense_id).where(A.staff_id == staff_id)))
         if period_month:
             stmt = stmt.where(Expense.period_month == period_month)
         if paid_by:

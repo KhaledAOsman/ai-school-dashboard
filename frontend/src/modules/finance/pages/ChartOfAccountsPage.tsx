@@ -99,12 +99,23 @@ export function ChartOfAccountsPage() {
   const { data: totals } = useAccountTotals();
   const { data: funding } = useFunding();
   const { data: ledgerAccounts } = useAccountingAccounts();
+  // Where each system account's movements come from (nobody posts to them by hand).
+  const SOURCE: Record<string, string> = {
+    "1110": "التمويل + الإيداعات − الفواتير المدفوعة",
+    "1200": "الاشتراكات المدفوعة − الإيداعات وعمولاتها",
+    "1300": "فواتير اتدفعت قبل الشهر اللي تخصه",
+    "2110": "أجور شهر لسه متحوّلتش",
+    "2120": "مصروفات شهر لسه متدفعتش",
+    "2200": "فواتير دفعها شريك من جيبه",
+    "2300": "اشتراكات مدفوعة مقدّمًا",
+    "4100": "قسم الاشتراكات (السعر قبل الخصم)",
+    "4900": "خصومات الاشتراكات",
+  };
   const otherAccounts = (ledgerAccounts ?? []).filter((a) => a.type !== "expense" && a.code !== "3100" && a.code !== "3000");
 
   const roots = useMemo(() => [...(categories ?? [])].sort((a, b) => (a.code ?? "~").localeCompare(b.code ?? "~")), [categories]);
   const rows = totals ?? [];
   const grand = rows.reduce((s, r) => s + toCents(r.total), 0);
-  const grandCount = rows.reduce((s, r) => s + r.count, 0);
 
   const fundingRows = funding ?? [];
   const fundingTotal = fundingRows.reduce((s, f) => s + toCents(f.amount), 0);
@@ -134,7 +145,7 @@ export function ChartOfAccountsPage() {
               <AccountNode key={c.id} account={c} totals={rows} defaultOpen={i === 0} />
             ))}
             <div className="mt-2 flex items-center justify-between rounded-lg bg-ink-50 px-3 py-3">
-              <span className="text-sm font-semibold text-ink-700">إجمالي المصروفات ({grandCount} دفعة)</span>
+              <span className="text-sm font-semibold text-ink-700">إجمالي المصروفات</span>
               <Amount cents={grand} bold />
             </div>
           </>
@@ -143,7 +154,7 @@ export function ChartOfAccountsPage() {
 
       <Card className="mb-5 p-5">
         <div className="mb-1 flex items-center justify-between px-2 pb-2 text-xs font-semibold text-ink-500">
-          <span>الأصول والخصوم والإيرادات (1000 – 4000)</span>
+          <span>حسابات النظام (1000 – 4000)</span>
           <span>الرصيد</span>
         </div>
         {otherAccounts.map((a) => (
@@ -155,8 +166,10 @@ export function ChartOfAccountsPage() {
           >
             <div className="flex min-w-0 items-center gap-2.5">
               <CodeTag code={a.code} />
-              <span className={`truncate text-sm ${a.has_children ? "font-semibold text-ink-900" : "font-medium text-ink-800"}`}>{a.name}</span>
-              <span className="shrink-0 text-xs text-ink-400">{a.type_label}</span>
+              <span className="min-w-0">
+                <span className={`block truncate text-sm ${a.has_children ? "font-semibold text-ink-900" : "font-medium text-ink-800"}`}>{a.name}</span>
+                {SOURCE[a.code] && <span className="block truncate text-[12px] text-ink-400">{SOURCE[a.code]}</span>}
+              </span>
             </div>
             {!a.has_children || Number(a.balance) !== 0 ? <Money v={a.balance} dash bold={a.has_children} /> : null}
           </Link>

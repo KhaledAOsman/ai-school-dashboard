@@ -29,7 +29,7 @@ export function CashFlowPage() {
 
   return (
     <div>
-      <ReportHeader title="التدفقات النقدية" subtitle="حركة حساب التشغيل 1110 بالشهر — بتاريخ الدفع الفعلي" onExport={data ? () => exportCsv(data) : undefined} />
+      <ReportHeader title="التدفقات النقدية" subtitle="حركة النقدية في حساب التشغيل — الطريقة المباشرة" onExport={data ? () => exportCsv(data) : undefined} />
       <DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} />
       <Card className="overflow-hidden p-0">
         {isLoading || !data ? (

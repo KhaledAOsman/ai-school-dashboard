@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth.dependencies import CurrentUser
@@ -86,8 +86,17 @@ async def create_expense(
     user: CurrentUser = Depends(require_permission(FINANCE_EXPENSE_CREATE)),
     db: AsyncSession = Depends(get_db),
 ):
+    if payload.approve_now and FINANCE_EXPENSE_APPROVE not in user.permissions:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "ليس لديك صلاحية اعتماد المصروفات")
+    if payload.submit_now and FINANCE_EXPENSE_SUBMIT not in user.permissions:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "ليس لديك صلاحية إرسال المصروفات للاعتماد")
     service = ExpenseService(db)
-    return await service.create(payload=payload, user_id=user.id)
+    expense = await service.create(payload=payload, user_id=user.id)
+    if payload.approve_now or payload.submit_now:
+        await service.submit(expense_id=expense.id, user_id=user.id)
+    if payload.approve_now:
+        await service.approve(expense_id=expense.id, user_id=user.id)
+    return await service.get(expense_id=expense.id)
 
 
 @router.patch("/{expense_id}", response_model=ExpenseResponse)

@@ -10,6 +10,7 @@ import {
 import { StatusBadge } from "@/modules/finance/components/StatusBadge";
 import { Card, CardHeader, CardTitle, CardSubtitle } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { sharesTo100 } from "@/modules/finance/utils";
 
 const PIE_COLORS = ["#6d3af2", "#9f70ff", "#bea3ff", "#d9ccff", "#ff8a3d", "#ffcfa1", "#5a26d6", "#ebe4ff"];
 
@@ -89,11 +90,11 @@ export function FinanceOverviewPage() {
 
             <div className="lg:col-span-3">
               <div className="divide-y divide-ink-100">
-                {rows
-                  .slice()
-                  .sort((a, b) => Number(b.total) - Number(a.total))
-                  .map((row, i) => {
-                    const pct = grandTotal > 0 ? (Number(row.total) / grandTotal) * 100 : 0;
+                {(() => {
+                  const sorted = rows.slice().sort((a, b) => Number(b.total) - Number(a.total));
+                  const pcts = sharesTo100(sorted.map((r) => Number(r.total)));
+                  return sorted.map((row, i) => {
+                    const pct = pcts[i];
                     return (
                       <Link
                         key={row.category_id}
@@ -106,12 +107,13 @@ export function FinanceOverviewPage() {
                           <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-ink-100">
                             <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
                           </div>
-                          <span className="ltr-content w-9 shrink-0 text-xs text-ink-500">{pct.toFixed(0)}%</span>
+                          <span className="ltr-content w-11 shrink-0 text-xs text-ink-500">{pct.toFixed(1)}%</span>
                         </div>
                         <span className="ltr-content w-24 shrink-0 text-left text-[15px] font-semibold text-ink-900">{formatSAR(row.total)}</span>
                       </Link>
                     );
-                  })}
+                  });
+                })()}
               </div>
               <div className="mt-2 flex items-center justify-between border-t border-ink-100 px-2 pt-3">
                 <span className="text-xs font-medium text-ink-500">الإجمالي</span>

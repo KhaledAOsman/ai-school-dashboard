@@ -23,7 +23,7 @@ export function TrialBalancePage() {
 
   return (
     <div>
-      <ReportHeader title="ميزان المراجعة" subtitle="حركة وأرصدة كل الحسابات — لازم إجمالي المدين يساوي إجمالي الدائن" onExport={exportCsv} />
+      <ReportHeader title="ميزان المراجعة" subtitle="حركة وأرصدة الحسابات" onExport={exportCsv} />
       <DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} />
       <Card className="overflow-hidden p-0">
         {isLoading || !data ? (
@@ -80,7 +80,6 @@ export function TrialBalancePage() {
           {data.balanced ? "الميزان متوازن" : "الميزان غير متوازن — راجع القيود"}
         </p>
       )}
-      <p className="mt-1 text-xs text-ink-500">الحسابات التجميعية (بخط عريض) بتعرض مجموع الحسابات اللي تحتها؛ الإجمالي السفلي محسوب من الحسابات الفرعية فقط عشان ما يتكررش.</p>
     </div>
   );
 }

@@ -1,4 +1,9 @@
-"""Subscription income (what students pay). Feeds the ledger as revenue."""
+"""Collections: money a payment gateway (or a bank transfer) actually deposited
+into the operating account for paid subscriptions, after its commission.
+
+The revenue itself comes from the subscriptions section (each paid
+subscription); a collection only moves it from "held by the gateway" (1200)
+to the bank (1110), with the commission booked as an expense (5810)."""
 from __future__ import annotations
 
 import uuid
@@ -19,7 +24,9 @@ class FinanceRevenue(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # amount = what was actually received; discount_amount = price reduction
     # given on top of it (gross price = amount + discount_amount).
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    discount_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0, nullable=False)
+    discount_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0, nullable=False)  # legacy, unused
+    # gateway commission / bank charges withheld before the deposit
+    fees_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0, nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="SAR", nullable=False)
     revenue_type: Mapped[str] = mapped_column(String(30), default="subscription", nullable=False)
     customer_name: Mapped[str | None] = mapped_column(String(200), nullable=True)

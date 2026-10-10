@@ -45,8 +45,8 @@ function DetailRow({ icon: Icon, label, value }: { icon: LucideIcon; label: stri
 }
 
 export function ExpenseDetailPage() {
-  const { expenseId } = useParams<{ expenseId: string }>();
-  const id = expenseId as string;
+  const { id: routeId } = useParams<{ id: string }>();
+  const id = routeId as string;
   const navigate = useNavigate();
 
   const { data: expense, isLoading } = useExpense(id);
@@ -130,7 +130,7 @@ export function ExpenseDetailPage() {
         <Card>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <DetailRow icon={CalendarDays} label="تاريخ الدفع" value={<span className="ltr-content">{expense.expense_date}</span>} />
-            <DetailRow icon={Store} label="المستفيد / المورّد" value={expense.vendor ?? "—"} />
+            <DetailRow icon={Store} label="المستفيد" value={staffName ?? expense.vendor ?? "—"} />
             <DetailRow icon={FileText} label="رقم الفاتورة" value={<span className="ltr-content">{expense.invoice_number ?? "—"}</span>} />
             <DetailRow icon={CalendarDays} label="تاريخ الفاتورة" value={<span className="ltr-content">{expense.invoice_date ?? "—"}</span>} />
             <DetailRow
@@ -144,7 +144,7 @@ export function ExpenseDetailPage() {
             />
             <DetailRow icon={CalendarDays} label="الدفعة عن شهر" value={expense.period_month ? periodLabel(expense.period_month) : "—"} />
             <DetailRow icon={UserRound} label="مين دفع" value={expense.paid_by ?? "حساب المشروع"} />
-            <DetailRow icon={UserRound} label="الشخص المرتبط" value={staffName ?? "—"} />
+            <DetailRow icon={FileText} label="طريقة الدفع" value={expense.payment_method ?? "—"} />
           </div>
           {expense.invoice_url && (
             <div className="mt-4 border-t border-ink-100 pt-4">
@@ -171,15 +171,33 @@ export function ExpenseDetailPage() {
         {expense.breakdown && expense.breakdown.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>تفاصيل المبلغ</CardTitle>
+              <CardTitle>بنود الفاتورة</CardTitle>
             </CardHeader>
             <div className="divide-y divide-ink-100">
-              {expense.breakdown.map((line, i) => (
-                <div key={i} className="flex items-center justify-between py-2.5 text-sm">
-                  <span className="text-ink-800">{line.label}</span>
-                  <span className={`ltr-content font-semibold ${Number(line.amount) < 0 ? "text-danger-700" : "text-ink-800"}`}>{formatSAR(line.amount)}</span>
-                </div>
-              ))}
+              {expense.breakdown.map((line, i) => {
+                const acc = line.account_id ? catMap.get(line.account_id) : catMap.get(expense.subcategory_id ?? expense.category_id);
+                const who = line.staff_id ? (staff ?? []).find((m) => m.id === line.staff_id)?.full_name : undefined;
+                return (
+                  <div key={i} className="flex items-start justify-between gap-3 py-2.5 text-sm">
+                    <div className="min-w-0">
+                      <p className="text-ink-800">{line.label}</p>
+                      <p className="text-[12px] text-ink-400">
+                        {accountLabel(acc)}
+                        {who && <> · {who}</>}
+                        {line.url && (
+                          <>
+                            {" · "}
+                            <a href={line.url} target="_blank" rel="noreferrer" className="font-medium text-brand-600">
+                              المستند
+                            </a>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                    <span className={`ltr-content shrink-0 font-semibold ${Number(line.amount) < 0 ? "text-danger-700" : "text-ink-800"}`}>{formatSAR(line.amount)}</span>
+                  </div>
+                );
+              })}
               <div className="flex items-center justify-between pt-3 text-sm font-bold text-ink-900">
                 <span>الإجمالي</span>
                 <span className="ltr-content">{formatSAR(expense.amount)}</span>
@@ -193,6 +211,18 @@ export function ExpenseDetailPage() {
           {expense.status === "draft" && canSubmit && (
             <Button variant="primary" onClick={() => submitExpense.mutate()}>
               {translate("ar", "expense_submit_for_approval")}
+            </Button>
+          )}
+          {expense.status === "draft" && canApprove && (
+            <Button
+              variant="success"
+              isLoading={submitExpense.isPending || approveExpense.isPending}
+              onClick={async () => {
+                await submitExpense.mutateAsync();
+                approveExpense.mutate();
+              }}
+            >
+              {translate("ar", "expense_approve")}
             </Button>
           )}
           {expense.status === "pending_approval" && canApprove && (

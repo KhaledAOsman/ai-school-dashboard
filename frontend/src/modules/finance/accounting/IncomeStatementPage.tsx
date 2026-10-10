@@ -71,7 +71,7 @@ export function IncomeStatementPage() {
 
   return (
     <div>
-      <ReportHeader title="قائمة الدخل" subtitle="الإيرادات والمصروفات بالشهر اللي تخصه (أساس الاستحقاق)" onExport={data ? () => exportCsv(data) : undefined} />
+      <ReportHeader title="قائمة الدخل" subtitle="على أساس الاستحقاق" onExport={data ? () => exportCsv(data) : undefined} />
       <DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} />
       <Card className="overflow-hidden p-0">
         {isLoading || !data ? (
@@ -102,7 +102,7 @@ export function IncomeStatementPage() {
           </div>
         )}
       </Card>
-      <p className="mt-3 text-xs text-ink-500">الأرقام بين أقواس = سالب. الراتب بيظهر في الشهر اللي يخصه مش شهر التحويل.</p>
+      <p className="mt-3 text-xs text-ink-500">الأرقام بين أقواس سالبة.</p>
     </div>
   );
 }

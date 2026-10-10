@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 class StaffDepartmentCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=150)
     display_order: int = 0
+    category_id: uuid.UUID | None = None
 
 
 class StaffDepartmentResponse(BaseModel):
@@ -17,6 +18,7 @@ class StaffDepartmentResponse(BaseModel):
     name: str
     display_order: int
     is_archived: bool
+    category_id: uuid.UUID | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

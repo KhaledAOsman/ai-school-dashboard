@@ -99,6 +99,8 @@ export interface StaffDepartment {
   name: string;
   display_order: number;
   is_archived: boolean;
+  /** expense account (group) this department is paid from */
+  category_id: string | null;
   created_at: string;
 }
 

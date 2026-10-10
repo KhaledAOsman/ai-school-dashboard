@@ -15,6 +15,7 @@ from sqlalchemy import TIMESTAMP
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.finance.categories.models import ExpenseCategory
+from app.modules.finance.expenses.allocations import A, expense_allocations
 from app.modules.finance.expenses.models import Expense
 
 
@@ -66,21 +67,23 @@ class FinanceReportService:
         }
 
     async def category_breakdown(self, *, date_from: date | None = None, date_to: date | None = None) -> list[dict]:
+        # per invoice LINE: a transfer of salary + bonus + fee counts each part
+        # under its own account
         stmt = (
             select(
                 ExpenseCategory.id,
                 ExpenseCategory.name,
-                func.coalesce(func.sum(Expense.amount), 0).label("total"),
+                func.coalesce(func.sum(A.amount), 0).label("total"),
             )
-            .join(Expense, Expense.category_id == ExpenseCategory.id)
-            .where(Expense.is_archived.is_(False), Expense.status != "cancelled")
+            .join(expense_allocations, A.category_id == ExpenseCategory.id)
+            .where(A.is_archived.is_(False), A.status != "cancelled")
             .group_by(ExpenseCategory.id, ExpenseCategory.name)
-            .order_by(func.sum(Expense.amount).desc())
+            .order_by(func.sum(A.amount).desc())
         )
         if date_from:
-            stmt = stmt.where(Expense.expense_date >= date_from)
+            stmt = stmt.where(A.expense_date >= date_from)
         if date_to:
-            stmt = stmt.where(Expense.expense_date <= date_to)
+            stmt = stmt.where(A.expense_date <= date_to)
 
         result = await self.db.execute(stmt)
         return [{"category_id": row.id, "category_name": row.name, "total": row.total} for row in result.all()]
@@ -132,13 +135,13 @@ class FinanceReportService:
         request per node. Cancelled/archived expenses are excluded."""
         stmt = (
             select(
-                Expense.category_id,
-                Expense.subcategory_id,
-                func.coalesce(func.sum(Expense.amount), 0).label("total"),
-                func.count(Expense.id).label("count"),
+                A.category_id,
+                A.subcategory_id,
+                func.coalesce(func.sum(A.amount), 0).label("total"),
+                func.count(func.distinct(A.expense_id)).label("count"),
             )
-            .where(Expense.is_archived.is_(False), Expense.status != "cancelled")
-            .group_by(Expense.category_id, Expense.subcategory_id)
+            .where(A.is_archived.is_(False), A.status != "cancelled")
+            .group_by(A.category_id, A.subcategory_id)
         )
         result = await self.db.execute(stmt)
         return [

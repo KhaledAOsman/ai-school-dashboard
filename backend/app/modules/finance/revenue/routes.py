@@ -4,7 +4,7 @@ import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit.service import AuditService
@@ -18,7 +18,14 @@ from app.core.permissions.registry import (
 )
 from app.database.session import get_db
 from app.modules.finance.revenue.models import FinanceRevenue
-from app.modules.finance.revenue.schemas import RevenueCreateRequest, RevenueResponse, RevenueUpdateRequest
+from app.modules.finance.revenue.schemas import (
+    RevenueCreateRequest,
+    RevenueMonth,
+    RevenueResponse,
+    RevenueSummary,
+    RevenueUpdateRequest,
+)
+from app.modules.marketing.models import Subscription
 
 router = APIRouter(prefix="/finance/revenue", tags=["finance-revenue"])
 
@@ -26,7 +33,7 @@ router = APIRouter(prefix="/finance/revenue", tags=["finance-revenue"])
 def _out(r: FinanceRevenue) -> RevenueResponse:
     return RevenueResponse(
         id=r.id, revenue_date=r.revenue_date, amount=r.amount, discount_amount=r.discount_amount,
-        gross_amount=r.amount + r.discount_amount, currency=r.currency, revenue_type=r.revenue_type,
+        fees_amount=r.fees_amount or 0, gross_amount=r.amount + (r.fees_amount or 0), currency=r.currency, revenue_type=r.revenue_type,
         customer_name=r.customer_name, package_name=r.package_name, invoice_number=r.invoice_number,
         invoice_url=r.invoice_url, payment_method=r.payment_method, note=r.note, source=r.source,
         created_at=r.created_at,
@@ -38,6 +45,44 @@ def _clean(data: dict) -> dict:
         if k in data and isinstance(data[k], str) and not data[k].strip():
             data[k] = None
     return data
+
+
+@router.get("/summary", response_model=RevenueSummary)
+async def revenue_summary(
+    user: CurrentUser = Depends(require_permission(FINANCE_EXPENSE_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Revenue (paid subscriptions) vs. what reached the bank, month by month."""
+    sm = func.to_char(Subscription.subscribed_at, "YYYY-MM")
+    subs = (await db.execute(
+        select(sm, func.count(Subscription.id), func.coalesce(func.sum(Subscription.amount_paid), 0),
+               func.coalesce(func.sum(Subscription.discount_amount), 0)).group_by(sm)
+    )).all()
+    cm = func.to_char(FinanceRevenue.revenue_date, "YYYY-MM")
+    cols = (await db.execute(
+        select(cm, func.coalesce(func.sum(FinanceRevenue.amount), 0),
+               func.coalesce(func.sum(FinanceRevenue.fees_amount), 0)).group_by(cm)
+    )).all()
+    months: dict[str, dict] = {}
+    for m, n, paid, disc in subs:
+        months.setdefault(m, dict(month=m, subscriptions_count=0, subscriptions_paid=0, discounts=0, collected=0, fees=0))
+        months[m].update(subscriptions_count=n, subscriptions_paid=paid, discounts=disc)
+    for m, dep, fees in cols:
+        months.setdefault(m, dict(month=m, subscriptions_count=0, subscriptions_paid=0, discounts=0, collected=0, fees=0))
+        months[m].update(collected=dep, fees=fees)
+    rows = [RevenueMonth(**months[k]) for k in sorted(months)]
+    paid = sum((r.subscriptions_paid for r in rows), 0)
+    collected = sum((r.collected for r in rows), 0)
+    fees = sum((r.fees for r in rows), 0)
+    return RevenueSummary(
+        subscriptions_count=sum(r.subscriptions_count for r in rows),
+        subscriptions_paid=paid,
+        discounts=sum((r.discounts for r in rows), 0),
+        collected=collected,
+        fees=fees,
+        outstanding=paid - collected - fees,
+        months=rows,
+    )
 
 
 @router.get("", response_model=list[RevenueResponse])

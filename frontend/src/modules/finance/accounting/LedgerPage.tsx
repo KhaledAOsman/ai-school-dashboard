@@ -126,7 +126,6 @@ export function LedgerPage() {
           </div>
         )}
       </Card>
-      <p className="mt-3 text-xs text-ink-500">الرصيد بيتحسب في اتجاه الحساب الطبيعي ({data?.account.normal_side === "credit" ? "دائن" : "مدين"}).</p>
     </div>
   );
 }

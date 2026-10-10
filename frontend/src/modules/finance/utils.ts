@@ -49,3 +49,22 @@ export function accountLabel(cat: { name: string; code: string | null } | undefi
   if (!cat) return "—";
   return cat.code ? `${cat.code} · ${cat.name}` : cat.name;
 }
+
+/** Percentages (1 decimal) that always add up to exactly 100.0 (largest remainder). */
+export function sharesTo100(values: number[]): number[] {
+  const total = values.reduce((a, b) => a + b, 0);
+  if (total <= 0) return values.map(() => 0);
+  const raw = values.map((v) => (v / total) * 1000);
+  const base = raw.map(Math.floor);
+  let left = 1000 - base.reduce((a, b) => a + b, 0);
+  raw
+    .map((r, i) => [r - base[i], i] as const)
+    .sort((a, b) => b[0] - a[0])
+    .forEach(([, i]) => {
+      if (left > 0) {
+        base[i] += 1;
+        left -= 1;
+      }
+    });
+  return base.map((b) => b / 10);
+}

@@ -6,9 +6,12 @@ from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.core.audit.service import AuditService
 from app.core.permissions.object_policy import ensure_found
+from app.modules.finance.categories.models import ExpenseCategory
+from app.modules.finance.expenses.allocations import A, TRANSFER_FEE_CODE, expense_allocations
 from app.modules.finance.expenses.models import Expense
 from app.modules.finance.staff.models import StaffDepartment, StaffMember
 from app.modules.finance.staff.repository import StaffDepartmentRepository, StaffRepository
@@ -38,7 +41,9 @@ class StaffDepartmentService:
                 return existing
             raise HTTPException(status.HTTP_409_CONFLICT, "A department with this name already exists")
 
-        department = StaffDepartment(name=payload.name, display_order=payload.display_order, created_by=user_id)
+        department = StaffDepartment(
+            name=payload.name, display_order=payload.display_order, category_id=payload.category_id, created_by=user_id
+        )
         self.repo.add(department)
         await self.db.flush()
 
@@ -124,19 +129,27 @@ class StaffService:
         """staff_id -> (total paid, number of payments, last payment date).
 
         Cancelled and archived expenses do not count as money paid out."""
+        # Per invoice line: what the person received, without the bank's
+        # transfer fee that rides on the same transfer.
+        sub = aliased(ExpenseCategory)
+        cat = aliased(ExpenseCategory)
         result = await self.db.execute(
             select(
-                Expense.staff_id,
-                func.coalesce(func.sum(Expense.amount), 0),
-                func.count(Expense.id),
-                func.max(Expense.expense_date),
+                A.staff_id,
+                func.coalesce(func.sum(A.amount), 0),
+                func.count(func.distinct(A.expense_id)),
+                func.max(A.expense_date),
             )
+            .select_from(expense_allocations)
+            .outerjoin(sub, sub.id == A.subcategory_id)
+            .outerjoin(cat, cat.id == A.category_id)
             .where(
-                Expense.staff_id.is_not(None),
-                Expense.is_archived.is_(False),
-                Expense.status != "cancelled",
+                A.staff_id.is_not(None),
+                A.is_archived.is_(False),
+                A.status != "cancelled",
+                func.coalesce(sub.code, cat.code, "") != TRANSFER_FEE_CODE,
             )
-            .group_by(Expense.staff_id)
+            .group_by(A.staff_id)
         )
         return {row[0]: (Decimal(row[1]), row[2], row[3]) for row in result.all()}
 

@@ -15,6 +15,7 @@ from app.modules.finance.accounting.posting import (
 from app.modules.finance.expenses.models import Expense
 from app.modules.finance.funding.models import FinanceFunding
 from app.modules.finance.revenue.models import FinanceRevenue
+from app.modules.marketing.models import Subscription
 
 TYPE_LABEL = {"asset": "أصول", "liability": "خصوم", "equity": "حقوق ملكية", "revenue": "إيرادات", "expense": "مصروفات"}
 TYPE_ORDER = {"asset": 1, "liability": 2, "equity": 3, "revenue": 4, "expense": 5}
@@ -351,8 +352,16 @@ class AccountingService:
                 months.append(m)
             if e.source_type == "funding":
                 key, group, label = "funding", "financing", "تمويل الشركاء"
-            elif e.source_type == "revenue":
-                key, group, label = "subscriptions", "operating_in", "اشتراكات الطلاب المحصّلة"
+            elif e.source_type in ("revenue", "collection"):
+                key, group, label = "subscriptions", "operating_in", "تحصيلات الاشتراكات (إيداعات بوابات الدفع)"
+            elif e.source_type == "expense" and e.split and sum(e.split.values(), ZERO) == -cash_net:
+                # split the cash paid across the accounts on the invoice lines
+                for code, amt in e.split.items():
+                    root = self._root_of(code)
+                    k = f"exp:{root}"
+                    flows[k][m] -= amt
+                    meta[k] = {"group": "operating_out", "label": self._name(root), "code": root}
+                continue
             elif e.source_type == "expense":
                 root = self._root_of(e.expense_code) if e.expense_code else "5999"
                 key, group, label = f"exp:{root}", "operating_out", self._name(root)
@@ -424,8 +433,10 @@ class AccountingService:
         exp_total = await scalar(select(func.coalesce(func.sum(Expense.amount), 0)).where(
             Expense.status == "approved", Expense.is_archived.is_(False)))
         fund_total = await scalar(select(func.coalesce(func.sum(FinanceFunding.amount), 0)))
-        rev_net = await scalar(select(func.coalesce(func.sum(FinanceRevenue.amount), 0)))
-        rev_disc = await scalar(select(func.coalesce(func.sum(FinanceRevenue.discount_amount), 0)))
+        rev_net = await scalar(select(func.coalesce(func.sum(Subscription.amount_paid), 0)))
+        rev_disc = await scalar(select(func.coalesce(func.sum(Subscription.discount_amount), 0)))
+        deposits = await scalar(select(func.coalesce(func.sum(FinanceRevenue.amount), 0)))
+        gw_fees = await scalar(select(func.coalesce(func.sum(FinanceRevenue.fees_amount), 0)))
         paid_by_partner = await scalar(select(func.coalesce(func.sum(Expense.amount), 0)).where(
             Expense.status == "approved", Expense.is_archived.is_(False),
             Expense.paid_by.is_not(None), Expense.paid_by != ""))
@@ -437,7 +448,7 @@ class AccountingService:
         ledger_cap = -sum(((gdeb.get(c, ZERO) - gcre.get(c, ZERO)) for c in self.descendants(CAPITAL)), ZERO)
         ledger_rev_net = -(sum_type("revenue"))  # credit-normal total = rev - discounts
         ledger_cash = gdeb.get(CASH, ZERO) - gcre.get(CASH, ZERO)
-        expected_cash = fund_total + rev_net - (exp_total - paid_by_partner)
+        expected_cash = fund_total + deposits - (exp_total - paid_by_partner)
         accrued = self.parties("2100")
         accrued_total = sum((Decimal(p["balance"]) for p in accrued), ZERO)
 
@@ -446,11 +457,11 @@ class AccountingService:
 
         return [
             row("إجمالي المدين = إجمالي الدائن في كل القيود", td, tc),
-            row("المصروفات في الدفاتر = المصروفات المعتمدة في السجل", ledger_exp, exp_total),
+            row("المصروفات في الدفاتر = المصروفات المعتمدة + عمولات البوابات", ledger_exp, exp_total + gw_fees),
             row("حقوق الشركاء في الدفاتر = إجمالي التمويل", ledger_cap, fund_total),
-            row("صافي الإيراد في الدفاتر = الاشتراكات المستلمة (بعد الخصم)", ledger_rev_net, rev_net,
+            row("صافي الإيراد في الدفاتر = الاشتراكات المدفوعة (بعد الخصم)", ledger_rev_net, rev_net,
                 f"إجمالي الخصومات {rev_disc}" if rev_disc else None),
-            row("رصيد النقدية = تمويل + إيرادات − مصروفات مدفوعة من الحساب", ledger_cash, expected_cash,
+            row("رصيد النقدية = تمويل + تحصيلات − مصروفات مدفوعة من الحساب", ledger_cash, expected_cash,
                 f"منها {paid_by_partner} دفعها شريك بالنيابة" if paid_by_partner else None),
             row("الأصول = الخصوم + حقوق الملكية", Decimal(bs["total_assets"]), Decimal(bs["total_liabilities_equity"])),
             {"name": "مستحقات لم تُسدَّد بعد (أجور/مصروفات مستحقة)", "ledger": str(accrued_total), "source": "0.00",

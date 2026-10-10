@@ -1,35 +1,61 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, type ComponentType } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "@/auth/AuthContext";
 import { ProtectedRoute } from "@/auth/ProtectedRoute";
 import { HomeRedirect } from "@/auth/HomeRedirect";
 import { LoginPage } from "@/auth/LoginPage";
 import { AppLayout } from "@/layouts/AppLayout";
-const DashboardPage = lazy(() => import("@/dashboard/DashboardPage").then((m) => ({ default: m.DashboardPage })));
-const FinanceSectionPage = lazy(() => import("@/modules/finance/pages/FinanceSectionPage").then((m) => ({ default: m.FinanceSectionPage })));
-const LeadsListPage = lazy(() => import("@/modules/crm/pages/LeadsListPage").then((m) => ({ default: m.LeadsListPage })));
-const BookingsPage = lazy(() => import("@/modules/crm/pages/BookingsPage").then((m) => ({ default: m.BookingsPage })));
-const InterestedPage = lazy(() => import("@/modules/crm/pages/InterestedPage").then((m) => ({ default: m.InterestedPage })));
-const LeadDetailPage = lazy(() => import("@/modules/crm/pages/LeadDetailPage").then((m) => ({ default: m.LeadDetailPage })));
-const CRMTeachersPage = lazy(() => import("@/modules/crm/pages/CRMTeachersPage").then((m) => ({ default: m.CRMTeachersPage })));
-const CRMDashboardPage = lazy(() => import("@/modules/crm/pages/CRMDashboardPage").then((m) => ({ default: m.CRMDashboardPage })));
-const AllLeadsOverviewPage = lazy(() => import("@/modules/crm/pages/AllLeadsOverviewPage").then((m) => ({ default: m.AllLeadsOverviewPage })));
-const SchedulePage = lazy(() => import("@/modules/crm/pages/SchedulePage").then((m) => ({ default: m.SchedulePage })));
-const WhatsAppConnectionPage = lazy(() => import("@/modules/whatsapp/pages/WhatsAppConnectionPage").then((m) => ({ default: m.WhatsAppConnectionPage })));
-const TemplatesPage = lazy(() => import("@/modules/whatsapp/pages/TemplatesPage").then((m) => ({ default: m.TemplatesPage })));
-const SubscriptionsPage = lazy(() => import("@/modules/marketing/pages/SubscriptionsPage").then((m) => ({ default: m.SubscriptionsPage })));
-const CampaignsPage = lazy(() => import("@/modules/marketing/pages/CampaignsPage").then((m) => ({ default: m.CampaignsPage })));
-const UsersPage = lazy(() => import("@/modules/finance/pages/UsersPage").then((m) => ({ default: m.UsersPage })));
-const RolesPage = lazy(() => import("@/modules/finance/pages/RolesPage").then((m) => ({ default: m.RolesPage })));
-const AuditLogPage = lazy(() => import("@/modules/finance/pages/AuditLogPage").then((m) => ({ default: m.AuditLogPage })));
-const SecurityLogPage = lazy(() => import("@/modules/finance/pages/SecurityLogPage").then((m) => ({ default: m.SecurityLogPage })));
 
-const queryClient = new QueryClient({
+/**
+ * Route chunks have hashed names, so after a redeploy an already-open tab asks
+ * for chunks that no longer exist and the page would hang on "loading".
+ * On such a failure reload once to pick up the new build.
+ */
+function lazyPage<T extends ComponentType<any>>(factory: () => Promise<{ default: T }>) {
+  return lazy(() =>
+    factory().catch((err) => {
+      const key = "chunk-reload-at";
+      const last = Number(sessionStorage.getItem(key) || 0);
+      if (Date.now() - last > 30000) {
+        sessionStorage.setItem(key, String(Date.now()));
+        window.location.reload();
+        return new Promise<{ default: T }>(() => {});
+      }
+      throw err;
+    })
+  );
+}
+const DashboardPage = lazyPage(() => import("@/dashboard/DashboardPage").then((m) => ({ default: m.DashboardPage })));
+const FinanceSectionPage = lazyPage(() => import("@/modules/finance/pages/FinanceSectionPage").then((m) => ({ default: m.FinanceSectionPage })));
+const LeadsListPage = lazyPage(() => import("@/modules/crm/pages/LeadsListPage").then((m) => ({ default: m.LeadsListPage })));
+const BookingsPage = lazyPage(() => import("@/modules/crm/pages/BookingsPage").then((m) => ({ default: m.BookingsPage })));
+const InterestedPage = lazyPage(() => import("@/modules/crm/pages/InterestedPage").then((m) => ({ default: m.InterestedPage })));
+const LeadDetailPage = lazyPage(() => import("@/modules/crm/pages/LeadDetailPage").then((m) => ({ default: m.LeadDetailPage })));
+const CRMTeachersPage = lazyPage(() => import("@/modules/crm/pages/CRMTeachersPage").then((m) => ({ default: m.CRMTeachersPage })));
+const CRMDashboardPage = lazyPage(() => import("@/modules/crm/pages/CRMDashboardPage").then((m) => ({ default: m.CRMDashboardPage })));
+const AllLeadsOverviewPage = lazyPage(() => import("@/modules/crm/pages/AllLeadsOverviewPage").then((m) => ({ default: m.AllLeadsOverviewPage })));
+const SchedulePage = lazyPage(() => import("@/modules/crm/pages/SchedulePage").then((m) => ({ default: m.SchedulePage })));
+const WhatsAppConnectionPage = lazyPage(() => import("@/modules/whatsapp/pages/WhatsAppConnectionPage").then((m) => ({ default: m.WhatsAppConnectionPage })));
+const TemplatesPage = lazyPage(() => import("@/modules/whatsapp/pages/TemplatesPage").then((m) => ({ default: m.TemplatesPage })));
+const SubscriptionsPage = lazyPage(() => import("@/modules/marketing/pages/SubscriptionsPage").then((m) => ({ default: m.SubscriptionsPage })));
+const CampaignsPage = lazyPage(() => import("@/modules/marketing/pages/CampaignsPage").then((m) => ({ default: m.CampaignsPage })));
+const UsersPage = lazyPage(() => import("@/modules/finance/pages/UsersPage").then((m) => ({ default: m.UsersPage })));
+const RolesPage = lazyPage(() => import("@/modules/finance/pages/RolesPage").then((m) => ({ default: m.RolesPage })));
+const AuditLogPage = lazyPage(() => import("@/modules/finance/pages/AuditLogPage").then((m) => ({ default: m.AuditLogPage })));
+const SecurityLogPage = lazyPage(() => import("@/modules/finance/pages/SecurityLogPage").then((m) => ({ default: m.SecurityLogPage })));
+
+const queryClient: QueryClient = new QueryClient({
+  // Any successful save marks cached data stale so every page shows the new
+  // numbers (only what is on screen is re-fetched right away).
+  mutationCache: new MutationCache({ onSuccess: () => queryClient.invalidateQueries() }),
   defaultOptions: {
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
+      // Lists/reports are reused across pages for half a minute instead of
+      // being re-fetched on every navigation; mutations invalidate them.
+      staleTime: 30_000,
     },
   },
 });

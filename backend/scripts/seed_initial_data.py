@@ -90,14 +90,20 @@ async def seed_permissions(session) -> dict[str, Permission]:
     result = await session.execute(select(Permission))
     existing = {p.code: p for p in result.scalars().all()}
 
+    NEW_PERMISSION_CODES.clear()
     for perm_def in SEED_PERMISSIONS:
         if perm_def.code not in existing:
             perm = Permission(code=perm_def.code, description=perm_def.description, category=perm_def.category)
             session.add(perm)
             existing[perm_def.code] = perm
+            NEW_PERMISSION_CODES.add(perm_def.code)
 
     await session.flush()
     return existing
+
+
+# permission codes created by THIS seed run (brand-new in the registry)
+NEW_PERMISSION_CODES: set[str] = set()
 
 
 async def seed_roles(session, permissions_by_code: dict[str, Permission]) -> dict[str, Role]:
@@ -114,13 +120,20 @@ async def seed_roles(session, permissions_by_code: dict[str, Permission]) -> dic
             )
             session.add(role)
             existing[role_name] = role
-        else:
-            # Keep system role permissions in sync with the registry on
-            # every seed run, so adding a new permission for an existing
-            # module reaches Owner/Admin/etc without a manual DB edit.
+        elif role_name == "Owner":
+            # The owner always holds every permission.
             existing[role_name].permissions = [
                 permissions_by_code[c] for c in perm_codes if c in permissions_by_code
             ]
+        else:
+            # Other system roles can be edited from the Roles page, so never
+            # overwrite them on restart: only hand them permissions that are
+            # brand-new in the registry (a new module/feature).
+            role = existing[role_name]
+            have = {p.code for p in role.permissions}
+            for c in perm_codes:
+                if c in NEW_PERMISSION_CODES and c not in have and c in permissions_by_code:
+                    role.permissions.append(permissions_by_code[c])
 
     await session.flush()
     return existing

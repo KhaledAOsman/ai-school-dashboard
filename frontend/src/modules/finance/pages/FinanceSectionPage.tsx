@@ -18,7 +18,6 @@ import { FundingPage } from "@/modules/finance/pages/FundingPage";
 import { RevenuePage } from "@/modules/finance/pages/RevenuePage";
 import { AccountingLayout } from "@/modules/finance/accounting/AccountingLayout";
 import { AccountingHome } from "@/modules/finance/accounting/AccountingHome";
-import { JournalPage } from "@/modules/finance/accounting/JournalPage";
 import { LedgerPage } from "@/modules/finance/accounting/LedgerPage";
 import { TrialBalancePage } from "@/modules/finance/accounting/TrialBalancePage";
 import { IncomeStatementPage } from "@/modules/finance/accounting/IncomeStatementPage";
@@ -45,7 +44,6 @@ export function FinanceSectionPage() {
       <Route path="revenue" element={<RevenuePage />} />
       <Route path="accounting" element={<AccountingLayout />}>
         <Route index element={<AccountingHome />} />
-        <Route path="journal" element={<JournalPage />} />
         <Route path="ledger" element={<LedgerPage />} />
         <Route path="trial-balance" element={<TrialBalancePage />} />
         <Route path="income-statement" element={<IncomeStatementPage />} />

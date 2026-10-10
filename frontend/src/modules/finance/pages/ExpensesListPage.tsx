@@ -180,7 +180,10 @@ export function ExpensesListPage() {
                       </td>
                       <td className="min-w-[190px] px-4 py-3.5 text-ink-700">
                         <span className="block">{cat?.name ?? "—"}</span>
-                        {sub && <span className="text-[12.5px] text-ink-500">{sub.name}</span>}
+                        {sub && <span className="block text-[12.5px] text-ink-500">{sub.name}</span>}
+                        {e.breakdown && e.breakdown.length > 1 && (
+                          <span className="text-[12px] text-ink-400">{e.breakdown.length} بنود</span>
+                        )}
                       </td>
                       <td className="px-4 py-3.5 text-ink-600">
                         {e.invoice_number || e.invoice_date || e.invoice_url ? (

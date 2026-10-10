@@ -11,9 +11,19 @@ PERIOD_PATTERN = r"^\d{4}-(0[1-9]|1[0-2])$"
 
 
 class BreakdownLine(BaseModel):
-    """One itemised line of a payment, e.g. "7 فيديو" = 210 or "خصم" = -50."""
+    """One itemised line of a payment/transfer, e.g. "7 فيديو" = 210 or "خصم" = -50.
+
+    A transfer usually carries several kinds of cost (salary + bonus +
+    commission + the bank's transfer fee), so each line may name its own
+    account (expense category/sub-account). Lines without an account use the
+    invoice's account. staff_id / url are optional per-line details (e.g. one
+    lump payroll transfer split per person, each with their contract link).
+    """
     label: str = Field(min_length=1, max_length=200)
     amount: Decimal = Field(max_digits=14, decimal_places=2)
+    account_id: uuid.UUID | None = None
+    staff_id: uuid.UUID | None = None
+    url: str | None = Field(default=None, max_length=1000)
 
 
 class ExpenseCreateRequest(BaseModel):
@@ -34,6 +44,10 @@ class ExpenseCreateRequest(BaseModel):
     paid_by: str | None = Field(default=None, max_length=100)
     period_month: str | None = Field(default=None, pattern=PERIOD_PATTERN)
     breakdown: list[BreakdownLine] | None = None
+    # Who may approve is checked in the route: save-and-approve needs the
+    # approve permission, save-and-submit the submit permission.
+    approve_now: bool = False
+    submit_now: bool = False
 
 
 class ExpenseUpdateRequest(BaseModel):

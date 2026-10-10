@@ -77,7 +77,37 @@ def _breakdown_json(lines) -> list[dict] | None:
     """Pydantic lines -> JSONB-safe list (amounts as exact strings)."""
     if not lines:
         return None
-    return [{"label": l.label, "amount": str(l.amount)} for l in lines]
+    out = []
+    for l in lines:
+        item = {"label": l.label, "amount": str(l.amount)}
+        if l.account_id:
+            item["account_id"] = str(l.account_id)
+        if l.staff_id:
+            item["staff_id"] = str(l.staff_id)
+        if l.url:
+            item["url"] = l.url
+        out.append(item)
+    return out
+
+
+async def _assert_line_refs_exist(db: AsyncSession, breakdown: list[dict] | None) -> None:
+    """Line accounts must be real (non-archived) accounts and line people real staff."""
+    if not breakdown:
+        return
+    from sqlalchemy import select as _select
+    from app.modules.finance.categories.models import ExpenseCategory
+    from app.modules.finance.staff.models import StaffMember
+
+    acc = {uuid.UUID(l["account_id"]) for l in breakdown if l.get("account_id")}
+    if acc:
+        found = set((await db.execute(_select(ExpenseCategory.id).where(ExpenseCategory.id.in_(acc)))).scalars())
+        if acc - found:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "حساب غير موجود في أحد بنود الفاتورة")
+    ppl = {uuid.UUID(l["staff_id"]) for l in breakdown if l.get("staff_id")}
+    if ppl:
+        found = set((await db.execute(_select(StaffMember.id).where(StaffMember.id.in_(ppl)))).scalars())
+        if ppl - found:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "شخص غير موجود في أحد بنود الفاتورة")
 
 
 def _assert_breakdown_adds_up(amount, breakdown: list[dict] | None) -> None:
@@ -108,6 +138,7 @@ class ExpenseService:
 
         breakdown = _breakdown_json(payload.breakdown)
         _assert_breakdown_adds_up(payload.amount, breakdown)
+        await _assert_line_refs_exist(self.db, breakdown)
 
         expense = Expense(
             amount=payload.amount,
@@ -206,6 +237,7 @@ class ExpenseService:
             expense.period_month = payload.period_month
         if payload.breakdown is not None:
             expense.breakdown = _breakdown_json(payload.breakdown)
+            await _assert_line_refs_exist(self.db, expense.breakdown)
         # Whatever changed (amount and/or lines), they must still agree.
         _assert_breakdown_adds_up(expense.amount, expense.breakdown)
 

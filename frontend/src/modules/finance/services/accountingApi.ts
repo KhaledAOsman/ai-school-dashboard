@@ -193,6 +193,9 @@ export interface Revenue {
   revenue_date: string;
   amount: string;
   discount_amount: string;
+  /** gateway commission / bank charges withheld before the deposit */
+  fees_amount: string;
+  /** amount + fees = what the gateway settled */
   gross_amount: string;
   currency: string;
   revenue_type: string;
@@ -206,10 +209,29 @@ export interface Revenue {
   created_at: string;
 }
 
+export interface RevenueMonth {
+  month: string;
+  subscriptions_count: number;
+  subscriptions_paid: string;
+  discounts: string;
+  collected: string;
+  fees: string;
+}
+
+export interface RevenueSummary {
+  subscriptions_count: number;
+  subscriptions_paid: string;
+  discounts: string;
+  collected: string;
+  fees: string;
+  outstanding: string;
+  months: RevenueMonth[];
+}
+
 export interface RevenuePayload {
   revenue_date: string;
   amount: string;
-  discount_amount: string;
+  fees_amount: string;
   customer_name?: string | null;
   package_name?: string | null;
   invoice_number?: string | null;
@@ -244,6 +266,7 @@ export const accountingApi = {
 
   listRevenue: async (params: { date_from?: string; date_to?: string; q?: string }): Promise<Revenue[]> =>
     (await api.get("/finance/revenue", { params: { ...clean(params), limit: 2000 } })).data,
+  revenueSummary: async (): Promise<RevenueSummary> => (await api.get("/finance/revenue/summary")).data,
   createRevenue: async (payload: RevenuePayload): Promise<Revenue> => (await api.post("/finance/revenue", payload)).data,
   deleteRevenue: async (id: string) => {
     await api.delete(`/finance/revenue/${id}`);
