@@ -27,6 +27,8 @@ from app.health.routes import router as health_router
 from app.middleware.error_handlers import register_exception_handlers
 from app.middleware.rate_limit import limiter
 from app.middleware.security import RequestContextMiddleware, SecurityHeadersMiddleware
+from app.modules.finance.accounting.routes import router as finance_accounting_router
+from app.modules.finance.revenue.routes import router as finance_revenue_router
 from app.modules.finance.attachments.routes import router as finance_attachments_router
 from app.modules.finance.budget.routes import router as finance_budget_router
 from app.modules.finance.categories.routes import router as finance_categories_router
@@ -99,6 +101,8 @@ app.include_router(finance_reports_router, prefix=API_PREFIX)
 app.include_router(finance_budget_router, prefix=API_PREFIX)
 app.include_router(finance_staff_router, prefix=API_PREFIX)
 app.include_router(finance_funding_router, prefix=API_PREFIX)
+app.include_router(finance_revenue_router, prefix=API_PREFIX)
+app.include_router(finance_accounting_router, prefix=API_PREFIX)
 app.include_router(crm_leads_router, prefix=API_PREFIX)
 app.include_router(crm_bookings_router, prefix=API_PREFIX)
 app.include_router(crm_teachers_router, prefix=API_PREFIX)

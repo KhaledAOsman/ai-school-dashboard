@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { ChevronDown, ChevronLeft, FolderTree, Landmark, Layers } from "lucide-react";
 import { translate } from "@/i18n";
 import { useAccountTotals, useCategories, useFunding } from "@/modules/finance/hooks/useFinance";
+import { useAccountingAccounts } from "@/modules/finance/hooks/useAccounting";
+import { Money } from "@/modules/finance/accounting/shared";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatSAR, fromCents, toCents } from "@/modules/finance/utils";
@@ -96,6 +98,8 @@ export function ChartOfAccountsPage() {
   const { data: categories, isLoading } = useCategories();
   const { data: totals } = useAccountTotals();
   const { data: funding } = useFunding();
+  const { data: ledgerAccounts } = useAccountingAccounts();
+  const otherAccounts = (ledgerAccounts ?? []).filter((a) => a.type !== "expense" && a.code !== "3100" && a.code !== "3000");
 
   const roots = useMemo(() => [...(categories ?? [])].sort((a, b) => (a.code ?? "~").localeCompare(b.code ?? "~")), [categories]);
   const rows = totals ?? [];
@@ -135,6 +139,28 @@ export function ChartOfAccountsPage() {
             </div>
           </>
         )}
+      </Card>
+
+      <Card className="mb-5 p-5">
+        <div className="mb-1 flex items-center justify-between px-2 pb-2 text-xs font-semibold text-ink-500">
+          <span>الأصول والخصوم والإيرادات (1000 – 4000)</span>
+          <span>الرصيد</span>
+        </div>
+        {otherAccounts.map((a) => (
+          <Link
+            key={a.code}
+            to={`/finance/accounting/ledger?account=${a.code}`}
+            className="-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-ink-50"
+            style={{ paddingRight: `${8 + a.level * 18}px` }}
+          >
+            <div className="flex min-w-0 items-center gap-2.5">
+              <CodeTag code={a.code} />
+              <span className={`truncate text-sm ${a.has_children ? "font-semibold text-ink-900" : "font-medium text-ink-800"}`}>{a.name}</span>
+              <span className="shrink-0 text-xs text-ink-400">{a.type_label}</span>
+            </div>
+            {!a.has_children || Number(a.balance) !== 0 ? <Money v={a.balance} dash bold={a.has_children} /> : null}
+          </Link>
+        ))}
       </Card>
 
       <Card className="p-5">

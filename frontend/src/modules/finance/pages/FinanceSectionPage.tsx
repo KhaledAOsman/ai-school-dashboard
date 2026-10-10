@@ -15,6 +15,15 @@ import { CategoriesPage } from "@/modules/finance/pages/CategoriesPage";
 import { ChartOfAccountsPage } from "@/modules/finance/pages/ChartOfAccountsPage";
 import { StaffPage } from "@/modules/finance/pages/StaffPage";
 import { FundingPage } from "@/modules/finance/pages/FundingPage";
+import { RevenuePage } from "@/modules/finance/pages/RevenuePage";
+import { AccountingLayout } from "@/modules/finance/accounting/AccountingLayout";
+import { AccountingHome } from "@/modules/finance/accounting/AccountingHome";
+import { JournalPage } from "@/modules/finance/accounting/JournalPage";
+import { LedgerPage } from "@/modules/finance/accounting/LedgerPage";
+import { TrialBalancePage } from "@/modules/finance/accounting/TrialBalancePage";
+import { IncomeStatementPage } from "@/modules/finance/accounting/IncomeStatementPage";
+import { BalanceSheetPage } from "@/modules/finance/accounting/BalanceSheetPage";
+import { CashFlowPage } from "@/modules/finance/accounting/CashFlowPage";
 import { ReportsPage } from "@/modules/finance/pages/ReportsPage";
 import { FinanceOverviewPage } from "@/modules/finance/pages/FinanceOverviewPage";
 import { usePermission } from "@/permissions/usePermission";
@@ -33,6 +42,16 @@ export function FinanceSectionPage() {
       <Route path="expenses/:id" element={<ExpenseDetailPage />} />
       <Route path="expenses/:id/edit" element={<ExpenseFormPage />} />
       <Route path="funding" element={<FundingPage />} />
+      <Route path="revenue" element={<RevenuePage />} />
+      <Route path="accounting" element={<AccountingLayout />}>
+        <Route index element={<AccountingHome />} />
+        <Route path="journal" element={<JournalPage />} />
+        <Route path="ledger" element={<LedgerPage />} />
+        <Route path="trial-balance" element={<TrialBalancePage />} />
+        <Route path="income-statement" element={<IncomeStatementPage />} />
+        <Route path="balance-sheet" element={<BalanceSheetPage />} />
+        <Route path="cash-flow" element={<CashFlowPage />} />
+      </Route>
       <Route path="budget-lines" element={<BudgetLinesPage />} />
       <Route path="categories" element={<CategoriesPage />} />
       <Route path="chart-of-accounts" element={<ChartOfAccountsPage />} />
