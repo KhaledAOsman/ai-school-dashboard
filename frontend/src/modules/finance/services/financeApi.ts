@@ -9,11 +9,18 @@ export interface Category {
   id: string;
   name: string;
   name_ar: string | null;
+  code: string | null;
   parent_id: string | null;
   display_order: number;
   is_archived: boolean;
   created_at: string;
   children: Category[];
+}
+
+/** One itemised line of a payment (e.g. "7 فيديو" = 210, "خصم" = -50). */
+export interface BreakdownLine {
+  label: string;
+  amount: string;
 }
 
 export interface Expense {
@@ -30,6 +37,12 @@ export interface Expense {
   invoice_number: string | null;
   payment_method: string | null;
   notes: string | null;
+  invoice_date: string | null;
+  invoice_url: string | null;
+  paid_by: string | null;
+  period_month: string | null;
+  breakdown: BreakdownLine[] | null;
+  source: string | null;
   status: "draft" | "pending_approval" | "approved" | "rejected" | "cancelled";
   current_version: number;
   created_by: string;
@@ -92,12 +105,51 @@ export interface ExpenseCreatePayload {
   invoice_number?: string | null;
   payment_method?: string | null;
   notes?: string | null;
+  invoice_date?: string | null;
+  invoice_url?: string | null;
+  paid_by?: string | null;
+  period_month?: string | null;
+  breakdown?: BreakdownLine[] | null;
+}
+
+export interface AccountTotal {
+  category_id: string;
+  subcategory_id: string | null;
+  total: number | string;
+  count: number;
+}
+
+export interface PeriodTotal {
+  period: string;
+  total: number | string;
+  count: number;
+}
+
+export interface Funding {
+  id: string;
+  funding_date: string;
+  amount: string;
+  currency: string;
+  source_name: string;
+  note: string | null;
+  created_at: string;
+}
+
+export interface FundingPayload {
+  funding_date: string;
+  amount: string;
+  source_name: string;
+  note?: string | null;
 }
 
 export interface ExpenseFilters {
   status?: string;
   category_id?: string;
   subcategory_id?: string;
+  staff_id?: string;
+  period_month?: string;
+  paid_by?: string;
+  q?: string;
   date_from?: string;
   date_to?: string;
   amount_min?: number;
@@ -112,11 +164,11 @@ export const financeApi = {
     const { data } = await api.get("/finance/categories", { params: { include_archived: includeArchived } });
     return data;
   },
-  createCategory: async (payload: { name: string; name_ar?: string; parent_id?: string | null }) => {
+  createCategory: async (payload: { name: string; name_ar?: string; code?: string | null; parent_id?: string | null }) => {
     const { data } = await api.post("/finance/categories", payload);
     return data;
   },
-  updateCategory: async (id: string, payload: { name?: string; name_ar?: string }) => {
+  updateCategory: async (id: string, payload: { name?: string; name_ar?: string; code?: string | null }) => {
     const { data } = await api.patch(`/finance/categories/${id}`, payload);
     return data;
   },
@@ -213,5 +265,30 @@ export const financeApi = {
   getRecentExpenses: async (limit = 10): Promise<Expense[]> => {
     const { data } = await api.get("/finance/reports/recent-expenses", { params: { limit } });
     return data;
+  },
+  getAccountTotals: async (): Promise<AccountTotal[]> => {
+    const { data } = await api.get("/finance/reports/account-totals");
+    return data;
+  },
+  getByPeriod: async (): Promise<PeriodTotal[]> => {
+    const { data } = await api.get("/finance/reports/by-period");
+    return data;
+  },
+
+  // ---- Partner funding (money transferred into the project) ----
+  listFunding: async (): Promise<Funding[]> => {
+    const { data } = await api.get("/finance/funding");
+    return data;
+  },
+  createFunding: async (payload: FundingPayload): Promise<Funding> => {
+    const { data } = await api.post("/finance/funding", payload);
+    return data;
+  },
+  updateFunding: async (id: string, payload: Partial<FundingPayload>): Promise<Funding> => {
+    const { data } = await api.patch(`/finance/funding/${id}`, payload);
+    return data;
+  },
+  deleteFunding: async (id: string) => {
+    await api.delete(`/finance/funding/${id}`);
   },
 };

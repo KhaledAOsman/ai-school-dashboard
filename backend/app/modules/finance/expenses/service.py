@@ -64,8 +64,32 @@ def _snapshot(expense: Expense) -> dict:
         "invoice_number": expense.invoice_number,
         "payment_method": expense.payment_method,
         "notes": expense.notes,
+        "invoice_date": expense.invoice_date.isoformat() if expense.invoice_date else None,
+        "invoice_url": expense.invoice_url,
+        "paid_by": expense.paid_by,
+        "period_month": expense.period_month,
+        "breakdown": expense.breakdown,
         "status": expense.status,
     }
+
+
+def _breakdown_json(lines) -> list[dict] | None:
+    """Pydantic lines -> JSONB-safe list (amounts as exact strings)."""
+    if not lines:
+        return None
+    return [{"label": l.label, "amount": str(l.amount)} for l in lines]
+
+
+def _assert_breakdown_adds_up(amount, breakdown: list[dict] | None) -> None:
+    """Itemised lines must add up to the payment amount, to the cent."""
+    if not breakdown:
+        return
+    total = sum((Decimal(str(l["amount"])) for l in breakdown), Decimal("0"))
+    if total != Decimal(str(amount)):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"مجموع البنود ({total}) لا يساوي المبلغ ({amount})",
+        )
 
 
 class ExpenseService:
@@ -82,6 +106,9 @@ class ExpenseService:
             # BEFORE any expense can be posted against it.
             await self.budget_service.assert_can_post_expense_against(payload.budget_line_id)
 
+        breakdown = _breakdown_json(payload.breakdown)
+        _assert_breakdown_adds_up(payload.amount, breakdown)
+
         expense = Expense(
             amount=payload.amount,
             currency=payload.currency,
@@ -95,6 +122,11 @@ class ExpenseService:
             invoice_number=payload.invoice_number,
             payment_method=payload.payment_method,
             notes=payload.notes,
+            invoice_date=payload.invoice_date,
+            invoice_url=payload.invoice_url or None,
+            paid_by=payload.paid_by or None,
+            period_month=payload.period_month,
+            breakdown=breakdown,
             status=ExpenseStatus.DRAFT.value,
             current_version=1,
             created_by=user_id,
@@ -164,6 +196,18 @@ class ExpenseService:
             expense.payment_method = payload.payment_method
         if payload.notes is not None:
             expense.notes = payload.notes
+        if payload.invoice_date is not None:
+            expense.invoice_date = payload.invoice_date
+        if payload.invoice_url is not None:
+            expense.invoice_url = payload.invoice_url or None
+        if payload.paid_by is not None:
+            expense.paid_by = payload.paid_by or None
+        if payload.period_month is not None:
+            expense.period_month = payload.period_month
+        if payload.breakdown is not None:
+            expense.breakdown = _breakdown_json(payload.breakdown)
+        # Whatever changed (amount and/or lines), they must still agree.
+        _assert_breakdown_adds_up(expense.amount, expense.breakdown)
 
         expense.updated_by = user_id
         expense.current_version += 1
@@ -337,6 +381,14 @@ class ExpenseService:
         expense.invoice_number = snap["invoice_number"]
         expense.payment_method = snap["payment_method"]
         expense.notes = snap["notes"]
+        # Snapshots written before the invoice fields existed lack these keys.
+        expense.invoice_date = (
+            datetime.fromisoformat(snap["invoice_date"]).date() if snap.get("invoice_date") else None
+        )
+        expense.invoice_url = snap.get("invoice_url")
+        expense.paid_by = snap.get("paid_by")
+        expense.period_month = snap.get("period_month")
+        expense.breakdown = snap.get("breakdown")
         expense.updated_by = user_id
         expense.current_version += 1
 

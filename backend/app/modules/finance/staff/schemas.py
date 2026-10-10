@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, Field
@@ -51,16 +51,21 @@ class StaffResponse(BaseModel):
     currency: str
     is_active: bool
     created_at: datetime
+    # Everyone here is paid per month on variable amounts (freelancers), so
+    # instead of a fixed salary we report what was actually paid out.
+    total_paid: Decimal = Decimal("0")
+    payments_count: int = 0
+    last_paid_on: date | None = None
 
     model_config = {"from_attributes": True}
 
 
 class StaffDepartmentGroup(BaseModel):
     """A department with its members grouped underneath, plus rollup
-    totals - used by the Staff page to render sectioned groups (e.g.
-    "المدرّسون: 5 أفراد، إجمالي 40,000 ر.س")."""
+    totals of what was actually paid to them."""
     department_id: uuid.UUID
     department_name: str
     member_count: int
-    total_salary: Decimal
+    total_paid: Decimal
+    payments_count: int = 0
     members: list[StaffResponse]

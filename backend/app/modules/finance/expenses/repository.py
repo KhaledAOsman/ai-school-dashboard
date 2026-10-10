@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -31,6 +31,10 @@ class ExpenseRepository:
         date_from: date | None = None,
         date_to: date | None = None,
         created_by: uuid.UUID | None = None,
+        staff_id: uuid.UUID | None = None,
+        period_month: str | None = None,
+        paid_by: str | None = None,
+        q: str | None = None,
         amount_min: float | None = None,
         amount_max: float | None = None,
         include_archived: bool = False,
@@ -52,12 +56,28 @@ class ExpenseRepository:
             stmt = stmt.where(Expense.expense_date <= date_to)
         if created_by:
             stmt = stmt.where(Expense.created_by == created_by)
+        if staff_id:
+            stmt = stmt.where(Expense.staff_id == staff_id)
+        if period_month:
+            stmt = stmt.where(Expense.period_month == period_month)
+        if paid_by:
+            stmt = stmt.where(Expense.paid_by == paid_by)
+        if q:
+            like = f"%{q.strip()}%"
+            stmt = stmt.where(
+                or_(
+                    Expense.vendor.ilike(like),
+                    Expense.description.ilike(like),
+                    Expense.invoice_number.ilike(like),
+                    Expense.notes.ilike(like),
+                )
+            )
         if amount_min is not None:
             stmt = stmt.where(Expense.amount >= amount_min)
         if amount_max is not None:
             stmt = stmt.where(Expense.amount <= amount_max)
 
-        stmt = stmt.order_by(Expense.expense_date.desc()).limit(limit).offset(offset)
+        stmt = stmt.order_by(Expense.expense_date.desc(), Expense.created_at.desc()).limit(limit).offset(offset)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 

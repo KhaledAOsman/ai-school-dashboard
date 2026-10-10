@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Download, Trash2, Paperclip, History, ArrowLeftCircle, ArrowRight, CalendarDays, Store, type LucideIcon } from "lucide-react";
+import { Download, Trash2, Paperclip, History, ArrowLeftCircle, ArrowRight, CalendarDays, Store, FileText, Link2, Pencil, UserRound, FolderTree, type LucideIcon } from "lucide-react";
 import { translate } from "@/i18n";
 import {
   useExpense,
+  useCategories,
   useSubmitExpense,
   useApproveExpense,
   useRejectExpense,
@@ -15,6 +16,8 @@ import {
   useDeleteAttachment,
 } from "@/modules/finance/hooks/useFinance";
 import { financeApi } from "@/modules/finance/services/financeApi";
+import { useStaff } from "@/modules/finance/hooks/useBudget";
+import { accountLabel, flattenCategories, periodLabel } from "@/modules/finance/utils";
 import { StatusBadge } from "@/modules/finance/components/StatusBadge";
 import { usePermission } from "@/permissions/usePermission";
 import { PERMISSIONS } from "@/permissions/constants";
@@ -48,6 +51,8 @@ export function ExpenseDetailPage() {
 
   const { data: expense, isLoading } = useExpense(id);
   const { data: attachments } = useAttachments(id);
+  const { data: categories } = useCategories();
+  const { data: staff } = useStaff(true);
 
   const submitExpense = useSubmitExpense(id);
   const approveExpense = useApproveExpense(id);
@@ -73,6 +78,9 @@ export function ExpenseDetailPage() {
   if (isLoading || !expense) {
     return <p className="text-sm text-ink-500">{translate("ar", "common_loading")}</p>;
   }
+
+  const catMap = flattenCategories(categories);
+  const staffName = (staff ?? []).find((m) => m.id === expense.staff_id)?.full_name;
 
   async function handleDownload(attachmentId: string, filename: string) {
     const blob = await financeApi.downloadAttachment(id, attachmentId);
@@ -107,22 +115,78 @@ export function ExpenseDetailPage() {
           <p className="ltr-content text-[34px] font-bold leading-tight tracking-tight text-ink-900">{formatSAR(expense.amount)}</p>
           <p className="mt-1 text-sm text-ink-500">{expense.vendor ?? expense.description ?? "—"}</p>
         </div>
-        <StatusBadge status={expense.status} />
+        <div className="flex items-center gap-3">
+          {canUpdate && expense.status !== "cancelled" && (
+            <Button variant="outline" onClick={() => navigate(`/finance/expenses/${id}/edit`)}>
+              <Pencil size={15} />
+              {translate("ar", "expense_edit")}
+            </Button>
+          )}
+          <StatusBadge status={expense.status} />
+        </div>
       </div>
 
       <div className="space-y-5">
         <Card>
-          <div className="grid grid-cols-2 gap-5">
-            <DetailRow icon={CalendarDays} label={translate("ar", "expense_date")} value={<span className="ltr-content">{expense.expense_date}</span>} />
-            <DetailRow icon={Store} label={translate("ar", "expense_vendor")} value={expense.vendor ?? "—"} />
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <DetailRow icon={CalendarDays} label="تاريخ الدفع" value={<span className="ltr-content">{expense.expense_date}</span>} />
+            <DetailRow icon={Store} label="المستفيد / المورّد" value={expense.vendor ?? "—"} />
+            <DetailRow icon={FileText} label="رقم الفاتورة" value={<span className="ltr-content">{expense.invoice_number ?? "—"}</span>} />
+            <DetailRow icon={CalendarDays} label="تاريخ الفاتورة" value={<span className="ltr-content">{expense.invoice_date ?? "—"}</span>} />
+            <DetailRow
+              icon={FolderTree}
+              label="الحساب"
+              value={
+                expense.subcategory_id
+                  ? `${accountLabel(catMap.get(expense.category_id))} ‹ ${catMap.get(expense.subcategory_id)?.name ?? ""}`
+                  : accountLabel(catMap.get(expense.category_id))
+              }
+            />
+            <DetailRow icon={CalendarDays} label="الدفعة عن شهر" value={expense.period_month ? periodLabel(expense.period_month) : "—"} />
+            <DetailRow icon={UserRound} label="مين دفع" value={expense.paid_by ?? "حساب المشروع"} />
+            <DetailRow icon={UserRound} label="الشخص المرتبط" value={staffName ?? "—"} />
           </div>
+          {expense.invoice_url && (
+            <div className="mt-4 border-t border-ink-100 pt-4">
+              <a href={expense.invoice_url} target="_blank" rel="noreferrer" className="link-underline inline-flex items-center gap-2 text-sm font-medium text-brand-600">
+                <Link2 size={15} />
+                فتح الفاتورة / إيصال التحويل
+              </a>
+            </div>
+          )}
           {expense.description && (
             <div className="mt-4 border-t border-ink-100 pt-4">
               <p className="text-xs text-ink-500">{translate("ar", "expense_description")}</p>
               <p className="mt-1 text-sm text-ink-800">{expense.description}</p>
             </div>
           )}
+          {expense.notes && (
+            <div className="mt-4 border-t border-ink-100 pt-4">
+              <p className="text-xs text-ink-500">ملاحظات</p>
+              <p className="mt-1 text-sm text-ink-800">{expense.notes}</p>
+            </div>
+          )}
         </Card>
+
+        {expense.breakdown && expense.breakdown.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>تفاصيل المبلغ</CardTitle>
+            </CardHeader>
+            <div className="divide-y divide-ink-100">
+              {expense.breakdown.map((line, i) => (
+                <div key={i} className="flex items-center justify-between py-2.5 text-sm">
+                  <span className="text-ink-800">{line.label}</span>
+                  <span className={`ltr-content font-semibold ${Number(line.amount) < 0 ? "text-danger-700" : "text-ink-800"}`}>{formatSAR(line.amount)}</span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between pt-3 text-sm font-bold text-ink-900">
+                <span>الإجمالي</span>
+                <span className="ltr-content">{formatSAR(expense.amount)}</span>
+              </div>
+            </div>
+          </Card>
+        )}
 
         {/* Actions */}
         <div className="flex flex-wrap gap-2.5">

@@ -69,6 +69,22 @@ class Expense(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     payment_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # ---- invoice register ------------------------------------------------
+    # expense_date = the day the money left; invoice_date = the date printed
+    # on the invoice / receipt (may differ). invoice_url is the link to the
+    # invoice or transfer receipt (Drive etc.). paid_by is who actually paid
+    # when it was not the project account (a partner paying out of pocket).
+    invoice_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    invoice_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    paid_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Month this payment is for, "YYYY-MM" (e.g. the salary month).
+    period_month: Mapped[str | None] = mapped_column(String(7), nullable=True, index=True)
+    # Itemised lines [{"label": "7 فيديو", "amount": "210.00"}, ...]; when
+    # present they must add up to `amount` (enforced in the service).
+    breakdown: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # Marks rows created by a bulk import so it can be re-run safely.
+    source: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+
     status: Mapped[str] = mapped_column(String(30), default="draft", nullable=False, index=True)
 
     current_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)

@@ -21,6 +21,8 @@ class ExpenseCategory(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     name_ar: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    # Chart-of-accounts code, e.g. 5300 for a group and 5310 for its sub-account.
+    code: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
     parent_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("expense_categories.id", ondelete="RESTRICT"), nullable=True
     )

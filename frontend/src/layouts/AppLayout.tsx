@@ -18,6 +18,7 @@ import {
   Receipt,
   FolderTree,
   GitBranch,
+  Landmark,
   BarChart3,
   Wallet,
   GraduationCap,
@@ -251,6 +252,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               {canViewBudget && <NavItem indented to="/finance/budget-lines" icon={Wallet} label="بنود الميزانية" />}
               {canViewCategories && <NavItem indented to="/finance/categories" icon={FolderTree} label={translate("ar", "nav_categories")} />}
               {canViewCategories && <NavItem indented to="/finance/chart-of-accounts" icon={GitBranch} label="شجرة الحسابات" />}
+              {canViewExpenses && <NavItem indented to="/finance/funding" icon={Landmark} label="التمويل" />}
               {canViewStaff && <NavItem indented to="/finance/staff" icon={GraduationCap} label="الموظفين" />}
               {canViewReports && <NavItem indented to="/finance/reports" icon={BarChart3} label={translate("ar", "nav_reports")} />}
             </NavGroup>

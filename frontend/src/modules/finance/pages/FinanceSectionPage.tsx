@@ -14,6 +14,7 @@ import { BudgetLinesPage } from "@/modules/finance/pages/BudgetLinesPage";
 import { CategoriesPage } from "@/modules/finance/pages/CategoriesPage";
 import { ChartOfAccountsPage } from "@/modules/finance/pages/ChartOfAccountsPage";
 import { StaffPage } from "@/modules/finance/pages/StaffPage";
+import { FundingPage } from "@/modules/finance/pages/FundingPage";
 import { ReportsPage } from "@/modules/finance/pages/ReportsPage";
 import { FinanceOverviewPage } from "@/modules/finance/pages/FinanceOverviewPage";
 import { usePermission } from "@/permissions/usePermission";
@@ -30,6 +31,8 @@ export function FinanceSectionPage() {
       <Route path="expenses" element={<ExpensesListPage />} />
       <Route path="expenses/new" element={<ExpenseFormPage />} />
       <Route path="expenses/:id" element={<ExpenseDetailPage />} />
+      <Route path="expenses/:id/edit" element={<ExpenseFormPage />} />
+      <Route path="funding" element={<FundingPage />} />
       <Route path="budget-lines" element={<BudgetLinesPage />} />
       <Route path="categories" element={<CategoriesPage />} />
       <Route path="chart-of-accounts" element={<ChartOfAccountsPage />} />

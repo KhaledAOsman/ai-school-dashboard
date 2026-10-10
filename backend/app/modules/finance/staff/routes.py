@@ -22,7 +22,8 @@ from app.modules.finance.staff.service import StaffDepartmentService, StaffServi
 router = APIRouter(prefix="/finance/staff", tags=["finance-staff"])
 
 
-def _to_staff_response(staff) -> StaffResponse:
+def _to_staff_response(staff, stats: dict | None = None) -> StaffResponse:
+    total, count, last = (stats or {}).get(staff.id, (0, 0, None))
     return StaffResponse(
         id=staff.id,
         full_name=staff.full_name,
@@ -34,6 +35,9 @@ def _to_staff_response(staff) -> StaffResponse:
         currency=staff.currency,
         is_active=staff.is_active,
         created_at=staff.created_at,
+        total_paid=total,
+        payments_count=count,
+        last_paid_on=last,
     )
 
 
@@ -79,7 +83,8 @@ async def list_staff(
 ):
     service = StaffService(db)
     members = await service.list_all(include_inactive=include_inactive)
-    return [_to_staff_response(m) for m in members]
+    stats = await service.payment_stats()
+    return [_to_staff_response(m, stats) for m in members]
 
 
 @router.post("", response_model=StaffResponse, status_code=201)

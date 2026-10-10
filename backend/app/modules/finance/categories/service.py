@@ -39,6 +39,7 @@ class CategoryService:
         category = ExpenseCategory(
             name=payload.name,
             name_ar=payload.name_ar,
+            code=payload.code or None,
             parent_id=payload.parent_id,
             display_order=payload.display_order,
             created_by=user_id,
@@ -69,6 +70,8 @@ class CategoryService:
             category.name = payload.name
         if payload.name_ar is not None:
             category.name_ar = payload.name_ar
+        if payload.code is not None:
+            category.code = payload.code or None
         if payload.display_order is not None:
             category.display_order = payload.display_order
 
@@ -117,6 +120,7 @@ class CategoryService:
                 id=c.id,
                 name=c.name,
                 name_ar=c.name_ar,
+                code=c.code,
                 parent_id=c.parent_id,
                 display_order=c.display_order,
                 is_archived=c.is_archived,

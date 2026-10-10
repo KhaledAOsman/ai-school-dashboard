@@ -7,6 +7,15 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 
 
+PERIOD_PATTERN = r"^\d{4}-(0[1-9]|1[0-2])$"
+
+
+class BreakdownLine(BaseModel):
+    """One itemised line of a payment, e.g. "7 فيديو" = 210 or "خصم" = -50."""
+    label: str = Field(min_length=1, max_length=200)
+    amount: Decimal = Field(max_digits=14, decimal_places=2)
+
+
 class ExpenseCreateRequest(BaseModel):
     amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
     currency: str = Field(default="SAR", min_length=3, max_length=3)
@@ -20,6 +29,11 @@ class ExpenseCreateRequest(BaseModel):
     invoice_number: str | None = Field(default=None, max_length=100)
     payment_method: str | None = Field(default=None, max_length=50)
     notes: str | None = None
+    invoice_date: date | None = None
+    invoice_url: str | None = None
+    paid_by: str | None = Field(default=None, max_length=100)
+    period_month: str | None = Field(default=None, pattern=PERIOD_PATTERN)
+    breakdown: list[BreakdownLine] | None = None
 
 
 class ExpenseUpdateRequest(BaseModel):
@@ -34,6 +48,12 @@ class ExpenseUpdateRequest(BaseModel):
     invoice_number: str | None = Field(default=None, max_length=100)
     payment_method: str | None = Field(default=None, max_length=50)
     notes: str | None = None
+    invoice_date: date | None = None
+    invoice_url: str | None = None
+    paid_by: str | None = Field(default=None, max_length=100)
+    period_month: str | None = Field(default=None, pattern=PERIOD_PATTERN)
+    # An empty list clears the breakdown.
+    breakdown: list[BreakdownLine] | None = None
     change_reason: str | None = Field(default=None, max_length=500)
 
 
@@ -60,6 +80,12 @@ class ExpenseResponse(BaseModel):
     invoice_number: str | None
     payment_method: str | None
     notes: str | None
+    invoice_date: date | None = None
+    invoice_url: str | None = None
+    paid_by: str | None = None
+    period_month: str | None = None
+    breakdown: list[BreakdownLine] | None = None
+    source: str | None = None
     status: str
     current_version: int
     created_by: uuid.UUID

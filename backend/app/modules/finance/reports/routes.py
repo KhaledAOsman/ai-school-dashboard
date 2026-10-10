@@ -53,3 +53,21 @@ async def get_recent_expenses(
 ):
     service = FinanceReportService(db)
     return await service.recent_expenses(limit=limit)
+
+
+@router.get("/account-totals")
+async def get_account_totals(
+    user: CurrentUser = Depends(require_permission(FINANCE_REPORT_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    service = FinanceReportService(db)
+    return await service.account_totals()
+
+
+@router.get("/by-period")
+async def get_monthly_by_period(
+    user: CurrentUser = Depends(require_permission(FINANCE_REPORT_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    service = FinanceReportService(db)
+    return await service.monthly_by_period()

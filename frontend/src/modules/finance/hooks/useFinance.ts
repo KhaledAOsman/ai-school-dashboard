@@ -47,7 +47,11 @@ export function useCreateExpense() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: ExpenseCreatePayload) => financeApi.createExpense(payload),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["expenses"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["account-totals"] });
+      queryClient.invalidateQueries({ queryKey: ["staff"] });
+    },
   });
 }
 
@@ -156,5 +160,33 @@ export function useRecentExpenses(limit = 10) {
   return useQuery({
     queryKey: ["recent-expenses", limit],
     queryFn: () => financeApi.getRecentExpenses(limit),
+  });
+}
+
+export function useAccountTotals() {
+  return useQuery({ queryKey: ["account-totals"], queryFn: financeApi.getAccountTotals });
+}
+
+export function useByPeriod() {
+  return useQuery({ queryKey: ["by-period"], queryFn: financeApi.getByPeriod });
+}
+
+export function useFunding() {
+  return useQuery({ queryKey: ["funding"], queryFn: financeApi.listFunding });
+}
+
+export function useCreateFunding() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: financeApi.createFunding,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["funding"] }),
+  });
+}
+
+export function useDeleteFunding() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: financeApi.deleteFunding,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["funding"] }),
   });
 }

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
-import { Plus, Users, GraduationCap, FolderPlus } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Plus, Users, GraduationCap, FolderPlus, ChevronDown, ChevronLeft } from "lucide-react";
 import { translate } from "@/i18n";
 import {
   useStaffGrouped,
@@ -15,48 +16,97 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { FormField, Input, Select } from "@/components/ui/Field";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { useExpenses } from "@/modules/finance/hooks/useFinance";
+import { formatSAR, periodLabel } from "@/modules/finance/utils";
+import type { StaffMember } from "@/modules/finance/services/budgetApi";
 
-function formatSAR(value: string | number | null): string {
-  if (value === null) return "—";
-  return `${Number(value).toLocaleString("ar-SA-u-nu-latn", { maximumFractionDigits: 2 })} ر.س`;
-}
-
-function StaffRow({ id, fullName, salary, active, canUpdate }: { id: string; fullName: string; salary: string | null; active: boolean; canUpdate: boolean }) {
-  const updateStaff = useUpdateStaff(id);
+/** Payments made to one person, newest first (loaded only when expanded). */
+function StaffPayments({ staffId }: { staffId: string }) {
+  const { data: payments, isLoading } = useExpenses({ staff_id: staffId, limit: 200 });
+  if (isLoading) return <p className="py-2 text-xs text-ink-400">جارٍ التحميل...</p>;
+  if (!payments || payments.length === 0) return <p className="py-2 text-xs text-ink-400">لا توجد دفعات مسجّلة لهذا الشخص بعد</p>;
   return (
-    <div className="flex items-center justify-between py-2.5">
-      <div className="flex items-center gap-2.5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-50 text-brand-600">
-          <GraduationCap size={14} />
-        </span>
-        <span className="text-sm font-medium text-ink-900">{fullName}</span>
-        {!active && <Badge tone="neutral">غير نشط</Badge>}
-      </div>
-      <div className="flex items-center gap-4">
-        <span className="ltr-content text-sm font-semibold text-ink-800">{formatSAR(salary)}</span>
-        {canUpdate && (
-          <button onClick={() => updateStaff.mutate({ is_active: !active })} className="link-underline text-xs font-medium text-brand-600">
-            {active ? "إلغاء التفعيل" : "تفعيل"}
-          </button>
-        )}
-      </div>
+    <div className="divide-y divide-ink-100">
+      {payments.map((p) => (
+        <Link key={p.id} to={`/finance/expenses/${p.id}`} className="flex items-center justify-between gap-3 py-2 text-sm transition-colors hover:text-brand-700">
+          <span className="text-ink-700">
+            <span className="ltr-content text-ink-500">{p.expense_date}</span>
+            {p.period_month && <span className="mr-2 text-[12.5px] text-ink-400">عن {periodLabel(p.period_month)}</span>}
+          </span>
+          <span className={`ltr-content font-semibold ${p.status === "cancelled" ? "text-ink-300 line-through" : "text-ink-800"}`}>{formatSAR(p.amount)}</span>
+        </Link>
+      ))}
     </div>
   );
 }
 
-/** One collapsible department section with its headcount + salary rollup. */
+function StaffRow({ member, canUpdate, canPay }: { member: StaffMember; canUpdate: boolean; canPay: boolean }) {
+  const updateStaff = useUpdateStaff(member.id);
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <button onClick={() => setOpen((o) => !o)} className="flex min-w-0 items-center gap-2.5 text-start">
+          {open ? <ChevronDown size={14} className="shrink-0 text-ink-400" /> : <ChevronLeft size={14} className="shrink-0 text-ink-400" />}
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+            <GraduationCap size={14} />
+          </span>
+          <span className="truncate text-sm font-medium text-ink-900">{member.full_name}</span>
+          {!member.is_active && <Badge tone="neutral">غير نشط</Badge>}
+        </button>
+        <div className="flex shrink-0 items-center gap-4">
+          <div className="text-left">
+            <p className="ltr-content text-sm font-semibold text-ink-800">{formatSAR(member.total_paid)}</p>
+            <p className="text-[12px] text-ink-400">{member.payments_count} دفعة</p>
+          </div>
+          {canPay && (
+            <Link to={`/finance/expenses/new?staff=${member.id}`} className="link-underline hidden text-xs font-medium text-brand-600 sm:inline">
+              تسجيل دفعة
+            </Link>
+          )}
+          {canUpdate && (
+            <button onClick={() => updateStaff.mutate({ is_active: !member.is_active })} className="link-underline hidden text-xs font-medium text-ink-500 sm:inline">
+              {member.is_active ? "إلغاء التفعيل" : "تفعيل"}
+            </button>
+          )}
+        </div>
+      </div>
+      {open && (
+        <div className="mr-10 mt-2 rounded-lg bg-ink-50/60 px-3 py-1">
+          <StaffPayments staffId={member.id} />
+          <div className="flex gap-4 pb-2 pt-1 sm:hidden">
+            {canPay && (
+              <Link to={`/finance/expenses/new?staff=${member.id}`} className="text-xs font-medium text-brand-600">
+                تسجيل دفعة
+              </Link>
+            )}
+            {canUpdate && (
+              <button onClick={() => updateStaff.mutate({ is_active: !member.is_active })} className="text-xs font-medium text-ink-500">
+                {member.is_active ? "إلغاء التفعيل" : "تفعيل"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** One department section with its headcount and what was actually paid out. */
 function DepartmentSection({
   departmentName,
   memberCount,
-  totalSalary,
+  totalPaid,
   members,
   canUpdate,
+  canPay,
 }: {
   departmentName: string;
   memberCount: number;
-  totalSalary: string;
-  members: { id: string; full_name: string; base_salary: string | null; is_active: boolean }[];
+  totalPaid: string;
+  members: StaffMember[];
   canUpdate: boolean;
+  canPay: boolean;
 }) {
   return (
     <Card className="p-5">
@@ -66,14 +116,14 @@ function DepartmentSection({
           <p className="mt-0.5 text-xs text-ink-500">{memberCount} فرد</p>
         </div>
         <div className="text-left">
-          <p className="ltr-content text-lg font-bold text-ink-900">{formatSAR(totalSalary)}</p>
-          <p className="text-xs text-ink-400">إجمالي الرواتب</p>
+          <p className="ltr-content text-lg font-bold text-ink-900">{formatSAR(totalPaid)}</p>
+          <p className="text-xs text-ink-400">إجمالي المدفوع</p>
         </div>
       </div>
       {members.length > 0 ? (
         <div className="mt-3 divide-y divide-ink-100 border-t border-ink-100 pt-1">
           {members.map((m) => (
-            <StaffRow key={m.id} id={m.id} fullName={m.full_name} salary={m.base_salary} active={m.is_active} canUpdate={canUpdate} />
+            <StaffRow key={m.id} member={m} canUpdate={canUpdate} canPay={canPay} />
           ))}
         </div>
       ) : (
@@ -125,12 +175,12 @@ export function StaffPage() {
   const createStaff = useCreateStaff();
   const canCreate = usePermission(PERMISSIONS.FINANCE_STAFF_CREATE);
   const canUpdate = usePermission(PERMISSIONS.FINANCE_STAFF_UPDATE);
+  const canPay = usePermission(PERMISSIONS.FINANCE_EXPENSE_CREATE);
 
   const [showForm, setShowForm] = useState(false);
   const [showAddDept, setShowAddDept] = useState(false);
   const [fullName, setFullName] = useState("");
   const [departmentId, setDepartmentId] = useState("");
-  const [salary, setSalary] = useState("");
   const [email, setEmail] = useState("");
 
   async function handleSubmit(e: FormEvent) {
@@ -139,17 +189,15 @@ export function StaffPage() {
     await createStaff.mutateAsync({
       full_name: fullName,
       department_id: departmentId,
-      base_salary: salary || null,
       email: email || null,
     });
     setFullName("");
-    setSalary("");
     setEmail("");
     setShowForm(false);
   }
 
   const totalHeadcount = (grouped ?? []).reduce((sum, g) => sum + g.member_count, 0);
-  const grandTotalSalary = (grouped ?? []).reduce((sum, g) => sum + Number(g.total_salary), 0);
+  const grandTotalPaid = (grouped ?? []).reduce((sum, g) => sum + Number(g.total_paid), 0);
 
   return (
     <div className="max-w-3xl">
@@ -157,7 +205,7 @@ export function StaffPage() {
         <div>
           <h1 className="text-[26px] font-bold tracking-tight text-ink-900">الموظفين</h1>
           <p className="mt-1 text-sm text-ink-500">
-            {totalHeadcount} فرد إجمالًا — بإجمالي رواتب {formatSAR(grandTotalSalary)}
+            {totalHeadcount} فرد — إجمالي المدفوع لهم {formatSAR(grandTotalPaid)} (الأجر متغيّر كل شهر، بيتسجّل من «مصروف جديد»)
           </p>
         </div>
         {canCreate && !showForm && (
@@ -208,14 +256,9 @@ export function StaffPage() {
               />
             )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="الراتب الأساسي (ر.س)">
-                <Input type="number" step="0.01" value={salary} onChange={(e) => setSalary(e.target.value)} className="ltr-content" />
-              </FormField>
-              <FormField label="البريد الإلكتروني (اختياري)">
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="ltr-content text-left" />
-              </FormField>
-            </div>
+            <FormField label="البريد الإلكتروني (اختياري)" hint="مفيش راتب ثابت: كل دفعة بتتسجّل بمبلغها الفعلي من صفحة الفواتير.">
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="ltr-content text-left" />
+            </FormField>
             <div className="flex gap-3">
               <Button type="submit" variant="primary" isLoading={createStaff.isPending}>
                 {translate("ar", "common_save")}
@@ -241,9 +284,10 @@ export function StaffPage() {
               key={g.department_id}
               departmentName={g.department_name}
               memberCount={g.member_count}
-              totalSalary={g.total_salary}
+              totalPaid={g.total_paid}
               members={g.members}
               canUpdate={canUpdate}
+              canPay={canPay}
             />
           ))}
         </div>

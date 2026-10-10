@@ -28,6 +28,7 @@ from app.modules.finance.expenses.models import Expense, ExpenseVersion, Expense
 from app.modules.finance.attachments.models import ExpenseAttachment  # noqa: F401
 from app.modules.finance.budget.models import BudgetLine, BudgetLineApproval  # noqa: F401
 from app.modules.finance.staff.models import StaffMember, StaffDepartment  # noqa: F401
+from app.modules.finance.funding.models import FinanceFunding  # noqa: F401
 from app.modules.crm.teachers.models import CRMTeacher, TeacherSlot  # noqa: F401
 from app.modules.crm.leads.models import Lead, LeadCallAttempt, LeadStageEvent  # noqa: F401
 from app.modules.whatsapp.models import MessageTemplate, WhatsAppMessageLog  # noqa: F401

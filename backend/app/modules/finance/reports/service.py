@@ -125,3 +125,45 @@ class FinanceReportService:
             .limit(limit)
         )
         return list(result.scalars().all())
+
+    async def account_totals(self) -> list[dict]:
+        """Spend per (category, subcategory) pair - the chart of accounts
+        builds its running totals from this in one query instead of one
+        request per node. Cancelled/archived expenses are excluded."""
+        stmt = (
+            select(
+                Expense.category_id,
+                Expense.subcategory_id,
+                func.coalesce(func.sum(Expense.amount), 0).label("total"),
+                func.count(Expense.id).label("count"),
+            )
+            .where(Expense.is_archived.is_(False), Expense.status != "cancelled")
+            .group_by(Expense.category_id, Expense.subcategory_id)
+        )
+        result = await self.db.execute(stmt)
+        return [
+            {
+                "category_id": row.category_id,
+                "subcategory_id": row.subcategory_id,
+                "total": row.total,
+                "count": row.count,
+            }
+            for row in result.all()
+        ]
+
+    async def monthly_by_period(self) -> list[dict]:
+        """Spend per business month (expenses.period_month, falling back to
+        the payment month) - what the payroll for a month actually cost."""
+        period = func.coalesce(Expense.period_month, func.to_char(Expense.expense_date, "YYYY-MM"))
+        stmt = (
+            select(
+                period.label("period"),
+                func.coalesce(func.sum(Expense.amount), 0).label("total"),
+                func.count(Expense.id).label("count"),
+            )
+            .where(Expense.is_archived.is_(False), Expense.status != "cancelled")
+            .group_by(period)
+            .order_by(period)
+        )
+        result = await self.db.execute(stmt)
+        return [{"period": row.period, "total": row.total, "count": row.count} for row in result.all()]

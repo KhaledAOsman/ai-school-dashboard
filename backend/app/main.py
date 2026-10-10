@@ -31,6 +31,7 @@ from app.modules.finance.attachments.routes import router as finance_attachments
 from app.modules.finance.budget.routes import router as finance_budget_router
 from app.modules.finance.categories.routes import router as finance_categories_router
 from app.modules.finance.expenses.routes import router as finance_expenses_router
+from app.modules.finance.funding.routes import router as finance_funding_router
 from app.modules.finance.reports.routes import router as finance_reports_router
 from app.modules.finance.staff.routes import router as finance_staff_router
 from app.modules.crm.leads.routes import bookings_router as crm_bookings_router
@@ -97,6 +98,7 @@ app.include_router(finance_attachments_router, prefix=API_PREFIX)
 app.include_router(finance_reports_router, prefix=API_PREFIX)
 app.include_router(finance_budget_router, prefix=API_PREFIX)
 app.include_router(finance_staff_router, prefix=API_PREFIX)
+app.include_router(finance_funding_router, prefix=API_PREFIX)
 app.include_router(crm_leads_router, prefix=API_PREFIX)
 app.include_router(crm_bookings_router, prefix=API_PREFIX)
 app.include_router(crm_teachers_router, prefix=API_PREFIX)
