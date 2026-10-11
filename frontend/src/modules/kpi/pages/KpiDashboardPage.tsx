@@ -10,7 +10,7 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ArrowDownRight, ArrowUpRight, ChevronDown, Info, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { FormField, Input } from "@/components/ui/Field";
@@ -26,6 +26,8 @@ const PURPLE = "#6d3af2";
 const PURPLE_SOFT = "#bea3ff";
 const ORANGE = "#ff8a3d";
 const GRAY = "#c3c8da";
+const PENDING = "#f5b83d"; // waiting for a status change: amber, clearly apart from orange (did not attend)
+const NOT_BOOKED = "#8f97b3"; // registered but never booked: solid slate, visible on white
 const PLATFORM_COLORS = [PURPLE, PURPLE_SOFT, ORANGE];
 const SOURCE_LABELS: Record<string, string> = {
   instagram: "إنستغرام (ميتا)", snapchat: "سناب شات", tiktok: "تيك توك", website: "تسجيل الموقع", organic: "زيارات مباشرة", other: "غير محدد المصدر",
@@ -270,13 +272,14 @@ function Operations({ cur }: { cur: PeriodMetrics }) {
       } else rows.push(r);
     }
     if (direct) rows.push(direct);
-    return rows;
+    // total registrations per source = the whole bar, shown as a number at its end
+    return rows.map((r) => ({ ...r, total: r.attended + r.not_attended + r.pending + r.not_booked }));
   }, [cur.sources]);
   const total = Math.max(f.booked, 1);
   const split = [
     { key: "attended", label: "حضروا", v: f.attended, color: PURPLE },
     { key: "not_attended", label: "لم يحضروا", v: f.not_attended, color: ORANGE },
-    { key: "pending", label: "بانتظار تغيّر الحالة", v: f.pending_attendance, color: GRAY },
+    { key: "pending", label: "بانتظار تغيّر الحالة", v: f.pending_attendance, color: PENDING },
   ];
   const platforms = cur.marketing.platforms;
   const spendTotal = Number(cur.marketing.total_spend) || 0;
@@ -361,7 +364,7 @@ function Operations({ cur }: { cur: PeriodMetrics }) {
           <div className="pt-4">
             <div className="ltr-content" style={{ height: Math.max(220, sources.length * 46 + 50) }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={sources} layout="vertical" margin={{ top: 0, right: 12, left: 8, bottom: 0 }} barSize={16}>
+                <BarChart data={sources} layout="vertical" margin={{ top: 0, right: 44, left: 8, bottom: 0 }} barSize={16}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#eef1f6" horizontal={false} />
                   <XAxis type="number" allowDecimals={false} tick={{ fill: "#555b7a", fontSize: 12 }} axisLine={false} tickLine={false} />
                   <YAxis type="category" dataKey="name" width={110} tick={{ fill: "#2d3149", fontSize: 12 }} axisLine={false} tickLine={false} />
@@ -369,12 +372,14 @@ function Operations({ cur }: { cur: PeriodMetrics }) {
                   <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
                   <Bar dataKey="attended" name="حضروا" stackId="a" fill={PURPLE} />
                   <Bar dataKey="not_attended" name="لم يحضروا" stackId="a" fill={ORANGE} />
-                  <Bar dataKey="pending" name="بانتظار تغيّر الحالة" stackId="a" fill={GRAY} />
-                  <Bar dataKey="not_booked" name="لم يحجزوا" stackId="a" fill="#eceef5" radius={[0, 6, 6, 0]} />
+                  <Bar dataKey="pending" name="بانتظار تغيّر الحالة" stackId="a" fill={PENDING} />
+                  <Bar dataKey="not_booked" name="لم يحجزوا" stackId="a" fill={NOT_BOOKED} radius={[0, 6, 6, 0]}>
+                    <LabelList dataKey="total" position="right" offset={8} style={{ fill: "#2d3149", fontSize: 12.5, fontWeight: 700 }} />
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <p className="mt-1 text-[12px] text-ink-500">كل شريط = عدد المحتملين من المصدر مقسّمًا على حالة الحجز.</p>
+            <p className="mt-1 text-[12px] text-ink-500">الرقم في آخر كل شريط = إجمالي التسجيلات من المصدر، والشريط مقسّم على حالة الحجز.</p>
           </div>
         )}
 
