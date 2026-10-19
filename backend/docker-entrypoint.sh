@@ -16,5 +16,15 @@ if [ -n "$SEED_ADMIN_EMAIL" ] && [ -n "$SEED_ADMIN_PASSWORD" ]; then
     python -m scripts.seed_initial_data || echo "Seed step finished (non-fatal if already seeded)."
 fi
 
-echo "Starting API server..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers
+# Workers: the app is stateless (sessions are JWT + DB, cache / rate-limit
+# counters live in Redis, uploads on the shared volume), so several worker
+# processes - or several containers - can serve requests side by side.
+# --forwarded-allow-ips='*' is safe ONLY because the port is never
+# published: nginx (which overwrites X-Forwarded-For) is the sole client.
+WORKERS="${UVICORN_WORKERS:-2}"
+echo "Starting API server with $WORKERS worker(s)..."
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000 \
+    --workers "$WORKERS" \
+    --proxy-headers --forwarded-allow-ips='*' \
+    --timeout-keep-alive 30 \
+    --no-server-header

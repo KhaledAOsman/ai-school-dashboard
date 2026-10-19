@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth.dependencies import CurrentUser, get_current_user
@@ -24,19 +24,29 @@ from app.core.settings.config import get_settings
 from app.core.users.models import User
 from app.core.users.repository import UserRepository
 from app.database.session import get_db
+from app.middleware.rate_limit import client_ip, hit
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
 
 
 def _client_info(request: Request) -> tuple[str | None, str | None]:
-    ip = request.client.host if request.client else None
+    ip = client_ip(request)
     ua = request.headers.get("user-agent")
     return ip, ua
 
 
+async def _account_limit(kind: str, email: str) -> None:
+    """Per-account budget on top of the per-IP one in the middleware, so a
+    botnet rotating IPs still cannot hammer a single account."""
+    retry = await hit(kind, f"acct:{email.strip().lower()}")
+    if retry is not None:
+        raise HTTPException(429, "محاولات كثيرة على هذا الحساب — حاول لاحقًا", headers={"Retry-After": str(retry)})
+
+
 @router.post("/login", response_model=LoginResponse)
 async def login(payload: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    await _account_limit("login_acct", payload.email)
     ip, ua = _client_info(request)
     service = AuthService(db)
     result = await service.login(
@@ -100,10 +110,13 @@ async def change_password(
 @router.post("/password/reset-request", status_code=204)
 async def request_password_reset(payload: PasswordResetRequestSchema, db: AsyncSession = Depends(get_db)):
     """
+    Per-account limit first (5 / hour by default) so the endpoint cannot be
+    used to flood one mailbox.
     Always returns 204 regardless of whether the email exists - this is
     intentional (spec: do not expose whether an email exists). The reset
     token itself is delivered out-of-band (email), not in this response.
     """
+    await _account_limit("reset_acct", payload.email)
     service = AuthService(db)
     reset_token = await service.request_password_reset(email=payload.email)
     if reset_token:

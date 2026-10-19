@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { FormField, Input, Select, Textarea } from "@/components/ui/Field";
+import { Pager } from "@/components/ui/Pager";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { usePermission } from "@/permissions/usePermission";
 import { PERMISSIONS } from "@/permissions/constants";
@@ -38,8 +39,11 @@ function SummaryTile({ label, value }: { label: string; value: string }) {
   );
 }
 
+const PAGE_SIZE = 25;
+
 export function SubscriptionsPage() {
-  const { data, isLoading } = useSubscriptions();
+  const [page, setPage] = useState(1);
+  const { data, isLoading } = useSubscriptions(page, PAGE_SIZE);
   const create = useCreateSubscription();
   const update = useUpdateSubscription();
   const remove = useDeleteSubscription();
@@ -222,6 +226,7 @@ export function SubscriptionsPage() {
             </table>
           </div>
         )}
+        <Pager page={page} pageSize={PAGE_SIZE} total={data?.total ?? 0} onChange={setPage} />
       </Card>
     </div>
   );

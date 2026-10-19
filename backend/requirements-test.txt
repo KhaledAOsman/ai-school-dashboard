@@ -1,5 +1,5 @@
-# Testing dependencies (also listed in requirements.txt, kept here as
-# reference for CI setups that install test deps separately).
+# Testing dependencies - install on top of requirements.txt when running
+# the pytest suite (they are NOT shipped in the production image).
 pytest==8.3.4
 pytest-asyncio==0.25.0
 pytest-cov==6.0.0

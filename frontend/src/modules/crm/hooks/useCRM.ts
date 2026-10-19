@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { crmLeadApi, crmBookingApi, crmTeacherApi, crmDashboardApi, type LeadSearchParams, type CallOutcome, type LeadImportRow } from "@/modules/crm/services/crmApi";
+import { crmLeadApi, crmBookingApi, crmTeacherApi, crmDashboardApi, type LeadSearchParams, type CallOutcome, type LeadImportRow, type LeadGroup } from "@/modules/crm/services/crmApi";
 
 export function useCRMDashboardStats() {
   return useQuery({
@@ -78,6 +78,12 @@ export function useLeads(params: { stage?: string; mine_only?: boolean } = {}) {
 /** Paginated, searchable, filterable leads listing - used by the main
  * leads table so it stays fast and usable at 1000+ rows. `placeholderData`
  * avoids a loading flash when just paging/filtering. */
+/** Lives under the "crm-leads-search" key so every lead mutation that
+ * refreshes the lists refreshes the tab counts too. */
+export function useStageCounts(group: LeadGroup) {
+  return useQuery({ queryKey: ["crm-leads-search", "stage-counts", group], queryFn: () => crmLeadApi.stageCounts(group) });
+}
+
 export function useLeadsSearch(params: LeadSearchParams) {
   return useQuery({
     queryKey: ["crm-leads-search", params],

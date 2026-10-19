@@ -1,3 +1,4 @@
+import type { Paged } from "@/components/ui/Pager";
 /**
  * Finance API service layer. All finance HTTP calls go through here -
  * pages/components never call `api` directly, so response shapes and
@@ -165,6 +166,11 @@ export interface FundingPayload {
   note?: string | null;
 }
 
+export interface ExpensePage extends Paged<Expense> {
+  active_count: number;
+  active_amount: string;
+}
+
 export interface ExpenseFilters {
   status?: string;
   category_id?: string;
@@ -202,6 +208,12 @@ export const financeApi = {
   // ---- Expenses ----
   listExpenses: async (filters: ExpenseFilters = {}): Promise<Expense[]> => {
     const { data } = await api.get("/finance/expenses", { params: filters });
+    return data;
+  },
+  listPayers: async (): Promise<string[]> => (await api.get("/finance/expenses/payers")).data,
+  /** One page + totals of the whole filtered set (expenses screen). */
+  pageExpenses: async (filters: ExpenseFilters & { page: number; page_size: number }): Promise<ExpensePage> => {
+    const { data } = await api.get("/finance/expenses/page", { params: filters });
     return data;
   },
   getExpense: async (id: string): Promise<ExpenseDetail> => {

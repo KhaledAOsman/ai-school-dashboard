@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
-from sqlalchemy import or_, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -23,7 +23,7 @@ class ExpenseRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_filtered(
+    def _filtered(
         self,
         *,
         status: str | None = None,
@@ -39,9 +39,7 @@ class ExpenseRepository:
         amount_min: float | None = None,
         amount_max: float | None = None,
         include_archived: bool = False,
-        limit: int = 50,
-        offset: int = 0,
-    ) -> list[Expense]:
+    ) -> Select:
         stmt = select(Expense)
         if not include_archived:
             stmt = stmt.where(Expense.is_archived.is_(False))
@@ -79,9 +77,39 @@ class ExpenseRepository:
         if amount_max is not None:
             stmt = stmt.where(Expense.amount <= amount_max)
 
+        return stmt
+
+    async def list_filtered(self, *, limit: int = 50, offset: int = 0, **filters) -> list[Expense]:
+        stmt = self._filtered(**filters)
         stmt = stmt.order_by(Expense.expense_date.desc(), Expense.created_at.desc()).limit(limit).offset(offset)
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
+
+    async def page_filtered(self, *, page: int, page_size: int, **filters) -> dict:
+        """One page of rows plus the totals of the WHOLE filtered set (so the
+        footer sums every matching invoice, not just the visible page)."""
+        base = self._filtered(**filters).subquery()
+        active = base.c.status != "cancelled"
+        agg = (
+            await self.db.execute(
+                select(
+                    func.count(),
+                    func.count().filter(active),
+                    func.coalesce(func.sum(base.c.amount).filter(active), 0),
+                ).select_from(base)
+            )
+        ).one()
+        total, active_count, active_sum = int(agg[0]), int(agg[1]), agg[2]
+        items = await self.list_filtered(limit=page_size, offset=(page - 1) * page_size, **filters)
+        return {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": max((total + page_size - 1) // page_size, 1),
+            "active_count": active_count,
+            "active_amount": active_sum,
+        }
 
     def add(self, expense: Expense) -> None:
         self.db.add(expense)

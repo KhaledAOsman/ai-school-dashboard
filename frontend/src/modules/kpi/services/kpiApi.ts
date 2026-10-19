@@ -90,7 +90,7 @@ export interface Reconciliation {
 export interface PeriodOption {
   key: string;
   label: string;
-  group: "quarter" | "range";
+  group: "quarter" | "range" | "phase";
 }
 
 export interface Targets {
@@ -100,13 +100,26 @@ export interface Targets {
   min_attendance: number;
 }
 
+export interface Phase {
+  id: string;
+  name: string;
+  start: string;
+  end_inclusive: string;
+  targets: Targets;
+}
+
 export interface KpiSettings {
   phase_start: string;
   phase_end_inclusive: string;
   targets: Targets;
+  phases: Phase[];
 }
 
+export type PhaseInput = Omit<Phase, "id"> & { id?: string | null };
+
 export interface PhaseGoals {
+  id: string;
+  name: string;
   start: string;
   end_inclusive: string;
   includes_cumulative: boolean;
@@ -146,4 +159,6 @@ export const kpiApi = {
     (await api.get("/kpi-dashboard/summary", { params: period ? { period } : {} })).data,
   updateSettings: async (payload: KpiSettingsUpdate): Promise<KpiSettings> =>
     (await api.patch("/kpi-dashboard/settings", payload)).data,
+  savePhases: async (phases: PhaseInput[]): Promise<KpiSettings> =>
+    (await api.put("/kpi-dashboard/phases", { phases })).data,
 };

@@ -7,10 +7,11 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Users, Search, ChevronRight, ChevronLeft, Upload, X, Instagram, Music2, Ghost, Sparkles, Globe } from "lucide-react";
+import { Plus, Users, Search, ChevronRight, ChevronLeft, Upload, X, Instagram, Music2, Ghost, Footprints, Globe } from "lucide-react";
 import { translate } from "@/i18n";
 import {
   useLeadsSearch,
+  useStageCounts,
   useLeadSources,
   useBulkAssignLeads,
   useLogCallAttempt,
@@ -70,7 +71,7 @@ export const SOURCE_ICON: Record<LeadSource, { Icon: typeof Instagram; label: st
   tiktok: { Icon: Music2, label: "تيك توك", className: "text-ink-900 bg-ink-100" },
   snapchat: { Icon: Ghost, label: "سناب شات", className: "text-yellow-600 bg-yellow-50" },
   website: { Icon: Globe, label: "الموقع", className: "text-brand-600 bg-brand-50" },
-  organic: { Icon: Sparkles, label: "عضوي", className: "text-brand-600 bg-brand-50" },
+  organic: { Icon: Footprints, label: "زيارات مباشرة", className: "text-brand-600 bg-brand-50" },
 };
 
 function userLabel(u: { full_name: string; email: string }): string {
@@ -207,11 +208,8 @@ function StageTabs({ value, onChange }: { value: string; onChange: (v: string) =
     { key: "contacted", label: "تم الاتصال" },
     { key: "not_answered", label: "لم يتم الرد" },
   ];
-  const all = useLeadsSearch({ page: 1, page_size: 1, group: "leads" }).data?.total;
-  const n = useLeadsSearch({ page: 1, page_size: 1, group: "leads", stage: "new" }).data?.total;
-  const c = useLeadsSearch({ page: 1, page_size: 1, group: "leads", stage: "contacted" }).data?.total;
-  const na = useLeadsSearch({ page: 1, page_size: 1, group: "leads", stage: "not_answered" }).data?.total;
-  const counts: Record<string, number | undefined> = { "": all, new: n, contacted: c, not_answered: na };
+  const { data } = useStageCounts("leads");
+  const counts: Record<string, number | undefined> = data ? { "": data[""] ?? 0, new: data.new ?? 0, contacted: data.contacted ?? 0, not_answered: data.not_answered ?? 0 } : {};
   return (
     <div className="mb-4 flex gap-1 overflow-x-auto border-b border-ink-200">
       {tabs.map((t) => (

@@ -25,7 +25,17 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.compiler import compiles
+
 from app.database.base import Base
+import app.main  # noqa: F401,E402  (registers every model on Base.metadata)
+
+
+@compiles(JSONB, "sqlite")
+def _jsonb_on_sqlite(element, compiler, **kw):  # tests run on SQLite: JSONB -> JSON
+    return "JSON"
+
 from app.database.session import get_db
 from app.core.users.models import Permission, Role, User, AccountStatus
 from app.core.permissions.registry import SEED_PERMISSIONS

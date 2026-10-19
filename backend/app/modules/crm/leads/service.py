@@ -594,11 +594,13 @@ class LeadService:
         sort_dir: str,
         attendance: str | None = None,
         unique_phone: bool = False,
+        open_only: bool = False,
     ) -> PaginatedLeadResponse:
         leads, total = await self.repo.list_paginated(
             page=page, page_size=page_size, search=search, stage=stage, stages=stages, source=source,
             assigned_to=assigned_to, date_from=date_from, date_to=date_to,
             sort_by=sort_by, sort_dir=sort_dir, attendance=attendance, unique_phone=unique_phone,
+            open_only=open_only,
         )
         items = [await self._to_response(l) for l in leads]
         total_pages = max(1, (total + page_size - 1) // page_size)

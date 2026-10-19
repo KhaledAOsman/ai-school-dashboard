@@ -104,10 +104,12 @@ for the application's database role, where that role exists.
 ## API security
 
 - **CORS**: strict allowlist from `CORS_ORIGINS`, never a wildcard.
-- **Rate limiting**: global default (`GLOBAL_RATE_LIMIT`, default
-  100/min) plus a stricter limit specifically on `/auth/login` and
-  `/auth/mfa/verify` (`LOGIN_RATE_LIMIT`, default 10/min) to blunt
-  credential-stuffing attempts.
+- **Rate limiting**: separate budgets per kind of request - login (per IP
+  and per account), MFA / refresh / password reset (per IP, reset also per
+  account), uploads, expensive reports and the general API (per user and
+  per IP) - with counters shared in Redis (`app/middleware/rate_limit.py`,
+  limits in `RATE_LIMIT_*`). nginx adds a coarse per-IP limit in front.
+  See `deploy/RUNBOOK.md`.
 - **Security headers** on every response: `X-Content-Type-Options`,
   `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`,
   `Strict-Transport-Security` (`app/middleware/security.py`).

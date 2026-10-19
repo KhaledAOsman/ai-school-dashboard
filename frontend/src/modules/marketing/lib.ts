@@ -17,7 +17,7 @@ export const PLATFORM_LABELS: Record<string, string> = {
 
 export const SOURCE_LABELS: Record<string, string> = {
   ...PLATFORM_LABELS,
-  organic: "عضوي",
+  organic: "زيارات مباشرة",
   other: "أخرى",
 };
 

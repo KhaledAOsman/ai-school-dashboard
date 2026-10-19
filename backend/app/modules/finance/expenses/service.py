@@ -192,6 +192,9 @@ class ExpenseService:
     async def list_filtered(self, **filters) -> list[Expense]:
         return await self.repo.list_filtered(**filters)
 
+    async def page_filtered(self, **filters) -> dict:
+        return await self.repo.page_filtered(**filters)
+
     # --------------------------------------------------------------- update
     async def update(
         self, *, expense_id: uuid.UUID, payload: ExpenseUpdateRequest, user_id: uuid.UUID

@@ -6,7 +6,6 @@ import {
   useCategories,
   useCreateExpense,
   useExpense,
-  useExpenses,
   useUpdateExpense,
 } from "@/modules/finance/hooks/useFinance";
 import { useBudgetLines, useStaff, useStaffDepartments } from "@/modules/finance/hooks/useBudget";
@@ -16,7 +15,8 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FormField, Input, Select, Textarea } from "@/components/ui/Field";
 import { formatSAR, fromCents, periodLabel, toCents } from "@/modules/finance/utils";
-import type { Category } from "@/modules/finance/services/financeApi";
+import { financeApi, type Category } from "@/modules/finance/services/financeApi";
+import { useQuery } from "@tanstack/react-query";
 
 interface Line {
   label: string;
@@ -68,7 +68,7 @@ export function ExpenseFormPage() {
   const { data: staff } = useStaff();
   const { data: departments } = useStaffDepartments();
   const { data: existing } = useExpense(id);
-  const { data: recent } = useExpenses({ limit: 200 });
+  const { data: payers = [] } = useQuery({ queryKey: ["expense-payers"], queryFn: financeApi.listPayers, staleTime: 5 * 60_000 });
   const createExpense = useCreateExpense();
   const updateExpense = useUpdateExpense(id ?? "");
   const canApprove = usePermission(PERMISSIONS.FINANCE_EXPENSE_APPROVE);
@@ -162,11 +162,6 @@ export function ExpenseFormPage() {
       if (person) setVendor(person.full_name);
     }
   }
-
-  const payers = useMemo(
-    () => Array.from(new Set((recent ?? []).map((e) => e.paid_by).filter((v): v is string => !!v))),
-    [recent]
-  );
 
   const totalCents = lines.reduce((sum, l) => sum + toCents(l.amount), 0);
   const total = fromCents(totalCents);

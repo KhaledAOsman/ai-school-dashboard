@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +21,7 @@ from app.modules.finance.revenue.models import FinanceRevenue
 from app.modules.finance.revenue.schemas import (
     RevenueCreateRequest,
     RevenueMonth,
+    RevenuePage,
     RevenueResponse,
     RevenueSummary,
     RevenueUpdateRequest,
@@ -85,15 +86,7 @@ async def revenue_summary(
     )
 
 
-@router.get("", response_model=list[RevenueResponse])
-async def list_revenue(
-    date_from: date | None = None,
-    date_to: date | None = None,
-    q: str | None = None,
-    limit: int = 500,
-    user: CurrentUser = Depends(require_permission(FINANCE_EXPENSE_VIEW)),
-    db: AsyncSession = Depends(get_db),
-):
+def _revenue_filtered(date_from: date | None, date_to: date | None, q: str | None):
     stmt = select(FinanceRevenue)
     if date_from:
         stmt = stmt.where(FinanceRevenue.revenue_date >= date_from)
@@ -105,8 +98,48 @@ async def list_revenue(
             FinanceRevenue.customer_name.ilike(like), FinanceRevenue.package_name.ilike(like),
             FinanceRevenue.invoice_number.ilike(like), FinanceRevenue.note.ilike(like),
         ))
-    stmt = stmt.order_by(FinanceRevenue.revenue_date.desc(), FinanceRevenue.created_at.desc()).limit(min(limit, 2000))
+    return stmt
+
+
+_REV_ORDER = (FinanceRevenue.revenue_date.desc(), FinanceRevenue.created_at.desc())
+
+
+@router.get("", response_model=list[RevenueResponse])
+async def list_revenue(
+    date_from: date | None = None,
+    date_to: date | None = None,
+    q: str | None = Query(default=None, max_length=100),
+    limit: int = Query(default=500, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    user: CurrentUser = Depends(require_permission(FINANCE_EXPENSE_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = _revenue_filtered(date_from, date_to, q).order_by(*_REV_ORDER).limit(limit).offset(offset)
     return [_out(r) for r in (await db.execute(stmt)).scalars().all()]
+
+
+@router.get("/page", response_model=RevenuePage)
+async def page_revenue(
+    date_from: date | None = None,
+    date_to: date | None = None,
+    q: str | None = Query(default=None, max_length=100),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    user: CurrentUser = Depends(require_permission(FINANCE_EXPENSE_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    """One page of deposits + totals over every matching deposit."""
+    base = _revenue_filtered(date_from, date_to, q).subquery()
+    total, amount, fees = (await db.execute(
+        select(func.count(), func.coalesce(func.sum(base.c.amount), 0), func.coalesce(func.sum(base.c.fees_amount), 0)).select_from(base)
+    )).one()
+    stmt = _revenue_filtered(date_from, date_to, q).order_by(*_REV_ORDER).limit(page_size).offset((page - 1) * page_size)
+    items = [_out(r) for r in (await db.execute(stmt)).scalars().all()]
+    return RevenuePage(
+        items=items, total=total, page=page, page_size=page_size,
+        total_pages=max((total + page_size - 1) // page_size, 1),
+        sum_amount=amount, sum_fees=fees, sum_gross=amount + fees,
+    )
 
 
 @router.post("", response_model=RevenueResponse, status_code=201)

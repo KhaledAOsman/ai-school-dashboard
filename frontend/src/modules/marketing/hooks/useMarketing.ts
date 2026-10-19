@@ -8,8 +8,12 @@ function useInvalidate(keys: string[]) {
   return () => keys.forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
 }
 
-export function useSubscriptions() {
-  return useQuery({ queryKey: ["subscriptions"], queryFn: marketingApi.listSubscriptions });
+export function useSubscriptions(page = 1, pageSize = 25) {
+  return useQuery({
+    queryKey: ["subscriptions", page, pageSize],
+    queryFn: () => marketingApi.listSubscriptions(page, pageSize),
+    placeholderData: (prev) => prev,
+  });
 }
 
 export function useCreateSubscription() {

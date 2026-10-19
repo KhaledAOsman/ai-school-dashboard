@@ -28,6 +28,14 @@ export function useArchiveCategory() {
   });
 }
 
+export function useExpensePage(filters: ExpenseFilters & { page: number; page_size: number }) {
+  return useQuery({
+    queryKey: ["expenses", "page", filters],
+    queryFn: () => financeApi.pageExpenses(filters),
+    placeholderData: (prev) => prev,
+  });
+}
+
 export function useExpenses(filters: ExpenseFilters = {}) {
   return useQuery({
     queryKey: ["expenses", filters],

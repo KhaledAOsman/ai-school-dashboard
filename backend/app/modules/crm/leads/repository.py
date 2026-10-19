@@ -66,6 +66,7 @@ class LeadRepository:
         sort_dir: str = "desc",
         attendance: str | None = None,
         unique_phone: bool = False,
+        open_only: bool = False,
     ) -> tuple[list[Lead], int]:
         """
         Server-side pagination, search, and filtering - this is what makes
@@ -91,6 +92,9 @@ class LeadRepository:
             conditions.append(exists().where(Booking.lead_id == Lead.id, Booking.attended.is_(None)))
         elif attendance == "not_attended":
             conditions.append(exists().where(Booking.lead_id == Lead.id, Booking.attended.is_(False)))
+        if open_only:
+            conditions.append(Lead.is_converted.is_(False))
+            conditions.append(Lead.is_lost.is_(False))
         if stages:
             conditions.append(Lead.stage.in_(stages))
         if stage:

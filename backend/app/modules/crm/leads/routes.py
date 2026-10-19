@@ -5,6 +5,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth.dependencies import CurrentUser
@@ -18,7 +19,7 @@ from app.core.permissions.registry import (
     CRM_LEAD_VIEW_ALL,
 )
 from app.database.session import get_db
-from app.modules.crm.leads.models import BOOKINGS_GROUP_STAGES, INTERESTED_GROUP_STAGES, LEADS_GROUP_STAGES
+from app.modules.crm.leads.models import Lead, BOOKINGS_GROUP_STAGES, INTERESTED_GROUP_STAGES, LEADS_GROUP_STAGES
 from app.modules.crm.leads.schemas import (
     LeadAdvanceRequest,
     LeadAttendanceRequest,
@@ -73,6 +74,7 @@ async def search_leads(
     mine_only: bool = Query(default=False),
     attendance: str | None = Query(default=None, pattern="^(pending|not_attended)$"),
     unique_phone: bool = Query(default=False, description="One row per phone number (customer list)"),
+    open_only: bool = Query(default=False, description="Hide converted and lost customers"),
     user: CurrentUser = Depends(require_permission(CRM_LEAD_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
@@ -98,6 +100,7 @@ async def search_leads(
         page=page, page_size=page_size, search=search, stage=stage, stages=stages, source=source,
         assigned_to=effective_assigned_to, date_from=date_from, date_to=date_to,
         sort_by=sort_by, sort_dir=sort_dir, attendance=attendance, unique_phone=unique_phone,
+        open_only=open_only,
     )
 
 
@@ -110,6 +113,24 @@ async def list_sources(
     dropdown with real data instead of a hardcoded list."""
     service = LeadService(db)
     return await service.list_sources()
+
+
+@router.get("/meta/stage-counts", response_model=dict[str, int])
+async def stage_counts(
+    group: str = Query(default="leads", pattern="^(leads|bookings|interested)$"),
+    user: CurrentUser = Depends(require_permission(CRM_LEAD_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Per-stage counts for one section's tabs in a single GROUP BY query
+    (the tabs used to fire one count request per tab). "" holds the total.
+    Reps without view-all only count their own customers, like the list."""
+    stages = {"leads": LEADS_GROUP_STAGES, "bookings": BOOKINGS_GROUP_STAGES, "interested": INTERESTED_GROUP_STAGES}[group]
+    stmt = select(Lead.stage, func.count(Lead.id)).where(Lead.stage.in_(stages)).group_by(Lead.stage)
+    if CRM_LEAD_VIEW_ALL not in user.permissions:
+        stmt = stmt.where(Lead.assigned_to == user.id)
+    counts = {str(getattr(stage, "value", stage)): n for stage, n in (await db.execute(stmt)).all()}
+    counts[""] = sum(counts.values())
+    return counts
 
 
 @router.get("/meta/schedule", response_model=list[ScheduledLectureResponse])

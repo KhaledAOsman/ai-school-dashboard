@@ -189,7 +189,7 @@ class AuthService:
     def _create_mfa_challenge_token(self, user_id: uuid.UUID) -> str:
         # Short-lived, single-purpose token distinct from access tokens -
         # cannot be used to call any API other than /auth/mfa/verify.
-        from jose import jwt
+        import jwt
 
         now = datetime.now(timezone.utc)
         payload = {
@@ -201,7 +201,8 @@ class AuthService:
         return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
     def _decode_mfa_challenge_token(self, token: str) -> uuid.UUID:
-        from jose import JWTError, jwt
+        import jwt
+        from jwt import PyJWTError as JWTError
 
         try:
             payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
@@ -392,7 +393,7 @@ class AuthService:
             return None
 
         # Reuse the MFA-challenge-style short-lived JWT pattern for reset tokens.
-        from jose import jwt
+        import jwt
 
         now = datetime.now(timezone.utc)
         payload = {
@@ -404,7 +405,8 @@ class AuthService:
         return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
     async def confirm_password_reset(self, *, reset_token: str, new_password: str) -> None:
-        from jose import JWTError, jwt
+        import jwt
+        from jwt import PyJWTError as JWTError
 
         try:
             payload = jwt.decode(

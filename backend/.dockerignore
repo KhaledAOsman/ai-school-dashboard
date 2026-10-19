@@ -9,3 +9,6 @@ storage/attachments/*
 .pytest_cache/
 .mypy_cache/
 *.egg-info/
+tests/
+pytest.ini
+requirements-test.txt

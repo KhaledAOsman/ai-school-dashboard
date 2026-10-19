@@ -87,7 +87,7 @@ export function BookingsPage() {
   const [filter, setFilter] = useState<"all" | "pending" | "not_attended">("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const { data, isLoading } = useBookings({ page, page_size: 100, search: search || undefined, attendance: filter === "all" ? undefined : filter });
+  const { data, isLoading } = useBookings({ page, page_size: 50, search: search || undefined, attendance: filter === "all" ? undefined : filter });
   const items = data?.items ?? [];
   const fmt = (n: number) => n.toLocaleString("ar-SA-u-nu-latn");
   const all = data ? data.pending + data.attended + data.not_attended : null;

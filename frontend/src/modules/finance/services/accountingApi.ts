@@ -1,3 +1,4 @@
+import type { Paged } from "@/components/ui/Pager";
 /** Accounting (double-entry) + subscription revenue API layer. */
 import { api } from "@/lib/apiClient";
 
@@ -243,6 +244,12 @@ export interface RevenuePayload {
 const clean = <T extends object>(p: T): T =>
   Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined && v !== "" && v !== null)) as T;
 
+export interface RevenuePage extends Paged<Revenue> {
+  sum_amount: string;
+  sum_fees: string;
+  sum_gross: string;
+}
+
 export const accountingApi = {
   accounts: async (): Promise<AccountRow[]> => (await api.get("/finance/accounting/accounts")).data,
   journal: async (params: JournalParams): Promise<JournalResponse> =>
@@ -264,8 +271,10 @@ export const accountingApi = {
     await api.delete(`/finance/accounting/journal/${id}`, { data: { reason } });
   },
 
-  listRevenue: async (params: { date_from?: string; date_to?: string; q?: string }): Promise<Revenue[]> =>
-    (await api.get("/finance/revenue", { params: { ...clean(params), limit: 2000 } })).data,
+  listRevenue: async (params: { date_from?: string; date_to?: string; q?: string; limit?: number; offset?: number }): Promise<Revenue[]> =>
+    (await api.get("/finance/revenue", { params: { limit: 500, ...clean(params) } })).data,
+  pageRevenue: async (params: { date_from?: string; date_to?: string; q?: string; page: number; page_size: number }): Promise<RevenuePage> =>
+    (await api.get("/finance/revenue/page", { params: clean(params) })).data,
   revenueSummary: async (): Promise<RevenueSummary> => (await api.get("/finance/revenue/summary")).data,
   createRevenue: async (payload: RevenuePayload): Promise<Revenue> => (await api.post("/finance/revenue", payload)).data,
   deleteRevenue: async (id: string) => {

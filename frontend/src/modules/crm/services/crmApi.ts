@@ -161,6 +161,8 @@ export interface LeadSearchParams {
   attendance?: "pending" | "not_attended";
   /** kept for old callers - customers are already unique by phone */
   unique_phone?: boolean;
+  /** hide converted and lost customers */
+  open_only?: boolean;
 }
 
 export interface LeadImportRow {
@@ -248,6 +250,9 @@ export const crmLeadApi = {
     const { data } = await api.get("/crm/leads", { params });
     return data;
   },
+  /** per-stage counts of one section in one request ("" = total) */
+  stageCounts: async (group: LeadGroup): Promise<Record<string, number>> =>
+    (await api.get("/crm/leads/meta/stage-counts", { params: { group } })).data,
   search: async (params: LeadSearchParams = {}): Promise<PaginatedLeads> => {
     const { data } = await api.get("/crm/leads/search/paginated", { params });
     return data;

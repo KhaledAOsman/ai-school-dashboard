@@ -10,8 +10,7 @@ from __future__ import annotations
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
+from starlette.middleware.gzip import GZipMiddleware
 
 from app.core.auth.routes import router as auth_router
 from app.core.audit.routes import router as audit_router
@@ -25,7 +24,8 @@ from app.core.settings.config import get_settings
 from app.core.users.routes import router as users_router
 from app.health.routes import router as health_router
 from app.middleware.error_handlers import register_exception_handlers
-from app.middleware.rate_limit import limiter
+from app.core.cache import CacheInvalidationMiddleware
+from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.security import RequestContextMiddleware, SecurityHeadersMiddleware
 from app.modules.finance.accounting.routes import router as finance_accounting_router
 from app.modules.finance.revenue.routes import router as finance_revenue_router
@@ -61,9 +61,6 @@ app = FastAPI(
     openapi_url="/api/openapi.json" if settings.ENVIRONMENT != "production" else None,
 )
 
-# ---- Rate limiting ----
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ---- CORS: strict allowlist from settings, never a wildcard in production ----
 app.add_middleware(
@@ -76,6 +73,12 @@ app.add_middleware(
 
 # ---- Security headers + request logging (order matters: outermost first) ----
 app.add_middleware(SecurityHeadersMiddleware)
+# cache version bump after successful writes (see app/core/cache.py)
+app.add_middleware(CacheInvalidationMiddleware, prefix=settings.API_V1_PREFIX)
+# per-kind rate limits (login / auth / upload / heavy / api) - see app/middleware/rate_limit.py
+app.add_middleware(RateLimitMiddleware, prefix=settings.API_V1_PREFIX)
+# compress JSON responses (the big KPI / report payloads shrink ~5-10x)
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
 app.add_middleware(RequestContextMiddleware)
 
 # ---- Centralized error handling ----

@@ -1,3 +1,4 @@
+import type { Paged } from "@/components/ui/Pager";
 import { api } from "@/lib/apiClient";
 
 export type Source = "snapchat" | "meta" | "tiktok" | "organic" | "other";
@@ -83,8 +84,8 @@ export interface PlatformTotals {
 }
 
 export const marketingApi = {
-  listSubscriptions: async (): Promise<{ items: Subscription[]; totals: SubscriptionTotals }> =>
-    (await api.get("/subscriptions")).data,
+  listSubscriptions: async (page = 1, page_size = 25): Promise<Paged<Subscription> & { totals: SubscriptionTotals }> =>
+    (await api.get("/subscriptions", { params: { page, page_size } })).data,
   createSubscription: async (payload: SubscriptionPayload): Promise<Subscription> =>
     (await api.post("/subscriptions", payload)).data,
   updateSubscription: async (id: string, payload: Partial<SubscriptionPayload>): Promise<Subscription> =>

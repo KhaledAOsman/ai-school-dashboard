@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth.dependencies import CurrentUser
@@ -32,9 +32,12 @@ campaigns_router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
 @subscriptions_router.get("", response_model=SubscriptionListResponse)
 async def list_subscriptions(
-    user: CurrentUser = Depends(require_permission(SUBSCRIPTIONS_VIEW)), db: AsyncSession = Depends(get_db)
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    user: CurrentUser = Depends(require_permission(SUBSCRIPTIONS_VIEW)),
+    db: AsyncSession = Depends(get_db),
 ):
-    return await SubscriptionService(db).list()
+    return await SubscriptionService(db).list(page=page, page_size=page_size)
 
 
 @subscriptions_router.post("", response_model=SubscriptionResponse, status_code=201)

@@ -79,8 +79,27 @@ class Settings(BaseSettings):
     # Lockout / rate limiting
     MAX_FAILED_LOGIN_ATTEMPTS: int = 5
     LOCKOUT_DURATION_MINUTES: int = 15
-    LOGIN_RATE_LIMIT: str = "10/minute"
-    GLOBAL_RATE_LIMIT: str = "100/minute"
+    # Rate limits per kind of request: "<count>/<window seconds>"
+    # (see app/middleware/rate_limit.py for what each kind covers).
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_LOGIN: str = "10/60"
+    RATE_LIMIT_LOGIN_ACCOUNT: str = "20/3600"
+    RATE_LIMIT_AUTH: str = "20/60"
+    RATE_LIMIT_RESET_ACCOUNT: str = "5/3600"
+    RATE_LIMIT_UPLOAD: str = "20/60"
+    RATE_LIMIT_HEAVY: str = "60/60"
+    RATE_LIMIT_API: str = "300/60"
+    RATE_LIMIT_API_IP: str = "600/60"
+
+    # ---- Redis (cache + shared rate-limit counters). Empty = disabled. ----
+    REDIS_URL: str = ""
+    CACHE_DEFAULT_TTL: int = 60
+
+    # ---- DB connection pool (per worker process) ----
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 5
+    DB_POOL_RECYCLE_SECONDS: int = 1800
+    DB_STATEMENT_TIMEOUT_MS: int = 30000
 
     # ---- CORS ----
     CORS_ORIGINS: str = "https://dashboard.rawadaltarh.com"

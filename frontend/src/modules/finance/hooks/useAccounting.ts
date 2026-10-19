@@ -36,6 +36,8 @@ export function useVoidJournal() {
 
 export const useRevenue = (params: { date_from?: string; date_to?: string; q?: string }) =>
   useQuery({ queryKey: ["revenue", params], queryFn: () => accountingApi.listRevenue(params), ...fresh });
+export const useRevenuePage = (params: { page: number; page_size: number }) =>
+  useQuery({ queryKey: ["revenue", "page", params], queryFn: () => accountingApi.pageRevenue(params), placeholderData: (p) => p, ...fresh });
 export const useRevenueSummary = () =>
   useQuery({ queryKey: ["revenue", "summary"], queryFn: accountingApi.revenueSummary, ...fresh });
 export function useCreateRevenue() {

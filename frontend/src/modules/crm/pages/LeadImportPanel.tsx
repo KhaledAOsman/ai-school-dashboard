@@ -8,7 +8,6 @@
  */
 import { useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import * as XLSX from "xlsx";
 import { Upload, FileSpreadsheet, ClipboardPaste, AlertCircle, CheckCircle2, X } from "lucide-react";
 import { useBulkImportLeads } from "@/modules/crm/hooks/useCRM";
 import type { LeadImportRow } from "@/modules/crm/services/crmApi";
@@ -66,6 +65,8 @@ async function parseFile(file: File): Promise<LeadImportRow[]> {
   }
 
   const buffer = await file.arrayBuffer();
+  // the Excel parser (~400 KB) is only downloaded when someone actually imports a sheet
+  const XLSX = await import("xlsx");
   const workbook = XLSX.read(buffer, { type: "array" });
   const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
   const rows: unknown[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: "" });

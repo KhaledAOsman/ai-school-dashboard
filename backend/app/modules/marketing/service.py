@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import uuid
 from collections import defaultdict
 from datetime import date, datetime, timezone
@@ -31,6 +33,7 @@ SETTING_KEYS = (
     "project_start_date", "full_launch_date",  # legacy
     "phase_start", "phase_end",
     "target_subscribers", "target_max_cac", "target_min_conversion", "target_min_attendance",
+    "kpi_phases",  # JSON list of phases, each with its own window and targets
 )
 
 
@@ -43,19 +46,34 @@ class SubscriptionService:
         self.db = db
         self.audit = AuditService(db)
 
-    async def list(self) -> SubscriptionListResponse:
+    async def list(self, page: int = 1, page_size: int = 25) -> SubscriptionListResponse:
+        """One page of subscriptions; `totals` always cover ALL subscriptions."""
+        count, paid, disc = (
+            await self.db.execute(
+                select(
+                    func.count(Subscription.id),
+                    func.coalesce(func.sum(Subscription.amount_paid), 0),
+                    func.coalesce(func.sum(Subscription.discount_amount), 0),
+                )
+            )
+        ).one()
         rows = (
             await self.db.execute(
-                select(Subscription).order_by(Subscription.subscribed_at.desc(), Subscription.created_at.desc())
+                select(Subscription)
+                .order_by(Subscription.subscribed_at.desc(), Subscription.created_at.desc())
+                .limit(page_size)
+                .offset((page - 1) * page_size)
             )
         ).scalars().all()
-        paid = sum((r.amount_paid for r in rows), ZERO)
-        disc = sum((r.discount_amount for r in rows), ZERO)
         return SubscriptionListResponse(
             items=[SubscriptionResponse.model_validate(r) for r in rows],
             totals=SubscriptionTotals(
-                count=len(rows), total_paid=paid, total_discount=disc, total_list_price=paid + disc
+                count=count, total_paid=paid, total_discount=disc, total_list_price=paid + disc
             ),
+            total=count,
+            page=page,
+            page_size=page_size,
+            total_pages=max((count + page_size - 1) // page_size, 1),
         )
 
     async def create(self, payload: SubscriptionCreateRequest, user_id: uuid.UUID) -> Subscription:
@@ -311,12 +329,72 @@ class KpiService:
                     targets[name] = cast(float(v)) if cast is int else cast(v)
                 except ValueError:
                     pass
+        phases = self._parse_phases(raw.get("kpi_phases"))
+        if not phases:  # never edited as phases: the legacy single window is phase 1
+            phases = [{"id": "p1", "name": "المرحلة الأولى", "start": start, "end": end, "targets": targets}]
+        first = phases[0]
         return {
-            "phase_start": start,
-            "phase_end_inclusive": date.fromordinal(end.toordinal() - 1),
-            "targets": targets,
-            "_phase_end": end,
+            # earliest phase window (pre-launch sign-ups are absorbed into it)
+            "phase_start": first["start"],
+            "phase_end_inclusive": date.fromordinal(first["end"].toordinal() - 1),
+            "targets": first["targets"],
+            "phases": [self._public_phase(p) for p in phases],
+            "_phase_end": first["end"],
+            "_phases": phases,
         }
+
+    @staticmethod
+    def _public_phase(p: dict) -> dict:
+        return {"id": p["id"], "name": p["name"], "start": p["start"],
+                "end_inclusive": date.fromordinal(p["end"].toordinal() - 1), "targets": p["targets"]}
+
+    @staticmethod
+    def _parse_phases(raw: str | None) -> list[dict]:
+        """kpi_phases JSON -> phases sorted by start; end is exclusive internally."""
+        if not raw:
+            return []
+        try:
+            items = json.loads(raw)
+        except ValueError:
+            return []
+        out = []
+        for i, it in enumerate(items if isinstance(items, list) else []):
+            s, e = _d(it.get("start")), _d(it.get("end_inclusive"))
+            if not s or not e or e < s:
+                continue
+            t = dict(TEST_PHASE_TARGETS)
+            for name, cast in (("subscribers", int), ("max_cac", float), ("min_conversion", float), ("min_attendance", float)):
+                v = (it.get("targets") or {}).get(name)
+                if v not in (None, ""):
+                    try:
+                        t[name] = cast(float(v)) if cast is int else cast(v)
+                    except (TypeError, ValueError):
+                        pass
+            out.append({"id": str(it.get("id") or f"p{i + 1}"), "name": (it.get("name") or f"المرحلة {i + 1}").strip(),
+                        "start": s, "end": date.fromordinal(e.toordinal() + 1), "targets": t})
+        out.sort(key=lambda p: p["start"])
+        return out
+
+    async def save_phases(self, phases: list[dict]) -> dict:
+        """Replace the whole list of phases (each with its own targets)."""
+        payload = []
+        for i, p in enumerate(sorted(phases, key=lambda x: x["start"])):
+            payload.append({
+                "id": p.get("id") or f"p{i + 1}",
+                "name": p["name"].strip(),
+                "start": p["start"].isoformat(),
+                "end_inclusive": p["end_inclusive"].isoformat(),
+                "targets": p["targets"],
+            })
+        row = await self.db.get(AppSetting, "kpi_phases")
+        val = json.dumps(payload, ensure_ascii=False)
+        if row is None:
+            self.db.add(AppSetting(key="kpi_phases", value=val))
+        else:
+            row.value = val
+        await self.db.commit()
+        out = await self.get_settings()
+        return {k: v for k, v in out.items() if not k.startswith("_")}
 
     async def update_settings(self, values: dict) -> dict:
         """values: phase_start / phase_end_inclusive (dates) and
@@ -339,8 +417,7 @@ class KpiService:
                 row.value = val or None
         await self.db.commit()
         out = await self.get_settings()
-        out.pop("_phase_end", None)
-        return out
+        return {k: v for k, v in out.items() if not k.startswith("_")}
 
     # ------------------------------------------------------------- periods
     @staticmethod
@@ -358,13 +435,30 @@ class KpiService:
         return out
 
     def period_options(self, settings: dict) -> list[dict]:
-        today = date.today()
-        quarters = [q for q in self._op_quarters(settings) if q["start"] <= today] or self._op_quarters(settings)[:1]
-        opts = [{"key": q["key"], "label": q["label"], "group": "quarter"} for q in reversed(quarters)]
-        ps, pe = settings["phase_start"], settings["phase_end_inclusive"]
-        opts.append({"key": "phase", "label": f"المرحلة الأولى ({_AR_MONTHS[ps.month - 1]} {ps.year} – {_AR_MONTHS[pe.month - 1]} {pe.year})", "group": "range"})
-        opts.append({"key": "all", "label": "كل الفترات", "group": "range"})
+        """'All periods' first (the default), then one option per phase."""
+        opts = [{"key": "all", "label": "كل الفترات", "group": "range"}]
+        for p in settings["_phases"]:
+            pe = date.fromordinal(p["end"].toordinal() - 1)
+            opts.append({"key": f"phase:{p['id']}", "group": "phase",
+                         "label": f"{p['name']} ({_AR_MONTHS[p['start'].month - 1]} {p['start'].year} – {_AR_MONTHS[pe.month - 1]} {pe.year})"})
         return opts
+
+    @staticmethod
+    def _focus_phase(settings: dict, selected_key: str) -> dict:
+        """Phase whose goals are shown: the selected phase, else the one running
+        today, else the latest that has started, else the first."""
+        phases = settings["_phases"]
+        if selected_key.startswith("phase:"):
+            pid = selected_key.split(":", 1)[1]
+            for p in phases:
+                if p["id"] == pid:
+                    return p
+        today = date.today()
+        for p in phases:
+            if p["start"] <= today < p["end"]:
+                return p
+        started = [p for p in phases if p["start"] <= today]
+        return started[-1] if started else phases[0]
 
     def resolve_period(self, period: str | None, settings: dict) -> dict:
         """-> key,label,start,end(exclusive), prev (dict|None)."""
@@ -372,9 +466,17 @@ class KpiService:
         key = (period or "").strip()
         quarters = self._op_quarters(settings)
         if not key:
-            started = [q for q in quarters if q["start"] <= today]
-            key = (started[-1] if started else quarters[0])["key"]
+            key = "all"  # default view: everything since launch
         low = key.lower()
+        if low.startswith("phase:"):
+            phases = settings["_phases"]
+            idx = next((i for i, p in enumerate(phases) if p["id"] == key.split(":", 1)[1]), None)
+            if idx is None:
+                raise HTTPException(status_code=422, detail="المرحلة غير موجودة")
+            p = phases[idx]
+            prev = phases[idx - 1] if idx > 0 else None
+            return {"key": f"phase:{p['id']}", "label": p["name"], "start": p["start"], "end": p["end"],
+                    "prev": {"key": f"phase:{prev['id']}", "label": prev["name"], "start": prev["start"], "end": prev["end"]} if prev else None}
         if low == "all":
             return {"key": "all", "label": "كل الفترات", "start": LAUNCH_PERIOD_START, "end": FAR_FUTURE, "prev": None}
         if low == "phase":
@@ -613,7 +715,7 @@ class KpiService:
             previous = await self._range_metrics(p["start"], p["end"], absorb)
             previous.update({"period": p["key"], "label": p["label"]})
             previous["funnel_rates"] = self._funnel_rates(previous["funnel"])
-        goals = await self._phase_goals(settings)
+        goals = await self._phase_goals(settings, self._focus_phase(settings, sel["key"]))
         public = {k: v for k, v in settings.items() if not k.startswith("_")}
         return {
             "current": current,
@@ -624,18 +726,20 @@ class KpiService:
             "phase_goals": goals,
         }
 
-    async def _phase_goals(self, settings: dict) -> dict:
-        """Cumulative results over the whole phase window vs. the targets."""
-        start, end = settings["phase_start"], settings["_phase_end"]
+    async def _phase_goals(self, settings: dict, phase: dict) -> dict:
+        """Cumulative results over one phase window vs. that phase's targets."""
+        start, end = phase["start"], phase["end"]
         today = date.today()
         m = await self._range_metrics(start, end, settings["phase_start"], include_undated=start <= today)
         rates = self._funnel_rates(m["funnel"])
         f = m["funnel"]
         return {
+            "id": phase["id"],
+            "name": phase["name"],
             "start": start,
-            "end_inclusive": settings["phase_end_inclusive"],
+            "end_inclusive": date.fromordinal(end.toordinal() - 1),
             "includes_cumulative": m["marketing"]["includes_cumulative"],
-            "targets": settings["targets"],
+            "targets": phase["targets"],
             "metrics": {
                 "subscribers": f["subscribers"],
                 "cac": m["marketing"]["cac"],

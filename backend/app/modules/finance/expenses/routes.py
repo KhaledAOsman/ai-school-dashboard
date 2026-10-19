@@ -4,6 +4,7 @@ import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth.dependencies import CurrentUser
@@ -22,11 +23,13 @@ from app.database.session import get_db
 from app.modules.finance.expenses.schemas import (
     ExpenseCreateRequest,
     ExpenseDetailResponse,
+    ExpensePage,
     ExpenseRejectRequest,
     ExpenseRestoreRequest,
     ExpenseResponse,
     ExpenseUpdateRequest,
 )
+from app.modules.finance.expenses.models import Expense
 from app.modules.finance.expenses.service import ExpenseService
 
 router = APIRouter(prefix="/finance/expenses", tags=["finance-expenses"])
@@ -67,6 +70,48 @@ async def list_expenses(
         amount_max=amount_max,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.get("/payers", response_model=list[str])
+async def list_payers(
+    user: CurrentUser = Depends(require_permission(FINANCE_EXPENSE_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Distinct "paid by" names for the form's suggestions (instead of
+    shipping hundreds of invoices to the browser just to read one column)."""
+    rows = await db.execute(
+        select(Expense.paid_by)
+        .where(Expense.paid_by.is_not(None), Expense.paid_by != "", Expense.is_archived.is_(False))
+        .group_by(Expense.paid_by)
+        .order_by(func.max(Expense.expense_date).desc())
+        .limit(50)
+    )
+    return [r[0] for r in rows]
+
+
+@router.get("/page", response_model=ExpensePage)
+async def page_expenses(
+    status_filter: str | None = Query(default=None, alias="status"),
+    category_id: uuid.UUID | None = None,
+    subcategory_id: uuid.UUID | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    staff_id: uuid.UUID | None = None,
+    period_month: str | None = Query(default=None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
+    paid_by: str | None = None,
+    q: str | None = Query(default=None, max_length=100),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    user: CurrentUser = Depends(require_permission(FINANCE_EXPENSE_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Paged list for the expenses screen: only one page travels over the wire,
+    while `active_count` / `active_amount` total the whole filtered set."""
+    return await ExpenseService(db).page_filtered(
+        status=status_filter, category_id=category_id, subcategory_id=subcategory_id,
+        date_from=date_from, date_to=date_to, staff_id=staff_id, period_month=period_month,
+        paid_by=paid_by, q=q, page=page, page_size=page_size,
     )
 
 

@@ -11,12 +11,12 @@ import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ArrowDownRight, ArrowUpRight, ChevronDown, Info, Pencil, X } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, ChevronDown, Info, Pencil, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { FormField, Input } from "@/components/ui/Field";
 import { usePermission } from "@/permissions/usePermission";
 import { PERMISSIONS } from "@/permissions/constants";
-import { kpiApi, type KpiSummary, type PeriodMetrics, type PhaseGoals, type Targets } from "@/modules/kpi/services/kpiApi";
+import { kpiApi, type KpiSummary, type PeriodMetrics, type Phase, type PhaseGoals, type Targets } from "@/modules/kpi/services/kpiApi";
 import { AnimatedText, Reveal, useCountUp, useMounted } from "@/components/motion";
 import { apiErrorMessage, formatNumber, formatSAR, PLATFORM_LABELS } from "@/modules/marketing/lib";
 
@@ -105,20 +105,32 @@ function GoalBar({ progress, color, label }: { progress: number; color: string; 
   );
 }
 
-function GoalsEditor({ goals, onClose }: { goals: PhaseGoals; onClose: () => void }) {
+type PhaseDraft = { id?: string; name: string; start: string; end_inclusive: string; subscribers: string; max_cac: string; min_conversion: string; min_attendance: string };
+
+const toDraft = (p: Phase): PhaseDraft => ({
+  id: p.id, name: p.name, start: p.start, end_inclusive: p.end_inclusive,
+  subscribers: String(p.targets.subscribers), max_cac: String(p.targets.max_cac),
+  min_conversion: String(p.targets.min_conversion), min_attendance: String(p.targets.min_attendance),
+});
+
+const PHASE_ORDINALS = ["الأولى", "الثانية", "الثالثة", "الرابعة", "الخامسة", "السادسة", "السابعة", "الثامنة", "التاسعة", "العاشرة", "الحادية عشرة", "الثانية عشرة"];
+
+function nextDay(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Phase editor: every phase has its own window and its own four targets. */
+function PhasesEditor({ phases, onClose }: { phases: Phase[]; onClose: () => void }) {
   const qc = useQueryClient();
-  const t = goals.targets;
-  const [f, setF] = useState({
-    phase_start: goals.start, phase_end_inclusive: goals.end_inclusive,
-    subscribers: String(t.subscribers), max_cac: String(t.max_cac), min_conversion: String(t.min_conversion), min_attendance: String(t.min_attendance),
-  });
+  const [rows, setRows] = useState<PhaseDraft[]>(() => phases.map(toDraft));
   const [error, setError] = useState<string | null>(null);
   const save = useMutation({
-    mutationFn: () => kpiApi.updateSettings({
-      phase_start: f.phase_start || null, phase_end_inclusive: f.phase_end_inclusive || null,
-      subscribers: Number(f.subscribers) || null, max_cac: Number(f.max_cac) || null,
-      min_conversion: f.min_conversion === "" ? null : Number(f.min_conversion), min_attendance: f.min_attendance === "" ? null : Number(f.min_attendance),
-    }),
+    mutationFn: () => kpiApi.savePhases(rows.map((r) => ({
+      id: r.id ?? null, name: r.name.trim(), start: r.start, end_inclusive: r.end_inclusive,
+      targets: { subscribers: Number(r.subscribers), max_cac: Number(r.max_cac), min_conversion: Number(r.min_conversion), min_attendance: Number(r.min_attendance) },
+    }))),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["kpi-summary"] }),
   });
   async function submit(e: FormEvent) {
@@ -126,33 +138,65 @@ function GoalsEditor({ goals, onClose }: { goals: PhaseGoals; onClose: () => voi
     setError(null);
     try { await save.mutateAsync(); onClose(); } catch (err) { setError(apiErrorMessage(err)); }
   }
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF((s) => ({ ...s, [k]: e.target.value }));
+  const set = (i: number, k: keyof PhaseDraft) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: e.target.value } : r)));
+  function addPhase() {
+    setRows((rs) => {
+      const last = rs[rs.length - 1];
+      const start = last ? nextDay(last.end_inclusive, 1) : new Date().toISOString().slice(0, 10);
+      const base = last ?? { subscribers: "50", max_cac: "150", min_conversion: "10", min_attendance: "60" };
+      return [...rs, {
+        name: `المرحلة ${PHASE_ORDINALS[rs.length] ?? rs.length + 1}`, start, end_inclusive: nextDay(start, 89),
+        subscribers: base.subscribers, max_cac: base.max_cac, min_conversion: base.min_conversion, min_attendance: base.min_attendance,
+      }];
+    });
+  }
   return (
     <form onSubmit={submit} className={`${CARD} mb-3 p-4 sm:p-5`}>
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-[15px] font-bold text-ink-900">تعديل المرحلة والأهداف</h3>
+        <h3 className="text-[15px] font-bold text-ink-900">المراحل والأهداف</h3>
         <button type="button" onClick={onClose} aria-label="إغلاق" className="rounded-full p-1.5 text-ink-600 hover:bg-ink-100"><X size={18} /></button>
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        <FormField label="بداية المرحلة"><Input type="date" dir="ltr" value={f.phase_start} onChange={set("phase_start")} required /></FormField>
-        <FormField label="نهاية المرحلة"><Input type="date" dir="ltr" value={f.phase_end_inclusive} onChange={set("phase_end_inclusive")} required /></FormField>
-        <FormField label="هدف عدد المشتركين"><Input type="number" min={1} dir="ltr" value={f.subscribers} onChange={set("subscribers")} required /></FormField>
-        <FormField label="أقصى تكلفة اكتساب مشترك (ر.س)"><Input type="number" min={1} step="any" dir="ltr" value={f.max_cac} onChange={set("max_cac")} required /></FormField>
-        <FormField label="هدف التحويل من الحاضرين (%)"><Input type="number" min={0} max={100} step="any" dir="ltr" value={f.min_conversion} onChange={set("min_conversion")} required /></FormField>
-        <FormField label="هدف نسبة الحضور (%)"><Input type="number" min={0} max={100} step="any" dir="ltr" value={f.min_attendance} onChange={set("min_attendance")} required /></FormField>
+      <div className="space-y-3">
+        {rows.map((r, i) => (
+          <fieldset key={r.id ?? `new-${i}`} className="rounded-lg border border-[#e1e7ef] bg-[#fafbfd] p-3 sm:p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <span className="text-[13px] font-semibold text-brand-600">مرحلة {formatNumber(i + 1)}</span>
+              {rows.length > 1 && (
+                <button type="button" onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12.5px] font-semibold text-[#a02a24] hover:bg-[#fdeceb]">
+                  <Trash2 size={13} /> حذف
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div className="col-span-2"><FormField label="اسم المرحلة"><Input value={r.name} onChange={set(i, "name")} maxLength={80} required /></FormField></div>
+              <FormField label="البداية"><Input type="date" dir="ltr" value={r.start} onChange={set(i, "start")} required /></FormField>
+              <FormField label="النهاية"><Input type="date" dir="ltr" value={r.end_inclusive} min={r.start} onChange={set(i, "end_inclusive")} required /></FormField>
+              <FormField label="هدف المشتركين"><Input type="number" min={1} dir="ltr" value={r.subscribers} onChange={set(i, "subscribers")} required /></FormField>
+              <FormField label="حد تكلفة المشترك (ر.س)"><Input type="number" min={1} step="any" dir="ltr" value={r.max_cac} onChange={set(i, "max_cac")} required /></FormField>
+              <FormField label="هدف التحويل (%)"><Input type="number" min={0} max={100} step="any" dir="ltr" value={r.min_conversion} onChange={set(i, "min_conversion")} required /></FormField>
+              <FormField label="هدف الحضور (%)"><Input type="number" min={0} max={100} step="any" dir="ltr" value={r.min_attendance} onChange={set(i, "min_attendance")} required /></FormField>
+            </div>
+          </fieldset>
+        ))}
       </div>
+      {rows.length < 12 && (
+        <button type="button" onClick={addPhase} className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-dashed border-brand-300 px-3.5 py-1.5 text-[13px] font-semibold text-brand-600 hover:bg-brand-50">
+          <Plus size={14} /> إضافة مرحلة
+        </button>
+      )}
       {error && <p className="mt-3 text-[14px] text-danger-700">{error}</p>}
       <div className="mt-4 flex gap-2">
         <Button type="submit" variant="primary" isLoading={save.isPending}>حفظ</Button>
         <Button type="button" variant="ghost" onClick={onClose}>إلغاء</Button>
       </div>
-      <p className="mt-3 text-[12.5px] text-ink-600">كل الأرقام في الصفحة تُحسب تلقائيًا بحسب هذه التواريخ.</p>
+      <p className="mt-3 text-[12.5px] text-ink-600">كل مرحلة تظهر كخيار في فلتر الفترة، وأهدافها تُقاس على تواريخها فقط. المراحل لازم ما تتداخلش.</p>
     </form>
   );
 }
 
 /** Phase goals: the only block with number motion. */
-function GoalsStrip({ goals, canManage }: { goals: PhaseGoals; canManage: boolean }) {
+function GoalsStrip({ goals, phases, canManage }: { goals: PhaseGoals; phases: Phase[]; canManage: boolean }) {
   const [editing, setEditing] = useState(false);
   const t: Targets = goals.targets, m = goals.metrics;
   const cac = num(m.cac);
@@ -190,16 +234,16 @@ function GoalsStrip({ goals, canManage }: { goals: PhaseGoals; canManage: boolea
     <section>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
         <div>
-          <h2 className="text-[18px] font-bold text-ink-900">أهداف المرحلة الأولى</h2>
+          <h2 className="text-[18px] font-bold text-ink-900">أهداف {goals.name}</h2>
           <p className="ltr-content text-[12.5px] text-ink-600">{fmtDate(goals.start)} → {fmtDate(goals.end_inclusive)}</p>
         </div>
         {canManage && !editing && (
           <button onClick={() => setEditing(true)} className="inline-flex items-center gap-1.5 rounded-full border border-[#e1e7ef] bg-white px-3.5 py-1.5 text-[13px] font-semibold text-brand-600 hover:bg-brand-50">
-            <Pencil size={14} /> تعديل الأهداف
+            <Pencil size={14} /> تعديل المراحل والأهداف
           </button>
         )}
       </div>
-      {editing && <GoalsEditor key={`${goals.start}-${goals.end_inclusive}-${JSON.stringify(goals.targets)}`} goals={goals} onClose={() => setEditing(false)} />}
+      {editing && <PhasesEditor key={JSON.stringify(phases)} phases={phases} onClose={() => setEditing(false)} />}
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {rows.map((r, i) => (
           <Reveal key={r.label} delay={i * 90} className="h-full">
@@ -481,7 +525,7 @@ export function KpiDashboardPage() {
       {data && cur && (
         <div className="space-y-7">
           <Summary cur={cur} prev={data.previous} />
-          <GoalsStrip goals={data.phase_goals} canManage={canManage} />
+          <GoalsStrip goals={data.phase_goals} phases={data.settings.phases} canManage={canManage} />
           <Operations cur={cur} />
         </div>
       )}

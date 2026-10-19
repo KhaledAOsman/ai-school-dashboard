@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Download, ExternalLink, Filter, Pencil, Plus, Receipt, Search } from "lucide-react";
 import { translate } from "@/i18n";
-import { useCategories, useExpenses } from "@/modules/finance/hooks/useFinance";
+import { useCategories, useExpensePage } from "@/modules/finance/hooks/useFinance";
+import { financeApi } from "@/modules/finance/services/financeApi";
 import { StatusBadge } from "@/modules/finance/components/StatusBadge";
 import { usePermission } from "@/permissions/usePermission";
 import { PERMISSIONS } from "@/permissions/constants";
@@ -11,9 +12,11 @@ import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Field";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { accountLabel, flattenCategories, formatSAR, periodLabel, toCents, fromCents } from "@/modules/finance/utils";
+import { Pager } from "@/components/ui/Pager";
+import { accountLabel, flattenCategories, formatSAR, periodLabel } from "@/modules/finance/utils";
 
-const LIMIT = 500;
+const PAGE_SIZE = 25;
+const EXPORT_LIMIT = 500;
 
 function monthRange(month: string): { date_from: string; date_to: string } {
   const [y, m] = month.split("-").map(Number);
@@ -40,21 +43,35 @@ export function ExpensesListPage() {
   const catMap = useMemo(() => flattenCategories(categories), [categories]);
 
   const filters: ExpenseFilters = {
-    limit: LIMIT,
     status: status || undefined,
     category_id: categoryId || undefined,
     subcategory_id: subId || undefined,
     q: query.trim() || undefined,
     ...(month ? monthRange(month) : {}),
   };
-  const { data: expenses, isLoading } = useExpenses(filters);
-  const rows = expenses ?? [];
+  const filterKey = JSON.stringify(filters);
+  const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [filterKey]);
+  const { data, isLoading } = useExpensePage({ ...filters, page, page_size: PAGE_SIZE });
+  const rows = data?.items ?? [];
+  const [exporting, setExporting] = useState(false);
 
-  const totalCents = rows.reduce((sum, e) => (e.status === "cancelled" ? sum : sum + toCents(e.amount)), 0);
-
-  function exportCsv() {
+  async function exportCsv() {
+    setExporting(true);
+    let all: typeof rows;
+    try {
+      // the export is the only place that needs every row: fetched on demand, page by page
+      all = [];
+      for (let offset = 0; ; offset += EXPORT_LIMIT) {
+        const chunk = await financeApi.listExpenses({ ...filters, limit: EXPORT_LIMIT, offset });
+        all.push(...chunk);
+        if (chunk.length < EXPORT_LIMIT) break;
+      }
+    } finally {
+      setExporting(false);
+    }
     const header = ["تاريخ الدفع", "تاريخ الفاتورة", "رقم الفاتورة", "المستفيد / المورّد", "الوصف", "الحساب", "الحساب الفرعي", "الشهر", "الدافع", "المبلغ", "الحالة", "رابط الفاتورة"];
-    const lines = rows.map((e) =>
+    const lines = all.map((e) =>
       [
         e.expense_date,
         e.invoice_date,
@@ -89,7 +106,7 @@ export function ExpensesListPage() {
           <p className="mt-1 text-sm text-ink-500">سجل كل دفعة بتاريخها ورقم فاتورتها والمستفيد والحساب</p>
         </div>
         <div className="flex gap-2.5">
-          <Button variant="outline" size="lg" onClick={exportCsv} disabled={rows.length === 0}>
+          <Button variant="outline" size="lg" onClick={exportCsv} isLoading={exporting} disabled={!data?.total}>
             <Download size={16} />
             تصدير Excel
           </Button>
@@ -224,16 +241,17 @@ export function ExpensesListPage() {
               <tfoot className="bg-ink-50/70">
                 <tr>
                   <td colSpan={5} className="px-4 py-3 text-sm font-semibold text-ink-700">
-                    الإجمالي ({rows.filter((e) => e.status !== "cancelled").length} دفعة{rows.length >= LIMIT ? " — أول " + LIMIT + " فقط، ضيّق التصفية" : ""})
+                    الإجمالي لكل النتائج ({data?.active_count ?? 0} دفعة{data && data.total > data.active_count ? ` · ${data.total - data.active_count} ملغاة غير محسوبة` : ""})
                   </td>
                   <td colSpan={3} className="ltr-content px-4 py-3 text-right text-[15px] font-bold text-ink-900">
-                    {formatSAR(fromCents(totalCents))}
+                    {formatSAR(data?.active_amount ?? 0)}
                   </td>
                 </tr>
               </tfoot>
             </table>
           </div>
         )}
+        <Pager page={page} pageSize={PAGE_SIZE} total={data?.total ?? 0} onChange={setPage} />
       </Card>
     </div>
   );

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import cached
 from app.core.auth.dependencies import CurrentUser
 from app.core.permissions.dependencies import require_permission
 from app.core.permissions.registry import FINANCE_REPORT_VIEW
@@ -56,7 +57,7 @@ async def get_overview(
     db: AsyncSession = Depends(get_db),
 ):
     """One month (or the whole period without ?month) for the finance overview."""
-    return await FinanceReportService(db).overview(month=month)
+    return await cached(f"fin:overview:{month or ''}", lambda: FinanceReportService(db).overview(month=month))
 
 
 @router.get("/summary")
@@ -64,8 +65,7 @@ async def get_summary(
     user: CurrentUser = Depends(require_permission(FINANCE_REPORT_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    service = FinanceReportService(db)
-    return await service.summary()
+    return await cached("fin:summary", lambda: FinanceReportService(db).summary())
 
 
 @router.get("/category-breakdown")
@@ -75,8 +75,7 @@ async def get_category_breakdown(
     user: CurrentUser = Depends(require_permission(FINANCE_REPORT_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    service = FinanceReportService(db)
-    return await service.category_breakdown(date_from=date_from, date_to=date_to)
+    return await cached(f"fin:catbd:{date_from}:{date_to}", lambda: FinanceReportService(db).category_breakdown(date_from=date_from, date_to=date_to))
 
 
 @router.get("/monthly-trend")
@@ -85,8 +84,7 @@ async def get_monthly_trend(
     user: CurrentUser = Depends(require_permission(FINANCE_REPORT_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    service = FinanceReportService(db)
-    return await service.monthly_trend(months_back=months_back)
+    return await cached(f"fin:trend:{months_back}", lambda: FinanceReportService(db).monthly_trend(months_back=months_back))
 
 
 @router.get("/recent-expenses", response_model=list[ExpenseResponse])
@@ -104,8 +102,7 @@ async def get_account_totals(
     user: CurrentUser = Depends(require_permission(FINANCE_REPORT_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    service = FinanceReportService(db)
-    return await service.account_totals()
+    return await cached("fin:acct-totals", lambda: FinanceReportService(db).account_totals())
 
 
 @router.get("/by-period")
@@ -113,5 +110,4 @@ async def get_monthly_by_period(
     user: CurrentUser = Depends(require_permission(FINANCE_REPORT_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    service = FinanceReportService(db)
-    return await service.monthly_by_period()
+    return await cached("fin:by-period", lambda: FinanceReportService(db).monthly_by_period())

@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import cached
 from app.core.auth.dependencies import CurrentUser
 from app.core.permissions.dependencies import require_permission
 from app.core.permissions.registry import DASHBOARDS_KPI_VIEW, DASHBOARDS_MANAGE
@@ -41,11 +42,63 @@ async def kpi_summary(
     user: CurrentUser = Depends(require_permission(DASHBOARDS_KPI_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    """period: '2026-Q4' (calendar quarter), 'phase' (the Year-1 phase window),
-    'all' (since launch) or a legacy half-year '2026-H2'. Defaults to the
-    current quarter. Returns the period, the previous period for comparison
+    """period: 'all' (since launch, the default) or 'phase:<id>' (one project
+    phase); legacy 'Q1' / '2026-Q4' / '2026-H2' keys still work. Returns the period, the previous period for comparison
     (quarters only), the phase goals and the available period options."""
-    return await KpiService(db).summary(period)
+    # cached per period; any write anywhere bumps the cache version
+    return await cached(f"kpi:summary:{period or ''}", lambda: KpiService(db).summary(period))
+
+
+class PhaseTargets(BaseModel):
+    subscribers: int = Field(ge=1, le=1_000_000)
+    max_cac: float = Field(gt=0, le=10_000_000)
+    min_conversion: float = Field(ge=0, le=100)
+    min_attendance: float = Field(ge=0, le=100)
+
+
+class PhaseIn(BaseModel):
+    id: str | None = Field(default=None, max_length=40)
+    name: str = Field(min_length=1, max_length=80)
+    start: date
+    end_inclusive: date
+    targets: PhaseTargets
+
+
+class PhasesRequest(BaseModel):
+    phases: list[PhaseIn] = Field(min_length=1, max_length=12)
+
+
+@router.put("/phases")
+async def save_kpi_phases(
+    payload: PhasesRequest,
+    user: CurrentUser = Depends(require_permission(DASHBOARDS_MANAGE)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Replace the project phases. Each phase has its own window and targets;
+    the dashboard's period filter lists one option per phase."""
+    phases = sorted(payload.phases, key=lambda p: p.start)
+    for p in phases:
+        if p.end_inclusive < p.start:
+            raise HTTPException(status_code=422, detail=f"نهاية «{p.name}» قبل بدايتها")
+    for a, b in zip(phases, phases[1:]):
+        if b.start <= a.end_inclusive:
+            raise HTTPException(status_code=422, detail=f"«{b.name}» بتبدأ قبل ما «{a.name}» تخلص — المراحل لازم ما تتداخلش")
+    ids = [p.id for p in phases if p.id]
+    if len(ids) != len(set(ids)):
+        raise HTTPException(status_code=422, detail="معرّفات المراحل مكررة")
+    used = set(ids)
+    items = []
+    for i, p in enumerate(phases):
+        pid = p.id
+        if not pid:
+            n = 1
+            while f"p{n}" in used:
+                n += 1
+            pid = f"p{n}"
+            used.add(pid)
+        items.append({"id": pid, "name": p.name, "start": p.start, "end_inclusive": p.end_inclusive,
+                      "targets": p.targets.model_dump()})
+    return await KpiService(db).save_phases(items)
 
 
 @router.get("/settings")
@@ -54,8 +107,7 @@ async def get_kpi_settings(
     db: AsyncSession = Depends(get_db),
 ):
     out = await KpiService(db).get_settings()
-    out.pop("_phase_end", None)
-    return out
+    return {k: v for k, v in out.items() if not k.startswith("_")}
 
 
 @router.patch("/settings")

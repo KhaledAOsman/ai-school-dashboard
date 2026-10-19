@@ -143,3 +143,14 @@ class ExpenseApprovalEventResponse(BaseModel):
 class ExpenseDetailResponse(ExpenseResponse):
     versions: list[ExpenseVersionResponse] = []
     approval_events: list[ExpenseApprovalEventResponse] = []
+
+
+class ExpensePage(BaseModel):
+    items: list[ExpenseResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    # totals over the WHOLE filtered set, cancelled invoices excluded
+    active_count: int
+    active_amount: Decimal

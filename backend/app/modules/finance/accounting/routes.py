@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import cached
 from app.core.audit.service import AuditService
 from app.core.auth.dependencies import CurrentUser
 from app.core.permissions.dependencies import require_permission
@@ -24,9 +25,17 @@ async def _svc(db: AsyncSession) -> AccountingService:
     return await AccountingService(db).load()
 
 
+def _run(db: AsyncSession, fn):
+    """Producer for cached(): builds the (expensive) derived journal only on a cache miss."""
+    async def producer():
+        return fn(await _svc(db))
+
+    return producer
+
+
 @router.get("/accounts")
 async def accounts(user: CurrentUser = Depends(require_permission(FINANCE_REPORT_VIEW)), db: AsyncSession = Depends(get_db)):
-    return (await _svc(db)).chart()
+    return await cached("acc:chart", _run(db, lambda s: s.chart()))
 
 
 @router.get("/journal")
@@ -41,8 +50,11 @@ async def journal(
     user: CurrentUser = Depends(require_permission(FINANCE_REPORT_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    svc = await _svc(db)
-    return svc.journal(date_from, date_to, account, source_type, q, min(max(limit, 1), 1000), max(offset, 0))
+    lim, off = min(max(limit, 1), 1000), max(offset, 0)
+    return await cached(
+        f"acc:journal:{date_from}:{date_to}:{account}:{source_type}:{q}:{lim}:{off}",
+        _run(db, lambda s: s.journal(date_from, date_to, account, source_type, q, lim, off)),
+    )
 
 
 @router.get("/ledger/{account}")
@@ -54,11 +66,15 @@ async def ledger(
     user: CurrentUser = Depends(require_permission(FINANCE_REPORT_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    svc = await _svc(db)
-    data = svc.ledger(account, date_from, date_to, party)
+    def build(svc):
+        data = svc.ledger(account, date_from, date_to, party)
+        if data is not None:
+            data["parties"] = svc.parties(account)
+        return data
+
+    data = await cached(f"acc:ledger:{account}:{date_from}:{date_to}:{party}", _run(db, build))
     if data is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "الحساب غير موجود")
-    data["parties"] = svc.parties(account)
     return data
 
 
@@ -69,7 +85,7 @@ async def trial_balance(
     user: CurrentUser = Depends(require_permission(FINANCE_REPORT_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    return (await _svc(db)).trial_balance(date_from, date_to)
+    return await cached(f"acc:tb:{date_from}:{date_to}", _run(db, lambda s: s.trial_balance(date_from, date_to)))
 
 
 @router.get("/income-statement")
@@ -79,7 +95,7 @@ async def income_statement(
     user: CurrentUser = Depends(require_permission(FINANCE_REPORT_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    return (await _svc(db)).income_statement(date_from, date_to)
+    return await cached(f"acc:is:{date_from}:{date_to}", _run(db, lambda s: s.income_statement(date_from, date_to)))
 
 
 @router.get("/balance-sheet")
@@ -88,7 +104,7 @@ async def balance_sheet(
     user: CurrentUser = Depends(require_permission(FINANCE_REPORT_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    return (await _svc(db)).balance_sheet(as_of)
+    return await cached(f"acc:bs:{as_of}", _run(db, lambda s: s.balance_sheet(as_of)))
 
 
 @router.get("/cash-flow")
@@ -98,12 +114,15 @@ async def cash_flow(
     user: CurrentUser = Depends(require_permission(FINANCE_REPORT_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
-    return (await _svc(db)).cash_flow(date_from, date_to)
+    return await cached(f"acc:cf:{date_from}:{date_to}", _run(db, lambda s: s.cash_flow(date_from, date_to)))
 
 
 @router.get("/checks")
 async def checks(user: CurrentUser = Depends(require_permission(FINANCE_REPORT_VIEW)), db: AsyncSession = Depends(get_db)):
-    return await (await _svc(db)).checks()
+    async def run():
+        return await (await _svc(db)).checks()
+
+    return await cached("acc:checks", run)
 
 
 @router.post("/journal", status_code=201)

@@ -16,6 +16,7 @@ import { usePermission } from "@/permissions/usePermission";
 import { PERMISSIONS } from "@/permissions/constants";
 import { STAGE_LABEL, STAGE_TONE, SOURCE_ICON } from "@/modules/crm/pages/LeadsListPage";
 import type { LeadSource } from "@/modules/crm/services/crmApi";
+import { Pager } from "@/components/ui/Pager";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -139,13 +140,16 @@ function InterestedRow({ lead, canManage }: {
   );
 }
 
+const PAGE_SIZE = 25;
+
 export function InterestedPage() {
   const canManage = usePermission(PERMISSIONS.CRM_LEAD_MANAGE);
   const [hideTerminal, setHideTerminal] = useState(true);
 
-  const { data, isLoading } = useLeadsSearch({ page: 1, page_size: 200, group: "interested" });
+  const [page, setPage] = useState(1);
+  const { data, isLoading } = useLeadsSearch({ page, page_size: PAGE_SIZE, group: "interested", open_only: hideTerminal });
 
-  const items = (data?.items ?? []).filter((l) => !hideTerminal || (!l.is_converted && !l.is_lost));
+  const items = data?.items ?? [];
 
   return (
     <div className="max-w-none">
@@ -155,7 +159,7 @@ export function InterestedPage() {
           <p className="mt-1 text-sm text-ink-500">متابعة العملاء بعد حضور المحاضرة لتحويلهم إلى عملاء فعليين</p>
         </div>
         <label className="flex items-center gap-2 text-sm text-ink-600">
-          <input type="checkbox" checked={hideTerminal} onChange={(e) => setHideTerminal(e.target.checked)} className="rounded" />
+          <input type="checkbox" checked={hideTerminal} onChange={(e) => { setHideTerminal(e.target.checked); setPage(1); }} className="rounded" />
           إخفاء المحوّلين والمفقودين
         </label>
       </div>
@@ -182,6 +186,7 @@ export function InterestedPage() {
             </div>
           </>
         )}
+        <Pager page={page} pageSize={PAGE_SIZE} total={data?.total ?? 0} onChange={setPage} />
       </Card>
     </div>
   );

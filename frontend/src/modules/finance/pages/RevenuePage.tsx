@@ -5,12 +5,15 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FormField, Input, Select } from "@/components/ui/Field";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Pager } from "@/components/ui/Pager";
+import { accountingApi } from "@/modules/finance/services/accountingApi";
 import { usePermission } from "@/permissions/usePermission";
 import { PERMISSIONS } from "@/permissions/constants";
-import { useCreateRevenue, useDeleteRevenue, useRevenue, useRevenueSummary } from "@/modules/finance/hooks/useAccounting";
+import { useCreateRevenue, useDeleteRevenue, useRevenuePage, useRevenueSummary } from "@/modules/finance/hooks/useAccounting";
 import { Money, downloadCsv, fmt, td, th } from "@/modules/finance/accounting/shared";
-import { fromCents, periodLabel, toCents } from "@/modules/finance/utils";
+import { periodLabel, toCents } from "@/modules/finance/utils";
 
+const PAGE_SIZE = 25;
 const CHANNELS = ["بوابة الدفع (بطاقات / مدى)", "تابي", "تمارا", "Apple Pay", "رابط دفع", "تحويل بنكي مباشر"];
 
 function Kpi({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
@@ -33,7 +36,8 @@ function Kpi({ label, value, hint }: { label: string; value: string | number; hi
  */
 export function RevenuePage() {
   const { data: summary } = useRevenueSummary();
-  const { data, isLoading } = useRevenue({});
+  const [page, setPage] = useState(1);
+  const { data, isLoading } = useRevenuePage({ page, page_size: PAGE_SIZE });
   const create = useCreateRevenue();
   const remove = useDeleteRevenue();
   const canCreate = usePermission(PERMISSIONS.FINANCE_EXPENSE_CREATE);
@@ -42,7 +46,7 @@ export function RevenuePage() {
   const [showForm, setShowForm] = useState(false);
   const [f, setF] = useState({ date: new Date().toISOString().slice(0, 10), channel: "", amount: "", fees: "", ref: "", url: "", note: "" });
   const set = (patch: Partial<typeof f>) => setF((p) => ({ ...p, ...patch }));
-  const rows = data ?? [];
+  const rows = data?.items ?? [];
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -60,11 +64,17 @@ export function RevenuePage() {
     setShowForm(false);
   }
 
-  function exportCsv() {
+  async function exportCsv() {
+    const all = [];
+    for (let offset = 0; ; offset += 500) {
+      const chunk = await accountingApi.listRevenue({ limit: 500, offset });
+      all.push(...chunk);
+      if (chunk.length < 500) break;
+    }
     downloadCsv(
       "collections.csv",
       ["تاريخ الإيداع", "القناة", "المرجع", "المودَع في البنك", "عمولة البوابة", "إجمالي المسوّى", "الرابط", "ملاحظة"],
-      rows.map((r) => [r.revenue_date, r.payment_method, r.invoice_number, r.amount, r.fees_amount, r.gross_amount, r.invoice_url, r.note])
+      all.map((r) => [r.revenue_date, r.payment_method, r.invoice_number, r.amount, r.fees_amount, r.gross_amount, r.invoice_url, r.note])
     );
   }
 
@@ -253,17 +263,18 @@ export function RevenuePage() {
               <tfoot>
                 <tr className="border-t-2 border-ink-200 bg-ink-50">
                   <td className={`${td} font-semibold text-ink-700`} colSpan={3}>
-                    الإجمالي ({rows.length})
+                    الإجمالي لكل الإيداعات ({data?.total ?? 0})
                   </td>
-                  <td className={`${td} text-left`}><Money v={fromCents(rows.reduce((s, r) => s + toCents(r.amount), 0))} bold /></td>
-                  <td className={`${td} text-left`}><Money v={fromCents(rows.reduce((s, r) => s + toCents(r.fees_amount), 0))} bold /></td>
-                  <td className={`${td} text-left`}><Money v={fromCents(rows.reduce((s, r) => s + toCents(r.gross_amount), 0))} bold /></td>
+                  <td className={`${td} text-left`}><Money v={data?.sum_amount ?? 0} bold /></td>
+                  <td className={`${td} text-left`}><Money v={data?.sum_fees ?? 0} bold /></td>
+                  <td className={`${td} text-left`}><Money v={data?.sum_gross ?? 0} bold /></td>
                   <td />
                 </tr>
               </tfoot>
             </table>
           </div>
         )}
+        <Pager page={page} pageSize={PAGE_SIZE} total={data?.total ?? 0} onChange={setPage} />
       </Card>
     </div>
   );

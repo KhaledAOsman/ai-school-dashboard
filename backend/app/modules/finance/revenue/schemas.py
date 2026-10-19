@@ -70,3 +70,15 @@ class RevenueSummary(BaseModel):
     fees: Decimal                 # gateway commission / bank charges
     outstanding: Decimal          # paid by students, not yet deposited (account 1200)
     months: list[RevenueMonth]
+
+
+class RevenuePage(BaseModel):
+    items: list[RevenueResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    # totals over every matching deposit, not only this page
+    sum_amount: Decimal
+    sum_fees: Decimal
+    sum_gross: Decimal

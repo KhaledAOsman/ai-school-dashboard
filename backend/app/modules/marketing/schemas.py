@@ -91,6 +91,10 @@ class SubscriptionTotals(BaseModel):
 class SubscriptionListResponse(BaseModel):
     items: list[SubscriptionResponse]
     totals: SubscriptionTotals
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
 
 
 class CampaignBase(BaseModel):
