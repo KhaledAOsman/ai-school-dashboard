@@ -87,6 +87,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     image: ai-school-backend:${APP_VERSION:-latest}
+    pull_policy: build   # local image, never look for it on Docker Hub
     restart: unless-stopped
     logging: *default-logging
     deploy:
@@ -186,6 +187,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     image: ai-school-frontend:${APP_VERSION:-latest}
+    pull_policy: build   # local image, never look for it on Docker Hub
     restart: unless-stopped
     logging: *default-logging
     deploy:
@@ -394,8 +396,8 @@ services:
         NGINXCONF
         cat > /etc/nginx/conf.d/https.conf << 'NGINXCONF'
         server {
-            listen 443 ssl;
-            http2 on;
+            # same listen style as the other sites mounted into conf.d (nsma.conf)
+            listen 443 ssl http2;
             server_name dashboard.rawadaltarh.com;
 
             ssl_certificate     /etc/letsencrypt/live/dashboard.rawadaltarh.com/fullchain.pem;

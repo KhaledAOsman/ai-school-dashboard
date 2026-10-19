@@ -33,3 +33,6 @@ full_import_*.sql
 *.xlsx 
 
 _prev/
+
+# server-only compose additions (e.g. other sites mounted into nginx)
+docker-compose.override.yml
