@@ -30,7 +30,7 @@ const PENDING = "#f5b83d"; // waiting for a status change: amber, clearly apart 
 const NOT_BOOKED = "#8f97b3"; // registered but never booked: solid slate, visible on white
 const PLATFORM_COLORS = [PURPLE, PURPLE_SOFT, ORANGE];
 const SOURCE_LABELS: Record<string, string> = {
-  instagram: "إنستغرام (ميتا)", snapchat: "سناب شات", tiktok: "تيك توك", website: "تسجيل الموقع", organic: "زيارات مباشرة", other: "غير محدد المصدر",
+  instagram: "إنستغرام (ميتا)", snapchat: "سناب شات", tiktok: "تيك توك", website: "زيارات مباشرة", organic: "زيارات مباشرة", other: "زيارات مباشرة",
 };
 
 const num = (v: string | number | null | undefined): number | null => (v === null || v === undefined ? null : Number(v));

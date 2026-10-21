@@ -154,6 +154,71 @@ class Settings(BaseSettings):
     # ---- WhatsApp bridge (whatsapp-service) ----
     WHATSAPP_SERVICE_URL: str = "http://whatsapp-service:3001"
 
+    # ---- Snapchat lead forms -> CRM (webhook) ----
+    # Secret path segment of the webhook URL given to Snap:
+    #   https://<domain>/api/integrations/snap/webhook/<SNAP_WEBHOOK_TOKEN>
+    # Empty = webhook disabled (404). Generate: openssl rand -hex 24
+    SNAP_WEBHOOK_TOKEN: str = ""
+    # hmacSecret returned by Snap when the webhook integration is created
+    # (optional - when set, a request with a wrong signature is rejected).
+    SNAP_WEBHOOK_HMAC_SECRET: str = ""
+    # Who leads created by the webhook are "created by" (default: oldest
+    # active user) and who they are assigned to (default: unassigned).
+    SNAP_LEADS_SYSTEM_USER_EMAIL: str = ""
+    SNAP_LEADS_DEFAULT_ASSIGNEE_EMAIL: str = ""
+
+    # ---- CRM progress -> Snap Conversions API (offline events) ----
+    SNAP_CAPI_ENABLED: bool = False
+    SNAP_PIXEL_ID: str = ""
+    SNAP_CAPI_TOKEN: str = ""
+    # Snap event name per CRM stage (empty = don't report that stage)
+    SNAP_EVENT_BOOKED: str = "RESERVE"
+    SNAP_EVENT_ATTENDED: str = "START_TRIAL"
+    SNAP_EVENT_PURCHASE: str = "PURCHASE"
+    # also send Snap's own lead_id with each event (exact ad match for form leads)
+    SNAP_CAPI_SEND_LEAD_ID: bool = True
+
+    @field_validator("SNAP_CAPI_ENABLED", "SNAP_CAPI_SEND_LEAD_ID", mode="before")
+    @classmethod
+    def blank_bool(cls, v: object, info) -> object:
+        if isinstance(v, str) and v.strip() == "":
+            return info.field_name == "SNAP_CAPI_SEND_LEAD_ID"
+        return v
+
+    # ---- CRM progress -> Meta Conversions API (CRM lead events) ----
+    META_CAPI_ENABLED: bool = False
+    META_PIXEL_ID: str = ""          # dataset / pixel id (Events Manager)
+    META_CAPI_TOKEN: str = ""
+    META_API_VERSION: str = "v21.0"
+    META_TEST_EVENT_CODE: str = ""   # Events Manager -> Test events (test-event endpoint only)
+    META_EVENT_BOOKED: str = "Schedule"
+    META_EVENT_ATTENDED: str = "StartTrial"
+    META_EVENT_PURCHASE: str = "Purchase"
+
+    # ---- CRM progress -> TikTok Events API ----
+    TIKTOK_EVENTS_ENABLED: bool = False
+    TIKTOK_EVENT_SOURCE: str = "web"     # web (pixel code) | crm | offline (event set id)
+    TIKTOK_EVENT_SOURCE_ID: str = ""
+    TIKTOK_ACCESS_TOKEN: str = ""
+    TIKTOK_PAGE_URL: str = "https://aischool.sa/"
+    TIKTOK_TEST_EVENT_CODE: str = ""
+    TIKTOK_EVENT_BOOKED: str = "Schedule"
+    TIKTOK_EVENT_ATTENDED: str = "StartTrial"
+    TIKTOK_EVENT_PURCHASE: str = "CompletePayment"
+
+    # name shown to the platforms as the CRM the lead events come from
+    ADS_LEAD_EVENT_SOURCE: str = "AI School Dashboard"
+
+    @field_validator("META_CAPI_ENABLED", "TIKTOK_EVENTS_ENABLED", mode="before")
+    @classmethod
+    def blank_false(cls, v: object) -> object:
+        if isinstance(v, str) and v.strip() == "":
+            return False
+        return v
+
+    def snap_capi_ready(self) -> bool:
+        return bool(self.SNAP_CAPI_ENABLED and self.SNAP_PIXEL_ID and self.SNAP_CAPI_TOKEN)
+
 
 @lru_cache
 def get_settings() -> Settings:

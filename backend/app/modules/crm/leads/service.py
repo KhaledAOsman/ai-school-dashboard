@@ -38,6 +38,7 @@ from app.modules.crm.leads.models import (
     LeadStageEvent,
 )
 from app.modules.crm.leads.repository import LeadRepository
+from app.modules.crm.leads.status import display_status
 from app.modules.crm.leads.schemas import (
     BookingListItem,
     BookingResponse,
@@ -58,6 +59,7 @@ from app.modules.crm.leads.schemas import (
     LeadReassignRequest,
     LeadResponse,
     LeadStageEventResponse,
+    LeadSubscribeRequest,
     LeadUpdateRequest,
     PaginatedLeadResponse,
     ScheduledLectureResponse,
@@ -86,6 +88,20 @@ class LeadService:
             created_at=_utcnow(),
         )
         self.repo.add_stage_event(event)
+
+    async def _queue_ad_conversion(self, lead: Lead, stage: str) -> None:
+        """Queues the conversion (booked / attended) for the ad platform the
+        customer came from (Snapchat / Meta / TikTok) in THIS transaction -
+        sent after the commit by _dispatch_ad_conversions(). No-op when that
+        platform isn't configured; never raises."""
+        from app.modules.ad_tracking.models import ConversionStage
+        from app.modules.ad_tracking.service import queue_conversion
+        await queue_conversion(self.db, lead, ConversionStage(stage))
+
+    @staticmethod
+    def _dispatch_ad_conversions() -> None:
+        from app.modules.ad_tracking.service import schedule_dispatch
+        schedule_dispatch()
 
     async def _notify_whatsapp(self, *, trigger: str, lead: Lead, user_id: uuid.UUID) -> None:
         """Best-effort automatic WhatsApp notification for a pipeline
@@ -119,6 +135,7 @@ class LeadService:
             phone=lead.phone,
             source=lead.source,
             stage=lead.stage,
+            status=display_status(lead),
             teacher_slot_id=lead.teacher_slot_id,
             teacher_name=lead.teacher_name,
             lecture_date=lead.lecture_date,
@@ -344,7 +361,9 @@ class LeadService:
         self._recompute_stage(lead, user_id=user_id, note="تم الحجز", record=False)
         when = f" {lecture_date} {lecture_time}" if lecture_date else ""
         self._record_stage_event(lead=lead, stage=LeadStage.BOOKED.value, user_id=user_id, note=f"حجز جديد{when}")
+        await self._queue_ad_conversion(lead, "booked")
         await self.db.commit()
+        self._dispatch_ad_conversions()
         lead = await self.repo.get_by_id(lead_id)
         if slot is not None:
             await self._notify_whatsapp(trigger="lecture_booked", lead=lead, user_id=user_id)
@@ -450,7 +469,11 @@ class LeadService:
         self._recompute_stage(lead, user_id=user_id, note=note, attendance_changed=True)
         if lead.stage == old_stage:
             self._record_stage_event(lead=lead, stage=lead.stage, user_id=user_id, note=note)
+        if payload.attended is True:
+            await self._queue_ad_conversion(lead, "attended")
         await self.db.commit()
+        if payload.attended is True:
+            self._dispatch_ad_conversions()
         lead = await self.repo.get_by_id(lead.id)
         return await self._to_response(lead)
 
@@ -507,6 +530,31 @@ class LeadService:
         self._record_stage_event(lead=lead, stage=LeadStage.FOLLOW_UP.value, user_id=user_id, note=note)
         await self.db.commit()
         lead = await self.repo.get_by_id(lead_id)
+        return await self._to_response(lead)
+
+    # ---- تحويل لمشترك: subscription + converted, in one transaction ----
+    async def subscribe(self, *, lead_id: uuid.UUID, payload: LeadSubscribeRequest, user_id: uuid.UUID) -> LeadResponse:
+        """Records the paid subscription for this customer (shows in
+        الاشتراكات + KPIs, reported to the ad platform as a purchase) and
+        closes the lead as converted."""
+        from app.modules.marketing.schemas import SubscriptionCreateRequest
+        from app.modules.marketing.service import SubscriptionService, lead_source_to_subscription_source
+
+        lead = await self.repo.get_by_id(lead_id)
+        ensure_found(lead, "Lead")
+        sub_payload = SubscriptionCreateRequest(
+            full_name=payload.full_name or lead.full_name,
+            phone=payload.phone or lead.phone,
+            amount_paid=payload.amount_paid,
+            discount_amount=payload.discount_amount,
+            subscribed_at=payload.subscribed_at,
+            source=lead_source_to_subscription_source(lead.source),
+            lead_id=lead.id,
+            notes=payload.notes,
+        )
+        await SubscriptionService(self.db).create(sub_payload, user_id)  # also marks the lead converted
+        lead = await self.repo.get_by_id(lead_id)
+        await self._notify_whatsapp(trigger="converted", lead=lead, user_id=user_id)
         return await self._to_response(lead)
 
     # ---- Terminal outcomes ----
@@ -595,12 +643,13 @@ class LeadService:
         attendance: str | None = None,
         unique_phone: bool = False,
         open_only: bool = False,
+        status: str | None = None,
     ) -> PaginatedLeadResponse:
         leads, total = await self.repo.list_paginated(
             page=page, page_size=page_size, search=search, stage=stage, stages=stages, source=source,
             assigned_to=assigned_to, date_from=date_from, date_to=date_to,
             sort_by=sort_by, sort_dir=sort_dir, attendance=attendance, unique_phone=unique_phone,
-            open_only=open_only,
+            open_only=open_only, status=status,
         )
         items = [await self._to_response(l) for l in leads]
         total_pages = max(1, (total + page_size - 1) // page_size)

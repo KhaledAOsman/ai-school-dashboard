@@ -20,7 +20,23 @@ export type LeadGroup = "leads" | "bookings" | "interested";
 
 export type CallOutcome = "contacted" | "not_answered";
 
-export type LeadSource = "instagram" | "tiktok" | "snapchat" | "website" | "organic";
+/** "organic" = زيارات مباشرة (also covers the website - one channel). */
+export type LeadSource = "instagram" | "tiktok" | "snapchat" | "organic";
+
+/** The customer's CURRENT status (backend leads/status.py) - what the tabs,
+ * filters and badges use instead of the historical stage values. */
+export type LeadStatus =
+  | "new"
+  | "contacted"
+  | "not_answered"
+  | "awaiting_attendance"
+  | "not_attended"
+  | "attended"
+  | "report_sent"
+  | "follow_up"
+  | "converted"
+  | "lost"
+  | "not_interested";
 
 export interface TeacherSlot {
   id: string;
@@ -111,6 +127,7 @@ export interface Lead {
   phone: string;
   source: string | null;
   stage: LeadStage;
+  status: LeadStatus;
   teacher_slot_id: string | null;
   teacher_name: string | null;
   lecture_date: string | null;
@@ -163,6 +180,17 @@ export interface LeadSearchParams {
   unique_phone?: boolean;
   /** hide converted and lost customers */
   open_only?: boolean;
+  /** current status (see LeadStatus) */
+  status?: LeadStatus;
+}
+
+export interface LeadSubscribePayload {
+  amount_paid: string;
+  discount_amount: string;
+  subscribed_at: string;
+  full_name?: string;
+  phone?: string;
+  notes?: string | null;
 }
 
 export interface LeadImportRow {
@@ -253,6 +281,12 @@ export const crmLeadApi = {
   /** per-stage counts of one section in one request ("" = total) */
   stageCounts: async (group: LeadGroup): Promise<Record<string, number>> =>
     (await api.get("/crm/leads/meta/stage-counts", { params: { group } })).data,
+  /** customers per current status for a search / source filter ("" = total) */
+  statusCounts: async (params: { search?: string; source?: string } = {}): Promise<Record<string, number>> =>
+    (await api.get("/crm/leads/meta/status-counts", { params })).data,
+  /** تحويل لمشترك: records the paid subscription and closes the lead as converted */
+  subscribe: async (id: string, payload: LeadSubscribePayload): Promise<Lead> =>
+    (await api.post(`/crm/leads/${id}/subscribe`, payload)).data,
   search: async (params: LeadSearchParams = {}): Promise<PaginatedLeads> => {
     const { data } = await api.get("/crm/leads/search/paginated", { params });
     return data;

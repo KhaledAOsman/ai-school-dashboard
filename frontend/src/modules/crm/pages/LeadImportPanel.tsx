@@ -28,8 +28,11 @@ function normalizeSource(raw: string | null): string | null {
   if (value.includes("insta") || value.includes("انستا") || value.includes("انستجرام")) return "instagram";
   if (value.includes("tiktok") || value.includes("tik tok") || value.includes("تيك توك")) return "tiktok";
   if (value.includes("snap") || value.includes("سناب")) return "snapchat";
-  if (value.includes("website") || value.includes("الموقع") || value.includes("موقع")) return "website";
-  if (value.includes("organic") || value.includes("عضوي") || value.includes("مباشر")) return "organic";
+  // the website, organic and walk-ins are one channel: زيارات مباشرة
+  if (
+    value.includes("website") || value.includes("موقع") || value.includes("organic") || value.includes("أورجانك") ||
+    value.includes("اورجانك") || value.includes("عضوي") || value.includes("مباشر") || value.includes("زيار")
+  ) return "organic";
   return null;
 }
 

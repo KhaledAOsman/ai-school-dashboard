@@ -36,12 +36,17 @@ from app.modules.crm.leads.schemas import (
     LeadReassignRequest,
     LeadRescheduleRequest,
     LeadResponse,
+    LeadSubscribeRequest,
     LeadUpdateRequest,
     PaginatedBookingResponse,
     PaginatedLeadResponse,
     ScheduledLectureResponse,
 )
 from app.modules.crm.leads.service import LeadService
+from app.modules.crm.leads.status import STATUSES
+from app.modules.crm.leads.repository import LeadRepository
+
+STATUS_PATTERN = "^(" + "|".join(STATUSES) + ")$"
 
 router = APIRouter(prefix="/crm/leads", tags=["crm-leads"])
 
@@ -75,6 +80,7 @@ async def search_leads(
     attendance: str | None = Query(default=None, pattern="^(pending|not_attended)$"),
     unique_phone: bool = Query(default=False, description="One row per phone number (customer list)"),
     open_only: bool = Query(default=False, description="Hide converted and lost customers"),
+    status: str | None = Query(default=None, pattern=STATUS_PATTERN, description="Current status (see leads/status.py)"),
     user: CurrentUser = Depends(require_permission(CRM_LEAD_VIEW)),
     db: AsyncSession = Depends(get_db),
 ):
@@ -100,8 +106,24 @@ async def search_leads(
         page=page, page_size=page_size, search=search, stage=stage, stages=stages, source=source,
         assigned_to=effective_assigned_to, date_from=date_from, date_to=date_to,
         sort_by=sort_by, sort_dir=sort_dir, attendance=attendance, unique_phone=unique_phone,
-        open_only=open_only,
+        open_only=open_only, status=status,
     )
+
+
+@router.get("/meta/status-counts", response_model=dict[str, int])
+async def status_counts(
+    search: str | None = Query(default=None),
+    source: str | None = Query(default=None),
+    assigned_to: uuid.UUID | None = Query(default=None),
+    user: CurrentUser = Depends(require_permission(CRM_LEAD_VIEW)),
+    db: AsyncSession = Depends(get_db),
+):
+    """Customers per CURRENT status (كل العملاء tabs) for the same search /
+    source filter as the list. "" = total. Reps without view-all only count
+    their own customers."""
+    if CRM_LEAD_VIEW_ALL not in user.permissions:
+        assigned_to = user.id
+    return await LeadRepository(db).status_counts(search=search, source=source, assigned_to=assigned_to)
 
 
 @router.get("/meta/sources", response_model=list[str])
@@ -308,6 +330,18 @@ async def log_follow_up(
 ):
     service = LeadService(db)
     return await service.log_follow_up(lead_id=lead_id, user_id=user.id, note=payload.note)
+
+
+@router.post("/{lead_id}/subscribe", response_model=LeadResponse)
+async def subscribe_lead(
+    lead_id: uuid.UUID,
+    payload: LeadSubscribeRequest,
+    user: CurrentUser = Depends(require_permission(CRM_LEAD_MANAGE)),
+    db: AsyncSession = Depends(get_db),
+):
+    """تحويل لمشترك: adds the paid subscription to الاشتراكات and closes
+    the lead as converted."""
+    return await LeadService(db).subscribe(lead_id=lead_id, payload=payload, user_id=user.id)
 
 
 @router.post("/{lead_id}/convert", response_model=LeadResponse)

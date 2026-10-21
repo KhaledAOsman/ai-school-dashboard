@@ -2,11 +2,33 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime, time
+from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+# Lead sources. "organic" = زيارات مباشرة and covers every non-ad contact
+# (walk-ins, the website, organic social): "website" is accepted from old
+# clients / sheets but always stored as "organic".
+SOURCE_PATTERN = "^(instagram|tiktok|snapchat|organic)$"
 
 
-class LeadCreateRequest(BaseModel):
+def normalize_source(v: object) -> object:
+    if isinstance(v, str):
+        v = v.strip().lower()
+        if v in ("website", "web", "direct"):
+            return "organic"
+        return v or None
+    return v
+
+
+class _SourceMixin(BaseModel):
+    @field_validator("source", mode="before", check_fields=False)
+    @classmethod
+    def _source(cls, v: object) -> object:
+        return normalize_source(v)
+
+
+class LeadCreateRequest(_SourceMixin):
     """Creates a lead at the first pipeline stage (new) - this is the
     entry point into the pipeline, before any contact has been made.
 
@@ -18,7 +40,7 @@ class LeadCreateRequest(BaseModel):
     """
     full_name: str = Field(min_length=1, max_length=200)
     phone: str = Field(min_length=1, max_length=30)
-    source: str | None = Field(default=None, pattern="^(instagram|tiktok|snapchat|website|organic)$")
+    source: str | None = Field(default=None, pattern=SOURCE_PATTERN)
     notes: str | None = None
     assigned_to: uuid.UUID | None = None
 
@@ -79,13 +101,24 @@ class LeadReassignRequest(BaseModel):
     assigned_to: uuid.UUID
 
 
-class LeadUpdateRequest(BaseModel):
+class LeadUpdateRequest(_SourceMixin):
     """Direct edit of a lead's plain fields (name, phone, source, notes) -
     used by the inline-editable table cells, not the pipeline actions.
     All fields optional; only provided ones are changed."""
     full_name: str | None = Field(default=None, min_length=1, max_length=200)
     phone: str | None = Field(default=None, min_length=1, max_length=30)
-    source: str | None = Field(default=None, pattern="^(instagram|tiktok|snapchat|website|organic)$")
+    source: str | None = Field(default=None, pattern=SOURCE_PATTERN)
+    notes: str | None = None
+
+
+class LeadSubscribeRequest(BaseModel):
+    """تحويل لمشترك: records the paid subscription for this customer (it
+    appears in الاشتراكات and the KPIs) and closes the lead as converted."""
+    amount_paid: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
+    discount_amount: Decimal = Field(default=Decimal("0"), ge=0, max_digits=12, decimal_places=2)
+    subscribed_at: date
+    full_name: str | None = Field(default=None, min_length=1, max_length=200)
+    phone: str | None = Field(default=None, min_length=5, max_length=30)
     notes: str | None = None
 
 
@@ -163,6 +196,8 @@ class LeadResponse(BaseModel):
     phone: str
     source: str | None
     stage: str
+    # current status as customer service sees it (see leads/status.py)
+    status: str = ""
     teacher_slot_id: uuid.UUID | None
     teacher_name: str | None
     lecture_date: date | None
@@ -191,13 +226,13 @@ class LeadDetailResponse(LeadResponse):
 
 
 # ---- Bulk import ----
-class LeadImportRow(BaseModel):
+class LeadImportRow(_SourceMixin):
     """One row from a pasted table or uploaded CSV/Excel file. Only
     full_name and phone are required, so a minimal two-column paste from
     a spreadsheet still works."""
     full_name: str = Field(min_length=1, max_length=200)
     phone: str = Field(min_length=1, max_length=30)
-    source: str | None = Field(default=None, pattern="^(instagram|tiktok|snapchat|website|organic)$")
+    source: str | None = Field(default=None, pattern=SOURCE_PATTERN)
     notes: str | None = None
 
 

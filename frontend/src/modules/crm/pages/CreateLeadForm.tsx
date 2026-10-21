@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Instagram, Music2, Ghost, Footprints, Globe } from "lucide-react";
+import { Instagram, Music2, Ghost, Footprints } from "lucide-react";
 import { translate } from "@/i18n";
 import { useCreateLead } from "@/modules/crm/hooks/useCRM";
 import type { LeadSource } from "@/modules/crm/services/crmApi";
@@ -13,7 +13,6 @@ const SOURCE_OPTIONS: { key: LeadSource; label: string; Icon: typeof Instagram }
   { key: "instagram", label: "انستجرام", Icon: Instagram },
   { key: "tiktok", label: "تيك توك", Icon: Music2 },
   { key: "snapchat", label: "سناب شات", Icon: Ghost },
-  { key: "website", label: "الموقع", Icon: Globe },
   { key: "organic", label: "زيارات مباشرة", Icon: Footprints },
 ];
 

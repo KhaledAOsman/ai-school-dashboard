@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { crmLeadApi, crmBookingApi, crmTeacherApi, crmDashboardApi, type LeadSearchParams, type CallOutcome, type LeadImportRow, type LeadGroup } from "@/modules/crm/services/crmApi";
+import { crmLeadApi, crmBookingApi, crmTeacherApi, crmDashboardApi, type LeadSearchParams, type CallOutcome, type LeadImportRow, type LeadGroup, type LeadSubscribePayload } from "@/modules/crm/services/crmApi";
 
 export function useCRMDashboardStats() {
   return useQuery({
@@ -80,8 +80,27 @@ export function useLeads(params: { stage?: string; mine_only?: boolean } = {}) {
  * avoids a loading flash when just paging/filtering. */
 /** Lives under the "crm-leads-search" key so every lead mutation that
  * refreshes the lists refreshes the tab counts too. */
+/** Leads now also arrive on their own (Snapchat lead-form webhook), so the
+ * lists poll while the tab is visible - a new lead shows up within ~20 s
+ * without anyone refreshing the page. */
+const LIVE_REFRESH_MS = 20_000;
+
 export function useStageCounts(group: LeadGroup) {
-  return useQuery({ queryKey: ["crm-leads-search", "stage-counts", group], queryFn: () => crmLeadApi.stageCounts(group) });
+  return useQuery({
+    queryKey: ["crm-leads-search", "stage-counts", group],
+    queryFn: () => crmLeadApi.stageCounts(group),
+    refetchInterval: LIVE_REFRESH_MS,
+  });
+}
+
+/** كل العملاء tabs: customers per current status (same search / source filter). */
+export function useStatusCounts(params: { search?: string; source?: string }) {
+  return useQuery({
+    queryKey: ["crm-leads-search", "status-counts", params],
+    queryFn: () => crmLeadApi.statusCounts(params),
+    placeholderData: (prev) => prev,
+    refetchInterval: LIVE_REFRESH_MS,
+  });
 }
 
 export function useLeadsSearch(params: LeadSearchParams) {
@@ -89,6 +108,7 @@ export function useLeadsSearch(params: LeadSearchParams) {
     queryKey: ["crm-leads-search", params],
     queryFn: () => crmLeadApi.search(params),
     placeholderData: (prev) => prev,
+    refetchInterval: LIVE_REFRESH_MS,
   });
 }
 
@@ -279,6 +299,21 @@ export function useSendReport(id: string) {
 export function useLogFollowUp(id: string) {
   const invalidate = useInvalidateLead(id);
   return useMutation({ mutationFn: (note?: string) => crmLeadApi.logFollowUp(id, note), onSuccess: invalidate });
+}
+
+/** تحويل لمشترك - the subscription lands in الاشتراكات and the KPIs. */
+export function useSubscribeLead(id: string) {
+  const invalidate = useInvalidateLead(id);
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: LeadSubscribePayload) => crmLeadApi.subscribe(id, payload),
+    onSuccess: () => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["subscriptions"] });
+      qc.invalidateQueries({ queryKey: ["kpi-summary"] });
+      qc.invalidateQueries({ queryKey: ["crm-dashboard-stats"] });
+    },
+  });
 }
 
 export function useConvertLead(id: string) {

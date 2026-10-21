@@ -9,13 +9,14 @@
  */
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { XCircle, MessageCircle, UserCheck, AlertTriangle } from "lucide-react";
+import { XCircle, MessageCircle, UserCheck, AlertTriangle, Send } from "lucide-react";
 import { translate } from "@/i18n";
-import { useLeadsSearch, useLogFollowUp, useConvertLead, useLoseLead } from "@/modules/crm/hooks/useCRM";
+import { useLeadsSearch, useLogFollowUp, useLoseLead, useSendReport } from "@/modules/crm/hooks/useCRM";
 import { usePermission } from "@/permissions/usePermission";
 import { PERMISSIONS } from "@/permissions/constants";
-import { STAGE_LABEL, STAGE_TONE, SOURCE_ICON } from "@/modules/crm/pages/LeadsListPage";
-import type { LeadSource } from "@/modules/crm/services/crmApi";
+import { STATUS_LABEL, STATUS_TONE, SOURCE_ICON } from "@/modules/crm/pages/LeadsListPage";
+import { SubscribeLeadModal } from "@/modules/crm/pages/SubscribeLeadModal";
+import type { LeadSource, LeadStatus } from "@/modules/crm/services/crmApi";
 import { Pager } from "@/components/ui/Pager";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -68,17 +69,18 @@ function LoseConfirmDialog({ requireStrongConfirm, onConfirm, onCancel, isLoadin
 
 function InterestedRow({ lead, canManage }: {
   lead: {
-    id: string; full_name: string; phone: string; stage: string; teacher_name: string | null;
+    id: string; full_name: string; phone: string; stage: string; status: LeadStatus; teacher_name: string | null;
     source: string | null; assigned_to_name: string | null; follow_up_count: number;
     is_converted: boolean; is_lost: boolean; updated_at: string;
   };
   canManage: boolean;
 }) {
   const logFollowUp = useLogFollowUp(lead.id);
-  const convertLead = useConvertLead(lead.id);
+  const sendReport = useSendReport(lead.id);
   const loseLead = useLoseLead(lead.id);
   const [note, setNote] = useState("");
   const [showLoseDialog, setShowLoseDialog] = useState(false);
+  const [showSubscribe, setShowSubscribe] = useState(false);
 
   const isTerminal = lead.is_converted || lead.is_lost;
   const source = lead.source as LeadSource | null;
@@ -99,10 +101,23 @@ function InterestedRow({ lead, canManage }: {
         <Badge tone={lead.follow_up_count >= 3 ? "warning" : "neutral"} dot={false}>{lead.follow_up_count}</Badge>
       </div>
       <div className="col-span-1 truncate text-center text-xs text-ink-400" title={lead.assigned_to_name || ""}>{lead.assigned_to_name || "—"}</div>
-      <div className="col-span-2 flex justify-center"><Badge tone={STAGE_TONE[lead.stage as keyof typeof STAGE_TONE]} dot={false}>{STAGE_LABEL[lead.stage as keyof typeof STAGE_LABEL]}</Badge></div>
+      <div className="col-span-2 flex flex-wrap items-center justify-center gap-1.5">
+        <Badge tone={STATUS_TONE[lead.status] ?? "neutral"} dot={false}>{STATUS_LABEL[lead.status] ?? lead.stage}</Badge>
+        {/* attended, report not sent yet -> the next step is right here */}
+        {lead.status === "attended" && canManage && (
+          <button
+            onClick={() => sendReport.mutate(undefined)}
+            disabled={sendReport.isPending}
+            className="inline-flex items-center gap-1 rounded-md border border-brand-300 bg-white px-2 py-1 text-[12px] font-semibold text-brand-700 transition-colors hover:bg-brand-50 disabled:opacity-50"
+          >
+            <Send size={12} />
+            {sendReport.isPending ? "جارٍ الإرسال…" : "إرسال التقرير"}
+          </button>
+        )}
+      </div>
       <div className="col-span-3">
         {isTerminal ? (
-          <span className="text-xs text-ink-400">{lead.is_converted ? "تم التحويل" : "مفقود"}</span>
+          <span className="text-xs text-ink-400">{lead.is_converted ? "مشترك" : "مفقود"}</span>
         ) : canManage ? (
           <div className="flex items-center gap-1.5">
             <input
@@ -119,7 +134,7 @@ function InterestedRow({ lead, canManage }: {
             >
               <MessageCircle size={15} />
             </button>
-            <button onClick={() => convertLead.mutate(undefined)} disabled={convertLead.isPending} title="تحويل إلى عميل فعلي" className="rounded-md p-1.5 text-success-600 transition-colors hover:bg-success-50">
+            <button onClick={() => setShowSubscribe(true)} title="تحويل لمشترك (يفتح فورم الاشتراك)" className="rounded-md p-1.5 text-success-600 transition-colors hover:bg-success-50">
               <UserCheck size={15} />
             </button>
             <button onClick={() => setShowLoseDialog(true)} title="إغلاق كمفقود" className="rounded-md p-1.5 text-danger-500 transition-colors hover:bg-danger-50">
@@ -128,6 +143,7 @@ function InterestedRow({ lead, canManage }: {
           </div>
         ) : null}
       </div>
+      {showSubscribe && <SubscribeLeadModal lead={lead} onClose={() => setShowSubscribe(false)} />}
       {showLoseDialog && (
         <LoseConfirmDialog
           requireStrongConfirm={lead.follow_up_count >= 3}

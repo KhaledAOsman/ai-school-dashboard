@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.modules.crm.leads.models import Booking, Lead, LeadCallAttempt, LeadStage, LeadStageEvent, LEADS_GROUP_STAGES, BOOKINGS_GROUP_STAGES
+from app.modules.crm.leads.search import search_condition
+from app.modules.crm.leads.status import status_expr
 
 
 class LeadRepository:
@@ -67,6 +69,7 @@ class LeadRepository:
         attendance: str | None = None,
         unique_phone: bool = False,
         open_only: bool = False,
+        status: str | None = None,
     ) -> tuple[list[Lead], int]:
         """
         Server-side pagination, search, and filtering - this is what makes
@@ -82,10 +85,42 @@ class LeadRepository:
         stmt = select(Lead).options(selectinload(Lead.bookings))
         count_stmt = select(func.count(Lead.id))
 
+        conditions = self._filters(
+            search=search, stage=stage, stages=stages, source=source, assigned_to=assigned_to,
+            date_from=date_from, date_to=date_to, attendance=attendance, open_only=open_only, status=status,
+        )
+
+        for cond in conditions:
+            stmt = stmt.where(cond)
+            count_stmt = count_stmt.where(cond)
+
+        sort_column = {
+            "created_at": Lead.created_at,
+            "full_name": Lead.full_name,
+            "stage": Lead.stage,
+        }.get(sort_by, Lead.created_at)
+        stmt = stmt.order_by(sort_column.desc() if sort_dir == "desc" else sort_column.asc())
+        stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+
+        result = await self.db.execute(stmt)
+        leads = list(result.scalars().all())
+
+        count_result = await self.db.execute(count_stmt)
+        total = count_result.scalar_one()
+
+        return leads, total
+
+    @staticmethod
+    def _filters(
+        *, search=None, stage=None, stages=None, source=None, assigned_to=None,
+        date_from=None, date_to=None, attendance=None, open_only=False, status=None,
+    ) -> list:
         conditions = []
-        if search:
-            like = f"%{search}%"
-            conditions.append(or_(Lead.full_name.ilike(like), Lead.phone.ilike(like)))
+        cond = search_condition(search)
+        if cond is not None:
+            conditions.append(cond)
+        if status:
+            conditions.append(status_expr() == status)
         # a customer is already unique by phone (unique_phone is kept only so
         # older clients keep working)
         if attendance == "pending":
@@ -107,26 +142,19 @@ class LeadRepository:
             conditions.append(Lead.created_at >= date_from)
         if date_to:
             conditions.append(Lead.created_at <= date_to)
+        return conditions
 
-        for cond in conditions:
-            stmt = stmt.where(cond)
-            count_stmt = count_stmt.where(cond)
-
-        sort_column = {
-            "created_at": Lead.created_at,
-            "full_name": Lead.full_name,
-            "stage": Lead.stage,
-        }.get(sort_by, Lead.created_at)
-        stmt = stmt.order_by(sort_column.desc() if sort_dir == "desc" else sort_column.asc())
-        stmt = stmt.offset((page - 1) * page_size).limit(page_size)
-
-        result = await self.db.execute(stmt)
-        leads = list(result.scalars().all())
-
-        count_result = await self.db.execute(count_stmt)
-        total = count_result.scalar_one()
-
-        return leads, total
+    async def status_counts(self, **filters) -> dict[str, int]:
+        """Customers per current status (see status.py) for the same filters
+        as the list - "" holds the total, so the tabs always add up."""
+        inner = select(Lead.id, status_expr().label("status"))
+        for cond in self._filters(**filters):
+            inner = inner.where(cond)
+        sq = inner.subquery()
+        rows = (await self.db.execute(select(sq.c.status, func.count()).group_by(sq.c.status))).all()
+        counts = {str(s): int(n) for s, n in rows}
+        counts[""] = sum(counts.values())
+        return counts
 
     async def list_by_phone(self, phone: str) -> list[Lead]:
         result = await self.db.execute(select(Lead).where(Lead.phone == phone))
@@ -182,9 +210,9 @@ class LeadRepository:
         N = pending + attended + not attended)."""
         base = select(Booking, Lead).join(Lead, Lead.id == Booking.lead_id)
         conds = []
-        if search:
-            like = f"%{search}%"
-            conds.append(or_(Lead.full_name.ilike(like), Lead.phone.ilike(like)))
+        search_cond = search_condition(search)
+        if search_cond is not None:
+            conds.append(search_cond)
         if assigned_to:
             conds.append(Lead.assigned_to == assigned_to)
 

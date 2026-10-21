@@ -41,6 +41,15 @@ def _not_found(what: str) -> HTTPException:
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"{what} غير موجود")
 
 
+# CRM lead source -> subscription source ("organic" = زيارات مباشرة, which also
+# covers the website).
+_LEAD_TO_SUB_SOURCE = {"instagram": "meta", "snapchat": "snapchat", "tiktok": "tiktok", "organic": "organic", "website": "organic"}
+
+
+def lead_source_to_subscription_source(source: str | None) -> str | None:
+    return _LEAD_TO_SUB_SOURCE.get(source or "")
+
+
 class SubscriptionService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -78,15 +87,69 @@ class SubscriptionService:
 
     async def create(self, payload: SubscriptionCreateRequest, user_id: uuid.UUID) -> Subscription:
         sub = Subscription(**payload.model_dump(), created_by=user_id)
+        lead = await self._link_lead(sub)
         self.db.add(sub)
         await self.db.flush()
         await self.audit.record(
             user_id=user_id, action="subscription.create", resource_type="subscription",
             resource_id=str(sub.id), new_value={"full_name": sub.full_name, "amount_paid": str(sub.amount_paid)},
         )
+        if lead is not None:
+            self._mark_converted(lead, sub, user_id)
+        queued = await self._queue_purchase(sub)
         await self.db.commit()
         await self.db.refresh(sub)
+        if queued:
+            from app.modules.ad_tracking.service import schedule_dispatch
+            schedule_dispatch()
         return sub
+
+    async def _link_lead(self, sub: Subscription) -> Lead | None:
+        """The CRM customer this subscription belongs to: the given lead_id,
+        else the customer with the same phone (so a subscription typed in
+        الاشتراكات still closes the right lead). Fills sub.lead_id/source."""
+        from app.modules.ad_tracking.service import find_lead_by_phone
+
+        lead = await self.db.get(Lead, sub.lead_id) if sub.lead_id else None
+        if lead is None and self.db.get_bind().dialect.name == "postgresql":
+            try:
+                async with self.db.begin_nested():
+                    lead = await find_lead_by_phone(self.db, sub.phone)
+            except Exception:  # noqa: BLE001 - linking is best-effort
+                lead = None
+        if lead is not None:
+            sub.lead_id = lead.id
+            if not sub.source:
+                sub.source = lead_source_to_subscription_source(lead.source)
+        return lead
+
+    def _mark_converted(self, lead: Lead, sub: Subscription, user_id: uuid.UUID) -> None:
+        from app.modules.crm.leads.models import LeadStage, LeadStageEvent
+
+        lead.is_converted = True
+        lead.is_lost = False
+        lead.stage = LeadStage.CONVERTED.value
+        self.db.add(LeadStageEvent(
+            lead_id=lead.id, stage=LeadStage.CONVERTED.value, performed_by=user_id,
+            note=f"اشترك — المدفوع {sub.amount_paid} ر.س", created_at=datetime.now(timezone.utc),
+        ))
+
+    async def _queue_purchase(self, sub: Subscription) -> bool:
+        """Reports the subscription as a purchase (with the amount paid) to the
+        ad platform the subscriber came from (Snapchat / Meta / TikTok). Never raises."""
+        from app.modules.ad_tracking.models import ConversionStage
+        from app.modules.ad_tracking.platforms import ready_platforms
+        from app.modules.ad_tracking.service import find_lead_by_phone, purchase_time, queue_conversion
+        if not ready_platforms():
+            return False
+        try:
+            lead = await self.db.get(Lead, sub.lead_id) if sub.lead_id else await find_lead_by_phone(self.db, sub.phone)
+        except Exception:  # noqa: BLE001
+            return False
+        return await queue_conversion(
+            self.db, lead, ConversionStage.PURCHASE,
+            value=sub.amount_paid, ref=sub.id, when=purchase_time(sub.subscribed_at),
+        )
 
     async def update(self, sub_id: uuid.UUID, payload: SubscriptionUpdateRequest, user_id: uuid.UUID) -> Subscription:
         sub = await self.db.get(Subscription, sub_id)
@@ -642,7 +705,8 @@ class KpiService:
             })
         reconciliation = {
             "platforms": recon_rows,
-            "other_channels": {"website": by_source.get("website", {}).get("leads", 0), "organic": by_source.get("organic", {}).get("leads", 0)},
+            # زيارات مباشرة = organic + the website (one channel for management)
+            "other_channels": {"organic": sum(by_source.get(s, {}).get("leads", 0) for s in ("organic", "website"))},
             "total_recorded": leads,
         }
 

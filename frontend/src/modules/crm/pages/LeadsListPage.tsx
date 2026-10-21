@@ -7,7 +7,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Users, Search, ChevronRight, ChevronLeft, Upload, X, Instagram, Music2, Ghost, Footprints, Globe } from "lucide-react";
+import { Plus, Users, Search, ChevronRight, ChevronLeft, Upload, X, Instagram, Music2, Ghost, Footprints } from "lucide-react";
 import { translate } from "@/i18n";
 import {
   useLeadsSearch,
@@ -20,7 +20,7 @@ import {
   useBookSlot,
   useNotInterestedLead,
 } from "@/modules/crm/hooks/useCRM";
-import type { LeadStage, CallOutcome, LeadSource } from "@/modules/crm/services/crmApi";
+import type { LeadStage, LeadStatus, CallOutcome, LeadSource } from "@/modules/crm/services/crmApi";
 import { adminApi } from "@/modules/finance/services/adminApi";
 import { usePermission } from "@/permissions/usePermission";
 import { PERMISSIONS } from "@/permissions/constants";
@@ -66,11 +66,41 @@ export const STAGE_TONE: Record<LeadStage, "neutral" | "brand" | "success" | "wa
   not_interested: "danger",
 };
 
+/** The customer's CURRENT status - one label per real situation (the old
+ * confirm / zoom steps are folded into "بانتظار الحضور"). */
+export const STATUS_LABEL: Record<LeadStatus, string> = {
+  new: "جديد",
+  contacted: "تم الاتصال",
+  not_answered: "لم يتم الرد",
+  awaiting_attendance: "بانتظار الحضور",
+  not_attended: "لم يحضر",
+  attended: "تم الحضور",
+  report_sent: "تم إرسال التقرير",
+  follow_up: "متابعة",
+  converted: "مشترك",
+  lost: "مفقود",
+  not_interested: "غير مهتم",
+};
+
+export const STATUS_TONE: Record<LeadStatus, "neutral" | "brand" | "success" | "warning" | "danger"> = {
+  new: "neutral",
+  contacted: "brand",
+  not_answered: "warning",
+  awaiting_attendance: "brand",
+  not_attended: "danger",
+  attended: "success",
+  report_sent: "warning",
+  follow_up: "warning",
+  converted: "success",
+  lost: "danger",
+  not_interested: "danger",
+};
+
+/** "organic" = زيارات مباشرة: walk-ins, the website and organic social are one channel. */
 export const SOURCE_ICON: Record<LeadSource, { Icon: typeof Instagram; label: string; className: string }> = {
   instagram: { Icon: Instagram, label: "انستجرام", className: "text-pink-600 bg-pink-50" },
   tiktok: { Icon: Music2, label: "تيك توك", className: "text-ink-900 bg-ink-100" },
   snapchat: { Icon: Ghost, label: "سناب شات", className: "text-yellow-600 bg-yellow-50" },
-  website: { Icon: Globe, label: "الموقع", className: "text-brand-600 bg-brand-50" },
   organic: { Icon: Footprints, label: "زيارات مباشرة", className: "text-brand-600 bg-brand-50" },
 };
 

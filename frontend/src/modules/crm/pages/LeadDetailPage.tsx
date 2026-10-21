@@ -8,15 +8,16 @@ import {
   useConfirmWhatsapp,
   useConfirmCall,
   useLogFollowUp,
-  useConvertLead,
+  useSendReport,
   useLoseLead,
   useLogCallAttempt,
   useDeleteLead,
   useUpdateLead,
 } from "@/modules/crm/hooks/useCRM";
 import { useMessageTemplates, useSendWhatsAppToLead } from "@/modules/whatsapp/hooks/useWhatsApp";
-import type { Booking, CallOutcome } from "@/modules/crm/services/crmApi";
-import { STAGE_LABEL, STAGE_TONE } from "@/modules/crm/pages/LeadsListPage";
+import type { Booking, CallOutcome, LeadStatus } from "@/modules/crm/services/crmApi";
+import { STAGE_LABEL, STAGE_TONE, STATUS_LABEL, STATUS_TONE } from "@/modules/crm/pages/LeadsListPage";
+import { SubscribeLeadModal } from "@/modules/crm/pages/SubscribeLeadModal";
 import { AttendanceDropdown } from "@/modules/crm/pages/BookingsPage";
 import { TeacherScheduleModal } from "@/modules/crm/pages/TeacherScheduleModal";
 import { usePermission } from "@/permissions/usePermission";
@@ -96,7 +97,19 @@ function BookingPanel({ leadId, hasBookings }: { leadId: string; hasBookings: bo
   );
 }
 
-function BookingsList({ bookings, canManage }: { bookings: Booking[]; canManage: boolean }) {
+/** «إرسال التقرير» - the step right after «تم الحضور» (moves the customer to تم إرسال التقرير
+ * and fires the report WhatsApp template when one is set). */
+function SendReportButton({ leadId }: { leadId: string }) {
+  const sendReport = useSendReport(leadId);
+  return (
+    <Button size="sm" variant="primary" isLoading={sendReport.isPending} onClick={() => sendReport.mutate(undefined)}>
+      <Send size={14} />
+      إرسال التقرير
+    </Button>
+  );
+}
+
+function BookingsList({ bookings, canManage, leadId, status }: { bookings: Booking[]; canManage: boolean; leadId: string; status: LeadStatus }) {
   if (bookings.length === 0) return null;
   return (
     <Card>
@@ -115,8 +128,11 @@ function BookingsList({ bookings, canManage }: { bookings: Booking[]; canManage:
               </div>
               {b.note && <p className="mt-0.5 truncate text-[12px] text-ink-400" title={b.note}>{b.note}</p>}
             </div>
-            <div className="w-56 max-w-full">
-              <AttendanceDropdown bookingId={b.id} attended={b.attended} disabled={!canManage} />
+            <div className="flex max-w-full items-center gap-2">
+              <div className="w-56 max-w-full">
+                <AttendanceDropdown bookingId={b.id} attended={b.attended} disabled={!canManage} />
+              </div>
+              {b.attended === true && status === "attended" && canManage && <SendReportButton leadId={leadId} />}
             </div>
           </div>
         ))}
@@ -211,8 +227,8 @@ export function LeadDetailPage() {
   const confirmWhatsapp = useConfirmWhatsapp(id!);
   const confirmCall = useConfirmCall(id!);
   const logFollowUp = useLogFollowUp(id!);
-  const convertLead = useConvertLead(id!);
   const loseLead = useLoseLead(id!);
+  const [showSubscribe, setShowSubscribe] = useState(false);
 
   const canManage = usePermission(PERMISSIONS.CRM_LEAD_MANAGE);
   const canDelete = usePermission(PERMISSIONS.CRM_LEAD_DELETE);
@@ -242,7 +258,7 @@ export function LeadDetailPage() {
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-[26px] font-bold tracking-tight text-ink-900">{lead.full_name}</h1>
-            <Badge tone={STAGE_TONE[lead.stage]}>{STAGE_LABEL[lead.stage]}</Badge>
+            <Badge tone={STATUS_TONE[lead.status] ?? STAGE_TONE[lead.stage]}>{STATUS_LABEL[lead.status] ?? STAGE_LABEL[lead.stage]}</Badge>
           </div>
           <p className="ltr-content mt-1 text-sm text-ink-500">{lead.phone}</p>
           {canManage && <div className="mt-2"><EditCustomer key={lead.id + lead.phone + lead.full_name} leadId={lead.id} name={lead.full_name} phone={lead.phone} /></div>}
@@ -289,7 +305,7 @@ export function LeadDetailPage() {
             <CallAttemptPanel leadId={lead.id} />
           )}
 
-          <BookingsList bookings={lead.bookings} canManage={canManage} />
+          <BookingsList bookings={lead.bookings} canManage={canManage} leadId={lead.id} status={lead.status} />
 
           {canManage && <BookingPanel leadId={lead.id} hasBookings={lead.bookings.length > 0} />}
 
@@ -330,9 +346,9 @@ export function LeadDetailPage() {
                 >
                   تسجيل محاولة متابعة
                 </Button>
-                <Button variant="success" isLoading={convertLead.isPending} onClick={() => convertLead.mutate(undefined)}>
+                <Button variant="success" onClick={() => setShowSubscribe(true)}>
                   <CheckCircle2 size={15} />
-                  تحويل إلى عميل فعلي
+                  تحويل لمشترك
                 </Button>
                 {!showLoseForm ? (
                   <Button variant="danger" onClick={() => setShowLoseForm(true)}>
@@ -363,6 +379,8 @@ export function LeadDetailPage() {
           )}
         </div>
       )}
+
+      {showSubscribe && <SubscribeLeadModal lead={lead} onClose={() => setShowSubscribe(false)} />}
 
       <Card>
         <CardHeader>
