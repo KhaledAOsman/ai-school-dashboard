@@ -1,11 +1,8 @@
 """
 Ad-platform lead sync service.
 
-Inbound  - SnapLeadIngestor.ingest(): one Snapchat lead-form webhook -> a
-           CRM lead in العملاء المحتملون (source = snapchat), or, when the
-           phone already belongs to a customer, a new attribution + note on
-           that same customer (customers are unique by phone). Idempotent
-           on Snap's lead_id, because Snap retries deliveries.
+Inbound leads (every platform) live in inbound.py; this module holds the
+shared lookups and the outbound side:
 Outbound - queue_conversion(): when a customer is booked / attends /
            subscribes, writes one outbox row per ad platform the customer
            came from (Snapchat, Meta, TikTok - by lead source and lead-form
@@ -27,16 +24,12 @@ import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.audit.service import AuditService
-from app.core.notifications.service import NotificationService
-from app.core.permissions.registry import CRM_LEAD_VIEW_ALL
 from app.core.settings.config import get_settings
-from app.core.users.models import AccountStatus, Permission, User, role_permissions, user_roles
-from app.modules.ad_tracking import snap
+from app.core.users.models import User
 from app.modules.ad_tracking.common import EventContext, split_name
 from app.modules.ad_tracking.models import AdConversionEvent, ConversionStage, ConversionStatus, LeadAdAttribution
 from app.modules.ad_tracking.platforms import ADAPTERS, LEAD_SOURCE_PLATFORM, ready_platforms
-from app.modules.crm.leads.models import Lead, LeadStage, LeadStageEvent
+from app.modules.crm.leads.models import Lead
 from app.modules.marketing.schemas import normalize_phone
 
 logger = structlog.get_logger("app.ad_tracking")
@@ -74,122 +67,6 @@ async def _user_by_email(db: AsyncSession, email: str | None) -> User | None:
     return (
         await db.execute(select(User).where(func.lower(User.email) == email.strip().lower()))
     ).scalar_one_or_none()
-
-
-# ================================================================ inbound
-class SnapLeadIngestor:
-    def __init__(self, db: AsyncSession):
-        self.db = db
-
-    async def _system_user(self) -> User | None:
-        user = await _user_by_email(self.db, settings.SNAP_LEADS_SYSTEM_USER_EMAIL)
-        if user:
-            return user
-        return (
-            await self.db.execute(
-                select(User).where(User.status == AccountStatus.ACTIVE.value).order_by(User.created_at).limit(1)
-            )
-        ).scalar_one_or_none()
-
-    @staticmethod
-    def _summary(d: dict) -> str:
-        parts = ["سناب شات"]
-        if d.get("campaign_name"):
-            parts.append(f"حملة: {d['campaign_name']}")
-        if d.get("ad_name"):
-            parts.append(f"إعلان: {d['ad_name']}")
-        if d.get("form_name"):
-            parts.append(f"فورم: {d['form_name']}")
-        if d.get("custom"):
-            parts.append(" | ".join(d["custom"].values()))
-        return " — ".join(parts)[:2000]
-
-    async def _notify(self, lead: Lead, created: bool) -> None:
-        if lead.assigned_to:
-            recipients = [lead.assigned_to]
-        else:
-            stmt = (
-                select(User.id)
-                .join(user_roles, user_roles.c.user_id == User.id)
-                .join(role_permissions, role_permissions.c.role_id == user_roles.c.role_id)
-                .join(Permission, Permission.id == role_permissions.c.permission_id)
-                .where(Permission.code == CRM_LEAD_VIEW_ALL, User.status == AccountStatus.ACTIVE.value)
-                .distinct()
-                .limit(25)
-            )
-            recipients = list((await self.db.execute(stmt)).scalars().all())
-        title = "عميل محتمل جديد من سناب شات" if created else "عميل حالي سجّل مرة أخرى من سناب شات"
-        notifier = NotificationService(self.db)
-        for uid in recipients:
-            await notifier.create(
-                user_id=uid, event_type="crm.lead.snapchat", title=title,
-                body=f"{lead.full_name} — {lead.phone}", resource_type="Lead", resource_id=str(lead.id),
-            )
-
-    async def ingest(self, payload: dict) -> dict:
-        d = snap.parse_lead(payload)
-        ext_id = d["lead_id"]
-        if not ext_id:
-            return {"result": "ignored", "reason": "missing lead_id"}
-        dup = (
-            await self.db.execute(
-                select(LeadAdAttribution.lead_id).where(
-                    LeadAdAttribution.platform == snap.PLATFORM, LeadAdAttribution.external_lead_id == ext_id
-                )
-            )
-        ).scalar_one_or_none()
-        if dup:
-            return {"result": "duplicate", "lead_id": str(dup)}
-        try:
-            phone = normalize_phone(d["phone"] or "")
-        except ValueError:
-            # a lead = name + phone; a form without a phone is not a lead
-            logger.warning("snap_lead_without_phone", external_lead_id=ext_id)
-            return {"result": "ignored", "reason": "missing phone"}
-
-        system_user = await self._system_user()
-        if system_user is None:
-            raise RuntimeError("no active user to own webhook leads")
-
-        now = _utcnow()
-        lead = await find_lead_by_phone(self.db, phone)
-        created = lead is None
-        summary = self._summary(d)
-        if created:
-            assignee = await _user_by_email(self.db, settings.SNAP_LEADS_DEFAULT_ASSIGNEE_EMAIL)
-            lead = Lead(
-                full_name=(d["name"] or "عميل سناب شات")[:200],
-                phone=phone,
-                source=snap.PLATFORM,
-                stage=LeadStage.NEW.value,
-                notes=summary,
-                assigned_to=assignee.id if assignee else None,
-                created_by=system_user.id,
-            )
-            self.db.add(lead)
-            await self.db.flush()
-            note = f"تسجيل تلقائي من فورم سناب شات — {summary}"
-        else:
-            if not lead.source:
-                lead.source = snap.PLATFORM
-            note = f"سجّل مرة أخرى من فورم سناب شات — {summary}"
-        self.db.add(LeadStageEvent(lead_id=lead.id, stage=lead.stage, performed_by=system_user.id, note=note[:2000], created_at=now))
-        self.db.add(
-            LeadAdAttribution(
-                lead_id=lead.id, platform=snap.PLATFORM, external_lead_id=ext_id,
-                form_id=d["form_id"], form_name=d["form_name"], ad_account_id=d["ad_account_id"],
-                campaign_id=d["campaign_id"], campaign_name=d["campaign_name"],
-                ad_squad_id=d["ad_squad_id"], ad_squad_name=d["ad_squad_name"],
-                ad_id=d["ad_id"], ad_name=d["ad_name"], submitted_at=d["submitted_at"], raw=payload,
-            )
-        )
-        await AuditService(self.db).record(
-            user_id=system_user.id, action="crm_lead.snap_webhook", resource_type="Lead", resource_id=str(lead.id),
-            new_value={"external_lead_id": ext_id, "created": created, "campaign": d["campaign_name"], "ad": d["ad_name"]},
-        )
-        await self._notify(lead, created)
-        await self.db.commit()
-        return {"result": "created" if created else "linked", "lead_id": str(lead.id)}
 
 
 # =============================================================== outbound

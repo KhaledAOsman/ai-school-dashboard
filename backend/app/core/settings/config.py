@@ -216,6 +216,43 @@ class Settings(BaseSettings):
             return False
         return v
 
+    # ---- Lead forms -> CRM (all platforms) ----
+    # Meta lead ads: webhook (Meta app on the Page, "leadgen") + periodic sync.
+    # Both need a Page access token with leads_retrieval.
+    META_LEADS_ENABLED: bool = False
+    META_PAGE_ID: str = ""
+    META_PAGE_ACCESS_TOKEN: str = ""
+    META_APP_SECRET: str = ""            # signs the webhook (X-Hub-Signature-256)
+    META_WEBHOOK_VERIFY_TOKEN: str = ""  # any secret string, typed in the Meta app webhook setup
+    META_LEADS_POLL_MINUTES: int = 5     # 0 = webhook only
+    META_LEADS_BACKFILL_DAYS: int = 3    # first sync looks back this far
+    # Generic lead webhook (TikTok lead forms via Zapier / Make, or anything else):
+    #   POST /api/integrations/leads/{tiktok|meta|snapchat}/<ADS_LEADS_WEBHOOK_TOKEN>
+    ADS_LEADS_WEBHOOK_TOKEN: str = ""
+    ADS_LEADS_SYSTEM_USER_EMAIL: str = ""
+    ADS_LEADS_DEFAULT_ASSIGNEE_EMAIL: str = ""
+
+    @field_validator("META_LEADS_ENABLED", mode="before")
+    @classmethod
+    def blank_false_leads(cls, v: object) -> object:
+        if isinstance(v, str) and v.strip() == "":
+            return False
+        return v
+
+    @field_validator("META_LEADS_POLL_MINUTES", "META_LEADS_BACKFILL_DAYS", mode="before")
+    @classmethod
+    def blank_int(cls, v: object, info) -> object:
+        if isinstance(v, str) and v.strip() == "":
+            return 5 if info.field_name == "META_LEADS_POLL_MINUTES" else 3
+        return v
+
+    @field_validator("META_CAPI_ENABLED", "TIKTOK_EVENTS_ENABLED", mode="before")
+    @classmethod
+    def blank_false(cls, v: object) -> object:
+        if isinstance(v, str) and v.strip() == "":
+            return False
+        return v
+
     def snap_capi_ready(self) -> bool:
         return bool(self.SNAP_CAPI_ENABLED and self.SNAP_PIXEL_ID and self.SNAP_CAPI_TOKEN)
 

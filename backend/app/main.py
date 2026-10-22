@@ -44,6 +44,9 @@ from app.modules.whatsapp.routes import router as whatsapp_router
 from app.modules.marketing.routes import subscriptions_router, campaigns_router
 from app.modules.ad_tracking.routes import ads_router as ads_integration_router
 from app.modules.ad_tracking.routes import router as snap_integration_router
+from app.modules.ad_tracking.routes import leads_router as leads_integration_router
+from app.modules.ad_tracking.routes import meta_router as meta_integration_router
+from app.modules.ad_tracking.sync import start_background_sync
 
 settings = get_settings()
 
@@ -117,6 +120,14 @@ app.include_router(subscriptions_router, prefix=API_PREFIX)
 app.include_router(campaigns_router, prefix=API_PREFIX)
 app.include_router(snap_integration_router, prefix=API_PREFIX)
 app.include_router(ads_integration_router, prefix=API_PREFIX)
+app.include_router(meta_integration_router, prefix=API_PREFIX)
+app.include_router(leads_integration_router, prefix=API_PREFIX)
+
+
+@app.on_event("startup")
+async def _start_lead_sync() -> None:
+    # pulls Meta lead-form leads every few minutes (no-op unless configured)
+    start_background_sync()
 
 
 @app.get("/", include_in_schema=False)

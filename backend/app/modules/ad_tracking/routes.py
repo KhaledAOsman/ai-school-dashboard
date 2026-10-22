@@ -1,18 +1,21 @@
 """
 Ad-platform integration endpoints.
 
-Public (called by Snap, no login):
-    POST /api/integrations/snap/webhook/{SNAP_WEBHOOK_TOKEN}
-    GET  /api/integrations/snap/webhook/{SNAP_WEBHOOK_TOKEN}   (URL check)
-The secret token in the path is the first gate (unknown token -> 404); when
-SNAP_WEBHOOK_HMAC_SECRET is set, a request carrying a wrong signature is
-rejected with 401.
+Public (called by the platforms, no login) - leads land in العملاء المحتملون:
+    POST /api/integrations/snap/webhook/{SNAP_WEBHOOK_TOKEN}      Snapchat lead forms
+    GET|POST /api/integrations/meta/webhook                       Meta lead ads (Page "leadgen")
+    POST /api/integrations/leads/{platform}/{ADS_LEADS_WEBHOOK_TOKEN}
+                                                                  any platform via Zapier / Make
+                                                                  (TikTok lead forms), flexible JSON
+Secrets: unknown path token -> 404; Snap / Meta signatures are checked
+when their secret is configured.
 
 Admin (settings.manage) - every platform (snapchat / meta / tiktok):
     GET  /api/integrations/ads/status        configuration + outbox health
     POST /api/integrations/ads/dispatch      send / retry the outbox now
     POST /api/integrations/ads/test-event    one TEST event to a platform
                                              (Snap /validate, Meta & TikTok test_event_code)
+    POST /api/integrations/ads/sync-leads    pull Meta lead-form leads now (also runs every few minutes)
 """
 from __future__ import annotations
 
@@ -24,7 +27,8 @@ from typing import Literal
 
 import httpx
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -35,12 +39,13 @@ from app.core.permissions.dependencies import require_permission
 from app.core.permissions.registry import SETTINGS_MANAGE
 from app.core.settings.config import get_settings
 from app.database.session import get_db
-from app.modules.ad_tracking import snap
+from app.modules.ad_tracking import meta_leads, snap
+from app.modules.ad_tracking.inbound import LeadIngestor, NormalizedLead, from_generic, from_snap
+from app.modules.ad_tracking.sync import sync_meta_leads
 from app.modules.ad_tracking.common import EventContext
 from app.modules.ad_tracking.models import AdConversionEvent, ConversionStage, ConversionStatus, LeadAdAttribution
 from app.modules.ad_tracking.platforms import ADAPTERS, LABELS
 from app.modules.ad_tracking.service import (
-    SnapLeadIngestor,
     _matchable_phone,
     context_for,
     dispatch_pending,
@@ -52,7 +57,26 @@ logger = structlog.get_logger("app.ad_tracking.routes")
 settings = get_settings()
 
 router = APIRouter(prefix="/integrations/snap", tags=["integrations-snap"])
+meta_router = APIRouter(prefix="/integrations/meta", tags=["integrations-meta"])
+leads_router = APIRouter(prefix="/integrations/leads", tags=["integrations-leads"])
 ads_router = APIRouter(prefix="/integrations/ads", tags=["integrations-ads"])
+
+
+async def _ingest_all(db: AsyncSession, leads: list[NormalizedLead]) -> tuple[list[dict], int]:
+    """Save every lead; a duplicate delivery is a no-op, one bad lead never blocks the rest."""
+    results, errors = [], 0
+    for n in leads:
+        try:
+            results.append(await LeadIngestor(db).ingest(n))
+        except IntegrityError:  # the same lead delivered twice at the same moment
+            await db.rollback()
+            results.append({"result": "duplicate"})
+        except Exception as err:  # noqa: BLE001
+            await db.rollback()
+            errors += 1
+            logger.exception("lead_ingest_failed", platform=n.platform, error=str(err))
+            results.append({"result": "error"})
+    return results, errors
 
 
 def _check_token(token: str) -> None:
@@ -83,23 +107,68 @@ async def snap_lead_webhook(token: str, request: Request, db: AsyncSession = Dep
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
-    results, errors = [], 0
-    for item in snap.extract_leads(payload):
-        try:
-            results.append(await SnapLeadIngestor(db).ingest(item))
-        except IntegrityError:  # the same lead delivered twice at the same moment
-            await db.rollback()
-            results.append({"result": "duplicate"})
-        except Exception as err:  # noqa: BLE001
-            await db.rollback()
-            errors += 1
-            logger.exception("snap_webhook_ingest_failed", error=str(err))
-            results.append({"result": "error"})
+    results, errors = await _ingest_all(db, [from_snap(item) for item in snap.extract_leads(payload)])
     schedule_dispatch()  # also retries any earlier failed conversion events
     if errors:
         # a 5xx makes Snap retry; leads already saved are skipped as duplicates
         raise HTTPException(status_code=500, detail="Some leads could not be saved")
     logger.info("snap_webhook_ok", results=[r.get("result") for r in results])
+    return {"received": len(results), "results": results}
+
+
+# ------------------------------------------------------------------ meta
+@meta_router.get("/webhook", include_in_schema=False)
+async def meta_webhook_verify(
+    mode: str | None = Query(default=None, alias="hub.mode"),
+    verify_token: str | None = Query(default=None, alias="hub.verify_token"),
+    challenge: str | None = Query(default=None, alias="hub.challenge"),
+):
+    expected = settings.META_WEBHOOK_VERIFY_TOKEN
+    if mode == "subscribe" and expected and verify_token and hmac.compare_digest(verify_token, expected):
+        return PlainTextResponse(challenge or "")
+    raise HTTPException(status_code=403, detail="Verification failed")
+
+
+@meta_router.post("/webhook", include_in_schema=False)
+async def meta_lead_webhook(request: Request, db: AsyncSession = Depends(get_db)):
+    body = await request.body()
+    verdict = meta_leads.verify_signature(request.headers, body)
+    if verdict is False:
+        logger.warning("meta_webhook_bad_signature")
+        raise HTTPException(status_code=401, detail="Invalid signature")
+    if verdict is None and not settings.META_WEBHOOK_VERIFY_TOKEN:
+        raise HTTPException(status_code=404, detail="Not found")
+    try:
+        payload = json.loads(body or b"{}")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    leads = []
+    for leadgen_id in meta_leads.webhook_lead_ids(payload):
+        try:
+            leads.append(await meta_leads.fetch_lead(leadgen_id))
+        except Exception as err:  # noqa: BLE001 - the periodic sync picks it up later
+            logger.warning("meta_lead_fetch_failed", leadgen_id=leadgen_id, error=str(err))
+    results, _ = await _ingest_all(db, leads)
+    # always 200: a lead that failed here is retried by the periodic sync, not by Meta
+    return {"received": len(results), "results": results}
+
+
+# ------------------------------------------------------- generic (TikTok via Zapier / Make)
+@leads_router.post("/{platform}/{token}", include_in_schema=False)
+async def generic_lead_webhook(platform: str, token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    expected = settings.ADS_LEADS_WEBHOOK_TOKEN
+    if not expected or not hmac.compare_digest(token.encode(), expected.encode()):
+        raise HTTPException(status_code=404, detail="Not found")
+    if platform not in ("tiktok", "meta", "snapchat"):
+        raise HTTPException(status_code=404, detail="Unknown platform")
+    try:
+        payload = json.loads(await request.body() or b"{}")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    items = payload if isinstance(payload, list) else (payload.get("leads") if isinstance(payload, dict) and isinstance(payload.get("leads"), list) else [payload])
+    results, errors = await _ingest_all(db, [from_generic(i, platform) for i in items if isinstance(i, dict)])
+    if errors:
+        raise HTTPException(status_code=500, detail="Some leads could not be saved")
     return {"received": len(results), "results": results}
 
 
@@ -117,20 +186,20 @@ async def ads_status(
         )
     ).all():
         counts.setdefault(platform, {})[st] = n
-    snap_leads, last_lead = (
-        await db.execute(
-            select(func.count(LeadAdAttribution.id), func.max(LeadAdAttribution.created_at))
-            .where(LeadAdAttribution.platform == snap.PLATFORM)
-        )
-    ).one()
+    leads_by_platform = dict(
+        (await db.execute(select(LeadAdAttribution.platform, func.count(LeadAdAttribution.id)).group_by(LeadAdAttribution.platform))).all()
+    )
+    last_lead = (await db.execute(select(func.max(LeadAdAttribution.created_at)))).scalar()
     recent = (
         await db.execute(select(AdConversionEvent).order_by(AdConversionEvent.created_at.desc()).limit(30))
     ).scalars().all()
     return {
-        "snap_webhook": {
-            "configured": bool(settings.SNAP_WEBHOOK_TOKEN),
-            "signature_check": bool(settings.SNAP_WEBHOOK_HMAC_SECRET),
-            "leads_received": snap_leads,
+        "inbound": {
+            "snapchat_webhook": {"configured": bool(settings.SNAP_WEBHOOK_TOKEN), "signature_check": bool(settings.SNAP_WEBHOOK_HMAC_SECRET)},
+            "meta": {"webhook": bool(settings.META_WEBHOOK_VERIFY_TOKEN), "signature_check": bool(settings.META_APP_SECRET),
+                     "sync": meta_leads.leads_ready() and bool(settings.META_PAGE_ID), "poll_minutes": settings.META_LEADS_POLL_MINUTES},
+            "generic_webhook": bool(settings.ADS_LEADS_WEBHOOK_TOKEN),
+            "leads_received": leads_by_platform,
             "last_lead_at": last_lead,
         },
         "platforms": [
@@ -208,3 +277,9 @@ async def ads_test_event(
     except httpx.HTTPError as err:
         raise HTTPException(status_code=502, detail=f"Could not reach {payload.platform}: {err}")
     return {"ok": adapter.is_success(code, body), "status_code": code, "response": body, "event_sent": event}
+
+
+@ads_router.post("/sync-leads")
+async def ads_sync_leads(user: CurrentUser = Depends(require_permission(SETTINGS_MANAGE))):
+    """Pull Meta lead-form leads now (the same job runs every META_LEADS_POLL_MINUTES)."""
+    return await sync_meta_leads()
