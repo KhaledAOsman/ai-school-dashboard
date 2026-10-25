@@ -115,6 +115,12 @@ CAMPAIGNS_VIEW = "campaigns.view"
 CAMPAIGNS_MANAGE = "campaigns.manage"  # create / edit / delete
 
 # ---- Audit / Security ----
+# ---- Investor financial model (feasibility study / business plan) ----
+FIN_MODEL_VIEW = "financial_model.view"        # published versions only (owners, investors)
+FIN_MODEL_EDIT = "financial_model.edit"        # drafts + assumptions (financial analyst)
+FIN_MODEL_PUBLISH = "financial_model.publish"  # approve a version for investors
+FIN_MODEL_EXPORT = "financial_model.export"    # Excel / PDF
+
 AUDIT_VIEW = "audit.view"
 SECURITY_LOGS_VIEW = "security_logs.view"
 
@@ -175,6 +181,10 @@ SEED_PERMISSIONS: list[PermissionDef] = [
     PermissionDef(SUBSCRIPTIONS_MANAGE, "Create, edit and delete paid subscriptions", "marketing"),
     PermissionDef(CAMPAIGNS_VIEW, "View ad campaigns and spend", "marketing"),
     PermissionDef(CAMPAIGNS_MANAGE, "Create, edit and delete ad campaigns", "marketing"),
+    PermissionDef(FIN_MODEL_VIEW, "View the published investor financial model", "financial_model"),
+    PermissionDef(FIN_MODEL_EDIT, "Edit financial model drafts and assumptions", "financial_model"),
+    PermissionDef(FIN_MODEL_PUBLISH, "Publish a financial model version to investors", "financial_model"),
+    PermissionDef(FIN_MODEL_EXPORT, "Export the financial model (Excel / PDF)", "financial_model"),
     PermissionDef(AUDIT_VIEW, "View audit logs", "audit"),
     PermissionDef(SECURITY_LOGS_VIEW, "View security logs", "security"),
     PermissionDef(SETTINGS_VIEW, "View system settings", "settings"),

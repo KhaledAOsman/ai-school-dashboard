@@ -42,6 +42,7 @@ from app.modules.crm.teachers.routes import router as crm_teachers_router
 from app.modules.crm.dashboard import router as crm_dashboard_router
 from app.modules.whatsapp.routes import router as whatsapp_router
 from app.modules.marketing.routes import subscriptions_router, campaigns_router
+from app.modules.fin_model.routes import router as fin_model_router
 from app.modules.ad_tracking.routes import ads_router as ads_integration_router
 from app.modules.ad_tracking.routes import router as snap_integration_router
 from app.modules.ad_tracking.routes import leads_router as leads_integration_router
@@ -122,6 +123,7 @@ app.include_router(snap_integration_router, prefix=API_PREFIX)
 app.include_router(ads_integration_router, prefix=API_PREFIX)
 app.include_router(meta_integration_router, prefix=API_PREFIX)
 app.include_router(leads_integration_router, prefix=API_PREFIX)
+app.include_router(fin_model_router, prefix=API_PREFIX)
 
 
 @app.on_event("startup")

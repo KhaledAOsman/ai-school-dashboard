@@ -80,6 +80,15 @@ const GROUPS: { title: string; items: [string, string][] }[] = [
     ],
   },
   {
+    title: "النموذج المالي ودراسة الجدوى",
+    items: [
+      ["financial_model.view", "عرض النسخة المنشورة (الملاك والمستثمرون)"],
+      ["financial_model.edit", "تعديل الافتراضات والمسودات (المحلل المالي)"],
+      ["financial_model.publish", "نشر نسخة للمستثمرين"],
+      ["financial_model.export", "تصدير Excel و PDF"],
+    ],
+  },
+  {
     title: "لوحات المؤشرات",
     items: [
       ["dashboards.view", "عرض لوحات المؤشرات"],
@@ -117,6 +126,8 @@ const ROLE_NAME_AR: Record<string, string> = {
   "Sales Manager": "مدير المبيعات",
   "Sales-Call center": "مبيعات — كول سنتر",
   Kpi: "مؤشرات الأداء (عرض فقط)",
+  "Financial Analyst": "المحلل المالي",
+  Investor: "مستثمر (عرض النموذج المالي فقط)",
 };
 
 /** Checkbox matrix, one group per area, with "select all" per group. */

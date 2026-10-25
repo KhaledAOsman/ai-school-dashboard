@@ -1,0 +1,122 @@
+import { useQuery } from "@tanstack/react-query";
+import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useFM } from "../context";
+import { fmApi, type Scenario } from "../api";
+import { COLORS, compact, monthLabel, pct } from "../i18n";
+import { ChartTooltip, Note, Panel, useMoney } from "../components/ui";
+
+const SC: Scenario[] = ["conservative", "base", "optimistic"];
+const SC_COLOR: Record<Scenario, string> = { conservative: COLORS.slate, base: COLORS.purple, optimistic: COLORS.orange };
+
+export default function ScenariosPage() {
+  const { versionId, scenario, t, nm, lang, version, result } = useFM();
+  const { big } = useMoney();
+  const ar = lang === "ar";
+  const q = useQuery({
+    queryKey: ["fm", "sens", versionId, scenario, version?.updated_at],
+    queryFn: () => fmApi.sensitivity(versionId!, scenario),
+    enabled: !!versionId,
+    staleTime: 120_000,
+  });
+  if (q.isLoading || !q.data) return <p className="py-10 text-center text-ink-600">{t("loading")}</p>;
+  const s = q.data;
+  const years = s.scenarios.base.revenue_by_year.map((_, i) => ({
+    name: `${t("y")}${i + 1}`,
+    ...Object.fromEntries(SC.map((k) => [`rev_${k}`, Math.round(s.scenarios[k].revenue_by_year[i])])),
+    ...Object.fromEntries(SC.map((k) => [`ebitda_${k}`, Math.round(s.scenarios[k].ebitda_by_year[i])])),
+  }));
+  const base = s.base.ebitda_y5;
+  const tornado = s.drivers.map((d) => ({ name: nm(d), low: Math.round(d.low.ebitda_y5 - base), high: Math.round(d.high.ebitda_y5 - base) }));
+  const sp = result?.resolved_assumptions?.scenarios;
+
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-3 md:grid-cols-3">
+        {SC.map((k, i) => {
+          const x = s.scenarios[k];
+          return (
+            <Panel key={k} delay={i * 60} title={<span style={{ color: SC_COLOR[k] }}>● {t(`sc_${k}` as "sc_base")}</span>}>
+              <dl className="grid grid-cols-2 gap-y-2 text-[13px]">
+                <dt className="text-ink-600">{t("revenue_y5")}</dt><dd className="ltr-content text-end font-bold text-ink-900">{big(x.revenue_y5)}</dd>
+                <dt className="text-ink-600">{t("ebitda_y5")}</dt><dd className={`ltr-content text-end font-bold ${x.ebitda_y5 >= 0 ? "text-[#136c3a]" : "text-[#a02a24]"}`}>{big(x.ebitda_y5)}</dd>
+                <dt className="text-ink-600">{t("breakeven")}</dt><dd className="text-end font-semibold text-ink-900">{x.breakeven ? monthLabel(x.breakeven, lang) : t("not_reached")}</dd>
+                <dt className="text-ink-600">{t("loan")}</dt><dd className="ltr-content text-end font-semibold text-ink-900">{big(x.loan)}</dd>
+                <dt className="text-ink-600">{ar ? "التمويل بدون قرض" : "Need without loan"}</dt><dd className="ltr-content text-end font-semibold text-ink-900">{big(x.funding_need)}</dd>
+                <dt className="text-ink-600">{t("ev")}</dt><dd className="ltr-content text-end font-semibold text-ink-900">{big(x.enterprise_value)}</dd>
+              </dl>
+            </Panel>
+          );
+        })}
+      </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Panel title={ar ? "الإيرادات في السيناريوهات الثلاثة" : "Revenue in the three scenarios"}>
+          <div className="h-[280px]" dir="ltr">
+            <ResponsiveContainer>
+              <LineChart data={years} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                <CartesianGrid vertical={false} stroke={COLORS.grid} />
+                <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={12} />
+                <YAxis tickFormatter={(v) => compact(v, "en")} tickLine={false} axisLine={false} fontSize={12} width={56} />
+                <Tooltip content={<ChartTooltip />} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                {SC.map((k) => <Line key={k} dataKey={`rev_${k}`} name={t(`sc_${k}` as "sc_base")} stroke={SC_COLOR[k]} strokeWidth={2.5} dot={{ r: 3 }} />)}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </Panel>
+        <Panel title={ar ? "EBITDA في السيناريوهات الثلاثة" : "EBITDA in the three scenarios"} delay={80}>
+          <div className="h-[280px]" dir="ltr">
+            <ResponsiveContainer>
+              <LineChart data={years} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                <CartesianGrid vertical={false} stroke={COLORS.grid} />
+                <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={12} />
+                <YAxis tickFormatter={(v) => compact(v, "en")} tickLine={false} axisLine={false} fontSize={12} width={56} />
+                <ReferenceLine y={0} stroke="#c3c8da" />
+                <Tooltip content={<ChartTooltip />} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                {SC.map((k) => <Line key={k} dataKey={`ebitda_${k}`} name={t(`sc_${k}` as "sc_base")} stroke={SC_COLOR[k]} strokeWidth={2.5} dot={{ r: 3 }} />)}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </Panel>
+      </div>
+      <Panel title={ar ? `حساسية EBITDA السنة الخامسة لتغير ±${pct(s.pct, 0)} في كل متغير` : `Year-5 EBITDA sensitivity to ±${pct(s.pct, 0)} in each driver`}
+        subtitle={ar ? `مقارنة بـ ${big(base)} في السيناريو ${t(`sc_${scenario}` as "sc_base")} — الأعلى تأثيرًا أولًا` : `Against ${big(base)} in the ${t(`sc_${scenario}` as "sc_base")} case — biggest impact first`}>
+        <div className="h-[380px]" dir="ltr">
+          <ResponsiveContainer>
+            <BarChart data={tornado} layout="vertical" stackOffset="sign" margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
+              <CartesianGrid horizontal={false} stroke={COLORS.grid} />
+              <XAxis type="number" tickFormatter={(v) => compact(v, "en")} tickLine={false} axisLine={false} fontSize={12} />
+              <YAxis type="category" dataKey="name" width={ar ? 190 : 170} tickLine={false} axisLine={false} fontSize={12} />
+              <ReferenceLine x={0} stroke="#8f97b3" />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: "#f4f1ff" }} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Bar dataKey="low" name={`-${pct(s.pct, 0)}`} fill={COLORS.purpleSoft} stackId="t" />
+              <Bar dataKey="high" name={`+${pct(s.pct, 0)}`} fill={COLORS.purple} stackId="t" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </Panel>
+      {sp && (
+        <Panel title={ar ? "كيف تُبنى السيناريوهات" : "How the scenarios are built"}>
+          <div className="thin-scrollbar overflow-x-auto">
+            <table className="w-full min-w-[620px] text-[13px]">
+              <thead><tr className="border-b border-[#e1e7ef] text-ink-600">
+                <th className="px-2 py-2 text-start" />
+                {SC.map((k) => <th key={k} className="px-2 py-2 text-start font-semibold">{t(`sc_${k}` as "sc_base")}</th>)}
+              </tr></thead>
+              <tbody>
+                {([["conversion", "التحويل", "Conversion"], ["cpl", "تكلفة الليد", "Cost per lead"], ["renewal", "التجديد", "Renewal"], ["growth_volume", "حجم المدارس والبرامج", "Schools & programs volume"], ["price", "السعر", "Price"], ["delay_months", "تأخير المنتجات الجديدة (شهور)", "Delay of new products (months)"]] as const).map(([key, a, e]) => (
+                  <tr key={key} className="border-b border-[#f0f2f7]">
+                    <td className="px-2 py-1.5 text-ink-700">{ar ? a : e}</td>
+                    {SC.map((k) => <td key={k} className="ltr-content px-2 py-1.5 font-semibold">{key === "delay_months" ? sp[k][key] : `×${sp[k][key]}`}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      )}
+      <Note>{ar ? "أكبر الأعمدة في الرسم هي المتغيرات اللي لازم نثبتها بالأرقام الفعلية أولًا قبل التوسع. المحلل المالي يقدر يغير مضاعفات كل سيناريو من صفحة الافتراضات." : "The longest bars are the drivers to prove with actual data before scaling. The analyst can change each scenario's multipliers on the Assumptions page."}</Note>
+    </div>
+  );
+}

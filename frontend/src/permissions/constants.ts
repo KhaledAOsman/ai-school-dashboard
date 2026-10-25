@@ -68,6 +68,11 @@ export const PERMISSIONS = {
   CAMPAIGNS_VIEW: "campaigns.view",
   CAMPAIGNS_MANAGE: "campaigns.manage",
 
+  FIN_MODEL_VIEW: "financial_model.view",
+  FIN_MODEL_EDIT: "financial_model.edit",
+  FIN_MODEL_PUBLISH: "financial_model.publish",
+  FIN_MODEL_EXPORT: "financial_model.export",
+
   AUDIT_VIEW: "audit.view",
   SECURITY_LOGS_VIEW: "security_logs.view",
 

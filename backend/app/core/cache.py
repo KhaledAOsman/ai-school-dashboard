@@ -117,7 +117,7 @@ class CacheInvalidationMiddleware:
 
     WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
     # auth writes never change cached business data
-    SKIP = ("/auth/",)
+    SKIP = ("/auth/", "/fin-model/preview")
 
     def __init__(self, app, prefix: str = "/api") -> None:
         self.app = app

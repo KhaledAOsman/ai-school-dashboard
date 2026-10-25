@@ -60,7 +60,7 @@ LIMITS: dict[str, tuple[int, int]] = {
 }
 
 _AUTH_PATHS = ("/auth/mfa/verify", "/auth/refresh", "/auth/password/reset-request", "/auth/password/reset-confirm", "/auth/password/change", "/auth/mfa/confirm", "/auth/mfa/disable")
-_HEAVY_PREFIXES = ("/kpi-dashboard", "/finance/reports", "/finance/accounting", "/finance/revenue/summary", "/crm/dashboard", "/dashboards")
+_HEAVY_PREFIXES = ("/fin-model/preview", "/fin-model/versions/", "/kpi-dashboard", "/finance/reports", "/finance/accounting", "/finance/revenue/summary", "/crm/dashboard", "/dashboards")
 
 # in-memory fallback: {key: (window_start, count)}
 _mem: dict[str, list[float]] = defaultdict(lambda: [0.0, 0])

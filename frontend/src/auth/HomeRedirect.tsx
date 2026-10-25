@@ -20,6 +20,7 @@ export function HomeRedirect() {
     PERMISSIONS.FINANCE_REPORT_VIEW,
   ]);
   const canViewUsers = useAnyPermission([PERMISSIONS.USERS_VIEW, PERMISSIONS.ROLES_VIEW]);
+  const canViewFinModel = useAnyPermission([PERMISSIONS.FIN_MODEL_VIEW, PERMISSIONS.FIN_MODEL_EDIT]);
 
   // The main dashboard is the half-yearly project KPI view for management.
   if (canViewKpi) return <Navigate to="/dashboard" replace />;
@@ -27,6 +28,7 @@ export function HomeRedirect() {
   if (canViewCRM && !canViewFinance) return <Navigate to="/crm/dashboard" replace />;
   if (canViewFinance) return <Navigate to="/finance" replace />;
   if (canViewCRM) return <Navigate to="/crm/dashboard" replace />;
+  if (canViewFinModel) return <Navigate to="/financial-model" replace />;
   if (canViewUsers) return <Navigate to="/admin/users" replace />;
 
   return <Navigate to="/login" replace />;

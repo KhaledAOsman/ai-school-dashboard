@@ -164,3 +164,12 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Printing (financial-model PDF report): charts were sized for the screen,
+   scale them down to the page instead of letting them overflow. */
+@media print {
+  .recharts-responsive-container, .recharts-wrapper { width: 100% !important; height: auto !important; }
+  .recharts-wrapper > .recharts-surface { width: 100% !important; height: auto !important; }
+  .recharts-legend-wrapper { position: static !important; width: 100% !important; }
+  @page { size: A4; margin: 12mm 10mm; }
+}

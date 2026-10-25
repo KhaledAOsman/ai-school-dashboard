@@ -39,6 +39,7 @@ import {
   BadgeCheck,
   Menu,
   X,
+  TrendingUp,
 } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { usePermission } from "@/permissions/usePermission";
@@ -158,6 +159,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const canViewSubscriptions = usePermission(PERMISSIONS.SUBSCRIPTIONS_VIEW);
   const canViewCampaigns = usePermission(PERMISSIONS.CAMPAIGNS_VIEW);
   const canViewMarketingSection = canViewSubscriptions || canViewCampaigns;
+  const canViewFinModelPublished = usePermission(PERMISSIONS.FIN_MODEL_VIEW);
+  const canEditFinModel = usePermission(PERMISSIONS.FIN_MODEL_EDIT);
+  const canViewFinModel = canViewFinModelPublished || canEditFinModel;
   const canViewAdminSection = canViewUsers || canViewRoles || canViewAudit || canViewSecurityLogs || canViewSettings;
 
   const isFinanceRoute = location.pathname.startsWith("/finance");
@@ -205,7 +209,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     .toUpperCase();
 
   return (
-    <div className="flex min-h-screen bg-[#f1f3f9]" dir="rtl">
+    <div className="flex min-h-screen bg-[#f1f3f9] print:block print:bg-white" dir="rtl">
       {/* Backdrop (mobile only) */}
       <div
         onClick={() => setMenuOpen(false)}
@@ -218,7 +222,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       <aside
         id="app-sidebar"
         className={clsx(
-          "fixed inset-y-0 start-0 z-50 flex w-[300px] max-w-[86vw] flex-col border-e border-[#dcdfeb] bg-white shadow-xl transition-transform duration-300 ease-out-expo",
+          "print:hidden fixed inset-y-0 start-0 z-50 flex w-[300px] max-w-[86vw] flex-col border-e border-[#dcdfeb] bg-white shadow-xl transition-transform duration-300 ease-out-expo",
           "lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:shrink-0 lg:translate-x-0 lg:shadow-none",
           menuOpen ? "translate-x-0" : "translate-x-full"
         )}
@@ -236,6 +240,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <NavSectionLabel>عام</NavSectionLabel>
               <NavItem to="/dashboard" icon={LayoutDashboard} label={translate("ar", "nav_dashboard")} />
             </>
+          )}
+
+          {canViewFinModel && (
+            <NavItem to="/financial-model" icon={TrendingUp} label="النموذج المالي ودراسة الجدوى" />
           )}
 
           {(canViewFinanceSection || canViewCRMSection || canViewMarketingSection) && <NavSectionLabel>الأقسام</NavSectionLabel>}
@@ -323,7 +331,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-[#dcdfeb] bg-white/95 px-4 backdrop-blur lg:hidden">
+        <header className="print:hidden sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-[#dcdfeb] bg-white/95 px-4 backdrop-blur lg:hidden">
           <button
             type="button" onClick={() => setMenuOpen(true)} aria-label="فتح القائمة" aria-expanded={menuOpen} aria-controls="app-sidebar"
             className="-me-1 rounded-full p-2 text-ink-800 hover:bg-ink-100"
@@ -333,7 +341,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <img src="/logo.png" alt="AiSchool" className="h-11 w-auto object-contain" />
         </header>
         <main className="thin-scrollbar min-w-0 flex-1">
-          <div className="mx-auto max-w-[1360px] px-4 py-5 sm:px-6 sm:py-8 lg:px-10">{children}</div>
+          <div className="mx-auto max-w-[1360px] px-4 py-5 sm:px-6 sm:py-8 lg:px-10 print:max-w-none print:p-0">{children}</div>
         </main>
       </div>
     </div>

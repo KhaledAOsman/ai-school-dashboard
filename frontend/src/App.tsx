@@ -43,6 +43,7 @@ const CampaignsPage = lazyPage(() => import("@/modules/marketing/pages/Campaigns
 const UsersPage = lazyPage(() => import("@/modules/finance/pages/UsersPage").then((m) => ({ default: m.UsersPage })));
 const RolesPage = lazyPage(() => import("@/modules/finance/pages/RolesPage").then((m) => ({ default: m.RolesPage })));
 const AuditLogPage = lazyPage(() => import("@/modules/finance/pages/AuditLogPage").then((m) => ({ default: m.AuditLogPage })));
+const FinModelSection = lazyPage(() => import("@/modules/fin-model/FinModelSection").then((m) => ({ default: m.FinModelSection })));
 const SecurityLogPage = lazyPage(() => import("@/modules/finance/pages/SecurityLogPage").then((m) => ({ default: m.SecurityLogPage })));
 
 const queryClient: QueryClient = new QueryClient({
@@ -81,6 +82,17 @@ export function App() {
             />
 
             <Route path="/kpi-dashboard" element={<Navigate to="/dashboard" replace />} />
+
+            <Route
+              path="/financial-model/*"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <FinModelSection />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
 
             <Route
               path="/marketing/subscriptions"

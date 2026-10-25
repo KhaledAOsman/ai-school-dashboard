@@ -76,6 +76,15 @@ DEFAULT_ROLES: dict[str, list[str]] = {
     # Manager enters new leads - see crm.lead.create), and only ever sees
     # their OWN assigned leads since crm.lead.view_all is withheld.
     "Sales Rep": ["crm.lead.view", "crm.lead.manage", "crm.teacher.view"],
+    # Financial analyst: builds and edits the investor model (drafts), exports it,
+    # and reads the finance reports it is calibrated from; publishing to
+    # investors stays with the owner.
+    "Financial Analyst": [
+        "financial_model.view", "financial_model.edit", "financial_model.export",
+        "finance.report.view", "finance.expense.view", "subscriptions.view", "campaigns.view",
+    ],
+    # Investor: read-only access to the published financial model only.
+    "Investor": ["financial_model.view"],
     # Sales Manager: sees every rep's leads and can reassign them between
     # reps, creates new leads to distribute, plus manages the teacher/slot
     # roster itself.
