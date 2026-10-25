@@ -20,7 +20,7 @@ from app.database.session import get_db
 from app.modules.fin_model.calibration import calibrate
 from app.modules.fin_model.defaults import default_assumptions
 from app.modules.fin_model.models import FinModelVersion
-from app.modules.fin_model.service import FinModelService
+from app.modules.fin_model.service import FinModelService, upgrade
 
 router = APIRouter(prefix="/fin-model", tags=["financial-model"])
 
@@ -50,7 +50,7 @@ def _out(v: FinModelVersion, with_assumptions: bool = False) -> dict:
          "published_at": v.published_at.isoformat() if v.published_at else None,
          "calibration_as_of": (v.calibration or {}).get("as_of")}
     if with_assumptions:
-        d["assumptions"] = v.assumptions
+        d["assumptions"] = upgrade(v.assumptions)
     return d
 
 

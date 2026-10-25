@@ -171,5 +171,5 @@
   .recharts-responsive-container, .recharts-wrapper { width: 100% !important; height: auto !important; }
   .recharts-wrapper > .recharts-surface { width: 100% !important; height: auto !important; }
   .recharts-legend-wrapper { position: static !important; width: 100% !important; }
-  @page { size: A4; margin: 12mm 10mm; }
+  @page { size: A4 landscape; margin: 10mm 10mm; }
 }

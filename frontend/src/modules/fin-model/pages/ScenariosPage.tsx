@@ -3,7 +3,8 @@ import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ReferenceLine, R
 import { useFM } from "../context";
 import { fmApi, type Scenario } from "../api";
 import { COLORS, compact, monthLabel, pct } from "../i18n";
-import { ChartTooltip, Note, Panel, useMoney } from "../components/ui";
+import { CARD, ChartTooltip, Note, Panel, useMoney } from "../components/ui";
+import { Block, ChapterHeader, ChapterNav } from "../components/chapters";
 
 const SC: Scenario[] = ["conservative", "base", "optimistic"];
 const SC_COLOR: Record<Scenario, string> = { conservative: COLORS.slate, base: COLORS.purple, optimistic: COLORS.orange };
@@ -18,7 +19,37 @@ export default function ScenariosPage() {
     enabled: !!versionId,
     staleTime: 120_000,
   });
-  if (q.isLoading || !q.data) return <p className="py-10 text-center text-ink-600">{t("loading")}</p>;
+  const risks = (ar ? [
+    ["الاعتماد على المدارس", "عقود شراكة على فصول كاملة + مسؤول مبيعات مخصص من فبراير 2027؛ السيناريو المتحفظ بيقلل حجمها 40%."],
+    ["تحويل الحصة المجانية لاشتراك", "متابعة كل حصة تجريبية خلال 24 ساعة وعرض لمدة محدودة؛ بيتراجع شهريًا في «الفعلي مقابل الخطة»."],
+    ["التجديد", "منهج بمستويات وشهادات + تقارير لولي الأمر؛ أكبر عامل مؤثر في تحليل الحساسية تحت."],
+    ["تكلفة الإعلانات", "زيادة العملاء من المعارف والزيارات المباشرة، وميزانية موسمية بتتضاعف في الصيف بس."],
+    ["جودة المعلمين مع التوسع", "مشرف أكاديمي لكل 20 معلم وتكلفة تدريب لكل معلم جديد محسوبين في الخطة."],
+    ["التنظيم والترخيص", "ترخيص التعليم الإلكتروني والتسجيل الضريبي ضمن بند الرسوم الحكومية."],
+  ] : [
+    ["Dependence on schools", "Whole-class partnership contracts + a dedicated sales lead from Feb 2027; the conservative case cuts volume 40%."],
+    ["Free-trial conversion", "Follow up every trial within 24h with a time-limited offer; reviewed monthly in Actual vs plan."],
+    ["Renewals", "Levelled curriculum with certificates and parent reports; the biggest driver in the sensitivity below."],
+    ["Ad costs", "Grow referrals and direct visits; seasonal budget that doubles only in summer."],
+    ["Teacher quality at scale", "One academic supervisor per 20 teachers and an onboarding cost per new teacher are in the plan."],
+    ["Regulation & licensing", "E-learning licence and VAT registration are covered by the government-fees line."],
+  ]);
+  const head = (
+    <>
+      <ChapterHeader id="scenarios" />
+      <Block n="6.1" title={ar ? "أهم المخاطر وإزاي بنديرها" : "Key risks and how we manage them"}>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {risks.map(([h, d], i) => (
+            <div key={h} className={`${CARD} p-4 print:shadow-none`}>
+              <p className="flex items-baseline gap-2 text-[15px] font-bold text-ink-900"><span className="ltr-content text-[12.5px] text-accent-600">{String(i + 1).padStart(2, "0")}</span>{h}</p>
+              <p className="mt-1 text-[13.5px] leading-6 text-ink-600">{d}</p>
+            </div>
+          ))}
+        </div>
+      </Block>
+    </>
+  );
+  if (q.isLoading || !q.data) return <div className="space-y-5">{head}<p className="py-10 text-center text-ink-600">{t("loading")}</p></div>;
   const s = q.data;
   const years = s.scenarios.base.revenue_by_year.map((_, i) => ({
     name: `${t("y")}${i + 1}`,
@@ -31,6 +62,8 @@ export default function ScenariosPage() {
 
   return (
     <div className="space-y-5">
+      {head}
+      <Block n="6.2" title={ar ? "3 سيناريوهات" : "Three scenarios"} lede={ar ? "نفس الخطة لو الأمور مشيت أبطأ (متحفظ) أو أسرع (متفائل) من المتوقع." : "The same plan if things go slower (conservative) or faster (optimistic) than expected."}><span /></Block>
       <div className="grid gap-3 md:grid-cols-3">
         {SC.map((k, i) => {
           const x = s.scenarios[k];
@@ -117,6 +150,7 @@ export default function ScenariosPage() {
         </Panel>
       )}
       <Note>{ar ? "أكبر الأعمدة في الرسم هي المتغيرات اللي لازم نثبتها بالأرقام الفعلية أولًا قبل التوسع. المحلل المالي يقدر يغير مضاعفات كل سيناريو من صفحة الافتراضات." : "The longest bars are the drivers to prove with actual data before scaling. The analyst can change each scenario's multipliers on the Assumptions page."}</Note>
+      <ChapterNav id="scenarios" />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useFM } from "../context";
 import { monthLabel } from "../i18n";
 import { Note, Panel, Segmented } from "../components/ui";
+import { ChapterHeader, ChapterNav } from "../components/chapters";
 import { StatementTable } from "../components/StatementTable";
 import { balanceLines, cashLines, incomeLines } from "../components/statements";
 
@@ -19,6 +20,20 @@ export default function StatementsPage() {
   const flowTotal = view === "monthly";
   return (
     <div className="space-y-5">
+      <ChapterHeader id="statements" />
+      <ul className="grid gap-3 md:grid-cols-3">
+        {(ar ? [
+          ["قائمة الدخل", "إحنا كسبنا ولا خسرنا؟ الإيراد ناقص كل التكاليف."],
+          ["التدفقات النقدية", "الفلوس دخلت وخرجت إمتى؟ (الاشتراك بيتدفع مقدم، والمدارس بتدفع بعد شهرين)."],
+          ["الميزانية", "عندنا إيه وعلينا إيه في آخر كل فترة — ولازم الطرفين يتساووا."],
+        ] : [
+          ["Income statement", "Did we make or lose money? Revenue minus all costs."],
+          ["Cash flow", "When did cash come in and go out? (Plans are prepaid; schools pay two months later.)"],
+          ["Balance sheet", "What we own and owe at each period end — both sides must match."],
+        ]).map(([h, d]) => (
+          <li key={h} className="rounded-xl border border-[#e1e7ef] bg-white p-4"><p className="text-[14.5px] font-bold text-ink-900">{h}</p><p className="mt-1 text-[13.5px] leading-6 text-ink-600">{d}</p></li>
+        ))}
+      </ul>
       <div className="flex flex-wrap items-center gap-3">
         <Segmented value={view} onChange={setView} options={[{ value: "annual", label: t("annual") }, { value: "monthly", label: t("monthly") }]} />
         {view === "monthly" && (
@@ -41,6 +56,7 @@ export default function StatementsPage() {
           ? "الإيراد يُعترف به مع تقديم الحصص (الاشتراك المدفوع مقدمًا يظهر كإيراد مقدم حتى تُقدَّم حصصه). المدارس تدفع بعد شهرين (مستحقات). المعلم يُدفع له عن كل حصة محجوزة حتى لو الطالب غاب."
           : "Revenue is recognised as lessons are delivered (prepaid subscriptions sit in deferred revenue until taught). Schools pay two months after billing (receivables). Teachers are paid for every booked lesson, even if the student misses it."}
       </Note>
+      <ChapterNav id="statements" />
     </div>
   );
 }

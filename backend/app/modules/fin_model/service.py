@@ -136,9 +136,17 @@ def normalize(data: dict) -> dict:
     return out
 
 
+def upgrade(assumptions: dict) -> dict:
+    """Stored assumptions completed with fields added to the model after they were saved."""
+    try:
+        return normalize(copy.deepcopy(assumptions))
+    except HTTPException:
+        return copy.deepcopy(assumptions)
+
+
 def resolve(assumptions: dict, calibration: dict | None) -> dict:
     """Assumptions with the auto fields replaced by actual data."""
-    a = copy.deepcopy(assumptions)
+    a = upgrade(assumptions)
     vals = (calibration or {}).get("values", {})
     for path in a.get("auto_fields", []):
         if path in vals and vals[path] is not None:
@@ -213,7 +221,7 @@ class FinModelService:
         changes: list[str] = []
         if assumptions is not None:
             new = normalize(assumptions)
-            changes = _changed_paths(v.assumptions, new)
+            changes = _changed_paths(upgrade(v.assumptions), new)
             v.assumptions = new
         if name is not None and name.strip() and name.strip() != v.name:
             changes.append("name")
@@ -269,7 +277,7 @@ class FinModelService:
     async def result(self, v: FinModelVersion, scenario: str) -> dict:
         cal = await self.calibration_for(v)
         a = resolve(v.assumptions, cal)
-        key = hashlib.sha1(json.dumps([a, scenario, cal.get("funding_history")], sort_keys=True, default=str).encode()).hexdigest()
+        key = hashlib.sha1(json.dumps([engine.ENGINE_VERSION, a, scenario, cal.get("funding_history")], sort_keys=True, default=str).encode()).hexdigest()
 
         async def produce():
             r = engine.compute(a, scenario, cal.get("funding_history"))
@@ -282,7 +290,7 @@ class FinModelService:
     async def sensitivity(self, v: FinModelVersion, scenario: str) -> dict:
         cal = await self.calibration_for(v)
         a = resolve(v.assumptions, cal)
-        key = hashlib.sha1(json.dumps([a, scenario], sort_keys=True, default=str).encode()).hexdigest()
+        key = hashlib.sha1(json.dumps([engine.ENGINE_VERSION, a, scenario], sort_keys=True, default=str).encode()).hexdigest()
 
         async def produce():
             return engine.sensitivity(a, scenario)

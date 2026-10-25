@@ -32,6 +32,9 @@ SCENARIOS = ("conservative", "base", "optimistic")
 
 
 # --------------------------------------------------------------- helpers
+# bump when the calculation changes so cached results are recomputed
+ENGINE_VERSION = 2
+
 def ym_index(ym: str | None, start: str) -> int | None:
     if not ym:
         return None
@@ -90,6 +93,12 @@ def set_path(d: dict, path: str, value) -> bool:
 
 
 _PROFILE_CACHE: dict[tuple, tuple[list[float], list[float]]] = {}
+
+
+def teacher_capacity_lessons(team: dict) -> float:
+    """Lessons one teacher can give per month = students they carry x lessons per student."""
+    cap = float(team.get("teacher_max_students", 65) or 0) * float(team.get("teacher_lessons_per_student_month", 8) or 0)
+    return cap if cap > 0 else 520.0
 
 
 def delivery_profile(service_weeks: float, weeks_per_month: float) -> tuple[list[float], list[float]]:
@@ -281,7 +290,7 @@ def _run(a: dict, loan_amount: float) -> dict:
         raise_f.append((1 + float(team.get("annual_raise", 0))) ** n)
     trials_all = [sum(funnel[m][i]["trials"] for m in funnel) for i in range(H)]
     teach_lessons = [sum(S[k]["group_lessons"][i] for k in S) + trials_all[i] for i in range(H)]
-    cap = float(team.get("teacher_capacity_lessons", 70)) or 70
+    cap = teacher_capacity_lessons(team)
     teachers = [math.ceil(x / cap - 1e-9) for x in teach_lessons]
     active_all = [sum(S[k]["active"][i] for k in S) for i in range(H)]
     spend_all = [sum(funnel[m][i]["spend"] for m in funnel) for i in range(H)]
@@ -685,6 +694,7 @@ def compute(assumptions: dict, scenario: str = "base", funding_history: list[dic
         "revenue_y1": y1["revenue"], "revenue_y5": y5["revenue"], "revenue_cagr": cagr,
         "ebitda_y1": y1["ebitda"], "ebitda_y5": y5["ebitda"], "ebitda_margin_y5": y5["ebitda_margin"],
         "net_income_y5": y5["net_income"],
+        "teacher_capacity_lessons": teacher_capacity_lessons(a["team"]),
         "ebitda_breakeven_month": first_sustained("ebitda"),
         "net_income_breakeven_month": first_sustained("net_income"),
         "cash_flow_breakeven_month": first_sustained("cfo"),

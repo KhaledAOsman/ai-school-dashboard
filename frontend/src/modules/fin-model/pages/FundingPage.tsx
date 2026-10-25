@@ -3,6 +3,7 @@ import { useFM } from "../context";
 import { COLORS, compact, money, monthLabel, pct } from "../i18n";
 import { ChartTooltip, Kpi, Note, Panel, useMoney } from "../components/ui";
 import { computeUseOfFunds } from "./OverviewPage";
+import { ChapterHeader, ChapterNav } from "../components/chapters";
 
 export default function FundingPage() {
   const { result: r, t, lang } = useFM();
@@ -21,6 +22,20 @@ export default function FundingPage() {
 
   return (
     <div className="space-y-5">
+      <ChapterHeader id="funding" />
+      <div className="grid gap-3 md:grid-cols-3">
+        {(ar ? [
+          ["كام محتاجين؟", `${big(k.loan_amount)} قرض${k.owner_bridge ? ` + ${big(k.owner_bridge)} من الملاك لحد ما القرض يتصرف` : ""}.`],
+          ["هيتصرف في إيه؟", `أكبر بند ${fundLabels[[...funds.rows].sort((a, b) => b.value - a.value)[0].key][0]} (${big([...funds.rows].sort((a, b) => b.value - a.value)[0].value)}) — التفاصيل في الجدول تحت.`],
+          ["هيرجع إزاي؟", `${f?.loan_grace_months} شهر سماح بندفع فيهم الأرباح بس، وبعدها قسط ${full(k.loan_monthly_payment)} شهريًا من أرباح التشغيل${k.loan_repaid_month ? ` لحد ${monthLabel(k.loan_repaid_month, lang)}` : ""}.`],
+        ] : [
+          ["How much?", `A ${big(k.loan_amount)} loan${k.owner_bridge ? ` + ${big(k.owner_bridge)} from owners until it is drawn` : ""}.`],
+          ["Spent on what?", `Largest item: ${fundLabels[[...funds.rows].sort((a, b) => b.value - a.value)[0].key][1]} (${big([...funds.rows].sort((a, b) => b.value - a.value)[0].value)}) — details below.`],
+          ["Paid back how?", `${f?.loan_grace_months} months of profit-only payments, then ${full(k.loan_monthly_payment)} a month from operating profit${k.loan_repaid_month ? ` until ${monthLabel(k.loan_repaid_month, lang)}` : ""}.`],
+        ]).map(([h, d]) => (
+          <div key={h} className="rounded-xl border border-[#e1e7ef] bg-white p-4"><p className="text-[14.5px] font-bold text-ink-900">{h}</p><p className="mt-1 text-[14px] leading-6 text-ink-700">{d}</p></div>
+        ))}
+      </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi label={ar ? "القرض المقترح" : "Proposed loan"} value={big(k.loan_amount)} tone="accent" sub={ar ? `يغطي أقل رصيد + احتياطي ${f?.cash_buffer_months} شهور` : `Covers the trough + ${f?.cash_buffer_months}-month buffer`} />
         <Kpi label={ar ? "التمويل المطلوب بدون قرض" : "Funding need without a loan"} value={big(k.funding_need_without_loan)} sub={ar ? "أعمق عجز تراكمي في الكاش" : "Deepest cumulative cash deficit"} delay={60} />
@@ -119,6 +134,7 @@ export default function FundingPage() {
           </p>
         </Panel>
       </div>
+      <ChapterNav id="funding" />
     </div>
   );
 }

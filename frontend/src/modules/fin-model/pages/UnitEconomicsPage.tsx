@@ -33,7 +33,7 @@ export default function UnitEconomicsPage() {
   ] : [];
   const cacNow = ksa ? (ksa.cpl * (1 - ksa.organic_share) + ksa.lead_to_trial * ksa.trial_cost) / (ksa.lead_to_trial * ksa.show_rate * ksa.trial_to_paid) : null;
   const core = r.unit_economics.find((u) => u.stream === "core_b2c");
-  const cap = ra?.team.teacher_capacity_lessons ?? 70;
+  const cap = r.kpis.teacher_capacity_lessons;
   const perTeacherRev = core?.lesson_net_revenue ? core.lesson_net_revenue * cap : null;
   const perTeacherCost = (core?.teacher_cost_per_lesson ?? 15) * cap;
 

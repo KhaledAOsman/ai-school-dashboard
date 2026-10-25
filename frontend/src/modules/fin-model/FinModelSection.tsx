@@ -13,6 +13,7 @@ import { PERMISSIONS } from "@/permissions/constants";
 import { FinModelProvider, useFM } from "./context";
 import { Segmented } from "./components/ui";
 import type { Scenario } from "./api";
+import { CHAPTERS, TOOLS, ToolHeader } from "./components/chapters";
 
 const Overview = lazy(() => import("./pages/OverviewPage"));
 const Statements = lazy(() => import("./pages/StatementsPage"));
@@ -23,6 +24,8 @@ const Funding = lazy(() => import("./pages/FundingPage"));
 const AssumptionsPage = lazy(() => import("./pages/AssumptionsPage"));
 const Versions = lazy(() => import("./pages/VersionsPage"));
 const Report = lazy(() => import("./pages/ReportPage"));
+const HowItWorks = lazy(() => import("./pages/HowItWorksPage"));
+const Growth = lazy(() => import("./pages/GrowthPage"));
 
 export function FinModelSection() {
   return (
@@ -40,17 +43,6 @@ function Shell() {
   const isReport = location.pathname.endsWith("/report");
   const [exporting, setExporting] = useState(false);
   const qs = location.search;
-
-  const tabs: { to: string; label: string; show: boolean }[] = [
-    { to: "overview", label: t("tab_overview"), show: true },
-    { to: "statements", label: t("tab_statements"), show: true },
-    { to: "unit-economics", label: t("tab_units"), show: true },
-    { to: "actual-vs-plan", label: t("tab_actual"), show: true },
-    { to: "scenarios", label: t("tab_scenarios"), show: true },
-    { to: "funding", label: t("tab_funding"), show: true },
-    { to: "assumptions", label: t("tab_assumptions"), show: true },
-    { to: "versions", label: t("tab_versions"), show: canEdit },
-  ];
 
   async function exportExcel() {
     if (!result || !version) return;
@@ -121,24 +113,50 @@ function Shell() {
                 ● {t(version.status)}
               </span>
             )}
+            <div className="flex flex-wrap items-center gap-1 lg:ms-auto">
+              <span className="me-1 text-[12.5px] font-medium text-ink-500">{lang === "ar" ? "أدوات المحلل:" : "Analyst tools:"}</span>
+              {TOOLS.filter((x) => !x.editorsOnly || canEdit).map((x) => (
+                <NavLink key={x.to} to={`${x.to}${qs}`}
+                  className={({ isActive }) => clsx("whitespace-nowrap rounded-full border px-3 py-1 text-[12.5px] font-semibold transition-colors",
+                    isActive ? "border-accent-500 text-accent-700" : "border-[#e1e7ef] bg-white text-ink-600 hover:text-ink-900")}>
+                  {lang === "ar" ? x.ar : x.en}
+                </NavLink>
+              ))}
+            </div>
           </div>
 
-          <nav className="thin-scrollbar -mx-1 mb-5 flex gap-1 overflow-x-auto border-b border-ink-200 px-1">
-            {tabs.filter((x) => x.show).map((x) => (
-              <NavLink key={x.to} to={`${x.to}${qs}`}
-                className={({ isActive }) => clsx("-mb-px whitespace-nowrap border-b-2 px-3.5 py-2.5 text-[14px] font-semibold transition-colors",
-                  isActive ? "border-brand-600 text-brand-700" : "border-transparent text-ink-600 hover:text-ink-900")}>
-                {x.label}
-              </NavLink>
-            ))}
+          <nav className="mb-7 border-b border-ink-200" aria-label={lang === "ar" ? "فصول العرض" : "Chapters"}>
+            <div className="thin-scrollbar -mx-1 flex items-end gap-0.5 overflow-x-auto px-1">
+              {CHAPTERS.map((c, i) => (
+                <NavLink key={c.to} to={`${c.to}${qs}`}
+                  className={({ isActive }) => clsx("group -mb-px flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3 text-[14.5px] font-semibold transition-colors",
+                    isActive ? "border-brand-600 text-brand-700" : "border-transparent text-ink-600 hover:text-ink-900")}>
+                  {({ isActive }) => (
+                    <>
+                      <span className={clsx("ltr-content grid h-6 w-6 place-items-center rounded-full border text-[11.5px] font-bold transition-colors",
+                        isActive ? "border-brand-600 bg-brand-600 text-white" : "border-ink-300 text-ink-500 group-hover:border-ink-500")}>
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                      {lang === "ar" ? c.ar : c.en}
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </div>
           </nav>
         </div>
       )}
 
+      {!isReport && (() => {
+        const tool = TOOLS.find((x) => location.pathname.endsWith(`/${x.to}`));
+        return tool ? <ToolHeader to={tool.to} /> : null;
+      })()}
       <Suspense fallback={<p className="py-10 text-center text-[14px] text-ink-600">{t("loading")}</p>}>
         <Routes>
           <Route index element={<Navigate to={`overview${qs}`} replace />} />
           <Route path="overview" element={<Overview />} />
+          <Route path="how-it-works" element={<HowItWorks />} />
+          <Route path="growth" element={<Growth />} />
           <Route path="statements" element={<Statements />} />
           <Route path="unit-economics" element={<Units />} />
           <Route path="actual-vs-plan" element={<ActualVsPlan />} />

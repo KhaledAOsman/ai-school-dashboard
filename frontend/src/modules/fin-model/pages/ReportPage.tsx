@@ -7,6 +7,11 @@ import { Panel } from "../components/ui";
 import { StatementTable } from "../components/StatementTable";
 import { balanceLines, cashLines, incomeLines } from "../components/statements";
 import OverviewPage from "./OverviewPage";
+import HowItWorksPage from "./HowItWorksPage";
+import GrowthPage from "./GrowthPage";
+import FundingPage from "./FundingPage";
+import ScenariosPage from "./ScenariosPage";
+import { ChapterHeader, ReportMode } from "../components/chapters";
 
 /** Print-ready investor report: browser "Save as PDF" turns it into the PDF. */
 export default function ReportPage() {
@@ -21,7 +26,7 @@ export default function ReportPage() {
   if (!r) return <p className="py-10 text-center text-ink-600">{t("loading")}</p>;
   const labels = r.years.map((y) => `${t("y")}${y.year}`);
   return (
-    <div className="mx-auto max-w-[760px] space-y-6 print:max-w-none print:space-y-4">
+    <div className="mx-auto max-w-[1000px] space-y-6 print:max-w-none print:space-y-4">
       <div className="flex items-center justify-between print:hidden">
         <Link to={`../overview${location.search}`} className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-brand-600"><ArrowRight size={16} className={ar ? "" : "rotate-180"} /> {t("tab_overview")}</Link>
         <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-full bg-brand-600 px-4 py-2 text-[14px] font-semibold text-white"><Printer size={16} /> {ar ? "طباعة / حفظ PDF" : "Print / Save as PDF"}</button>
@@ -34,13 +39,21 @@ export default function ReportPage() {
           {version?.status === "published" && version.published_at ? ` · ${ar ? "نسخة منشورة" : "Published"} ${version.published_at.slice(0, 10)}` : ` · ${ar ? "مسودة" : "Draft"}`}
         </p>
       </header>
-      <OverviewPage />
-      <div className="print:break-before-page" />
-      <Panel title={`${t("income_statement")} (${monthLabel(r.years[0].from, lang)} – ${monthLabel(r.years[r.years.length - 1].to, lang)})`}>
-        <StatementTable lines={incomeLines(r)} cols={r.years} labels={labels} />
-      </Panel>
-      <Panel title={t("cash_flow")}><StatementTable lines={cashLines} cols={r.years} labels={labels} /></Panel>
-      <Panel title={t("balance_sheet")}><StatementTable lines={balanceLines} cols={r.years} labels={labels} /></Panel>
+      <ReportMode.Provider value>
+        <OverviewPage />
+        <HowItWorksPage />
+        <GrowthPage />
+        <div className="space-y-5">
+          <ChapterHeader id="statements" />
+          <Panel title={`${t("income_statement")} (${monthLabel(r.years[0].from, lang)} – ${monthLabel(r.years[r.years.length - 1].to, lang)})`}>
+            <StatementTable lines={incomeLines(r)} cols={r.years} labels={labels} />
+          </Panel>
+          <Panel title={t("cash_flow")}><StatementTable lines={cashLines} cols={r.years} labels={labels} /></Panel>
+          <Panel title={t("balance_sheet")}><StatementTable lines={balanceLines} cols={r.years} labels={labels} /></Panel>
+        </div>
+        <FundingPage />
+        <ScenariosPage />
+      </ReportMode.Provider>
       <p className="text-[11.5px] text-ink-500">
         {ar
           ? "تقرير مُعد من النموذج المالي في داشبورد AI School. الأرقام توقعات مبنية على افتراضات موضحة في صفحة الافتراضات وبيانات التشغيل الفعلية، وليست ضمانًا للنتائج."

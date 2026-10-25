@@ -288,7 +288,10 @@ DEFAULT_ASSUMPTIONS: dict = {
         "cs_students_per_agent": 120,
         "cs_salary": 1200.0,
         "cs_current_agents": 2,
-        "teacher_capacity_lessons": 70,   # lessons per teacher per month (60-80)
+        # teacher capacity is counted in lessons: one teacher carries 60-70 students a month,
+        # and a 12-lesson plan is delivered over 1-2 months (~8 lessons per student per month)
+        "teacher_max_students": 65,
+        "teacher_lessons_per_student_month": 8.0,
         "teachers_per_supervisor": 20,
         "supervisor_salary": 3000.0,
         "teacher_onboarding_cost": 300.0,

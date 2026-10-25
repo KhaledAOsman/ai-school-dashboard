@@ -46,7 +46,7 @@ export interface Assumptions {
   team: {
     base_payroll: number; base_headcount: number; annual_raise: number; raise_month: number; employer_oncost: number;
     intl_transfer_fee_pct: number; cs_students_per_agent: number; cs_salary: number; cs_current_agents: number;
-    teacher_capacity_lessons: number; teachers_per_supervisor: number; supervisor_salary: number; teacher_onboarding_cost: number;
+    teacher_max_students: number; teacher_lessons_per_student_month: number; teachers_per_supervisor: number; supervisor_salary: number; teacher_onboarding_cost: number;
     ad_spend_per_media_buyer: number; media_buyer_salary: number; media_buyers_current: number; hires: Hire[];
   };
   opex: OpexLine[];
@@ -91,7 +91,7 @@ export interface UnitEconomics {
 
 export interface Kpis {
   revenue_y1: number; revenue_y5: number; revenue_cagr: number | null; ebitda_y1: number; ebitda_y5: number;
-  ebitda_margin_y5: number | null; net_income_y5: number; ebitda_breakeven_month: string | null;
+  ebitda_margin_y5: number | null; net_income_y5: number; teacher_capacity_lessons: number; ebitda_breakeven_month: string | null;
   net_income_breakeven_month: string | null; cash_flow_breakeven_month: string | null; min_cash: number; min_cash_month: string;
   funding_need_without_loan: number; cash_buffer: number; loan_amount: number; suggested_loan: number; financeable: boolean;
   owner_bridge: number; suggested_grace_months: number | null; loan_repaid_month: string | null; loan_monthly_payment: number;
