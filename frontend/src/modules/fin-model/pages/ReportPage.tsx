@@ -15,6 +15,7 @@ import FundingPage from "./FundingPage";
 import ScenariosPage from "./ScenariosPage";
 import { ChapterHeader, ReportMode } from "../components/chapters";
 import { Reconciliation } from "../components/Reconciliation";
+import { ScenarioBar } from "../components/ScenarioBar";
 
 /** Print-ready investor report: browser "Save as PDF" turns it into the PDF. */
 export default function ReportPage() {
@@ -34,6 +35,7 @@ export default function ReportPage() {
         <Link to={`../overview${location.search}`} className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-brand-600"><ArrowRight size={16} className={ar ? "" : "rotate-180"} /> {t("tab_overview")}</Link>
         <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-full bg-brand-600 px-4 py-2 text-[14px] font-semibold text-white"><Printer size={16} /> {ar ? "طباعة / حفظ PDF" : "Print / Save as PDF"}</button>
       </div>
+      <ScenarioBar />
       <header className="border-b-2 border-brand-600 pb-3">
         <img src="/logo.png" alt="AiSchool" className="h-12 w-auto" />
         <h1 className="mt-2 text-[24px] font-bold text-ink-900">{t("module")} — {version?.name}</h1>

@@ -20,7 +20,7 @@ from app.database.session import get_db
 from app.modules.fin_model.calibration import calibrate
 from app.modules.fin_model.defaults import default_assumptions
 from app.modules.fin_model.models import FinModelVersion
-from app.modules.fin_model.service import FinModelService, upgrade
+from app.modules.fin_model.service import FinModelService, presentation_of, upgrade
 
 router = APIRouter(prefix="/fin-model", tags=["financial-model"])
 
@@ -38,6 +38,11 @@ class VersionUpdate(BaseModel):
     assumptions: dict | None = None
 
 
+class Presentation(BaseModel):
+    scenarios: list[str] = Field(default_factory=lambda: ["conservative", "base", "optimistic"], max_length=3)
+    default_scenario: str = Field(default="base", pattern="^(conservative|base|optimistic)$")
+
+
 class PreviewRequest(BaseModel):
     assumptions: dict
     scenario: str = Field(default="base", pattern="^(conservative|base|optimistic)$")
@@ -48,7 +53,7 @@ def _out(v: FinModelVersion, with_assumptions: bool = False) -> dict:
          "created_at": v.created_at.isoformat() if v.created_at else None,
          "updated_at": v.updated_at.isoformat() if v.updated_at else None,
          "published_at": v.published_at.isoformat() if v.published_at else None,
-         "calibration_as_of": (v.calibration or {}).get("as_of")}
+         "calibration_as_of": (v.calibration or {}).get("as_of"), "presentation": presentation_of(v)}
     if with_assumptions:
         d["assumptions"] = upgrade(v.assumptions)
     return d
@@ -89,9 +94,25 @@ async def update_version(version_id: uuid.UUID, payload: VersionUpdate,
 
 
 @router.post("/versions/{version_id}/publish")
-async def publish_version(version_id: uuid.UUID, user: CurrentUser = Depends(require_permission(FIN_MODEL_PUBLISH)),
+async def publish_version(version_id: uuid.UUID, payload: Presentation | None = None,
+                          user: CurrentUser = Depends(require_permission(FIN_MODEL_PUBLISH)),
                           db: AsyncSession = Depends(get_db)):
-    return _out(await FinModelService(db).publish(version_id, user.id))
+    return _out(await FinModelService(db).publish(version_id, user.id, payload.model_dump() if payload else None))
+
+
+@router.put("/versions/{version_id}/presentation")
+async def set_presentation(version_id: uuid.UUID, payload: Presentation,
+                           user: CurrentUser = Depends(require_permission(FIN_MODEL_PUBLISH)),
+                           db: AsyncSession = Depends(get_db)):
+    return _out(await FinModelService(db).set_presentation(version_id, user.id, payload.model_dump()))
+
+
+def _viewer_scenario(v: FinModelVersion, scenario: str, user: CurrentUser) -> str:
+    """Viewers of a published version only get the scenarios the owner chose to show."""
+    if _can_edit(user):
+        return scenario
+    p = presentation_of(v)
+    return scenario if scenario in p["scenarios"] else p["default_scenario"]
 
 
 @router.post("/versions/{version_id}/archive", status_code=204)
@@ -113,7 +134,8 @@ async def version_result(version_id: uuid.UUID, scenario: str = SCENARIO,
                          user: CurrentUser = Depends(require_permission(FIN_MODEL_VIEW, FIN_MODEL_EDIT, require_all=False)),
                          db: AsyncSession = Depends(get_db)):
     svc = FinModelService(db)
-    return await svc.result(await svc.get(version_id, _can_edit(user)), scenario)
+    v = await svc.get(version_id, _can_edit(user))
+    return await svc.result(v, _viewer_scenario(v, scenario, user))
 
 
 @router.get("/versions/{version_id}/sensitivity")
@@ -121,7 +143,12 @@ async def version_sensitivity(version_id: uuid.UUID, scenario: str = SCENARIO,
                               user: CurrentUser = Depends(require_permission(FIN_MODEL_VIEW, FIN_MODEL_EDIT, require_all=False)),
                               db: AsyncSession = Depends(get_db)):
     svc = FinModelService(db)
-    return await svc.sensitivity(await svc.get(version_id, _can_edit(user)), scenario)
+    v = await svc.get(version_id, _can_edit(user))
+    out = await svc.sensitivity(v, _viewer_scenario(v, scenario, user))
+    if not _can_edit(user):
+        allowed = presentation_of(v)["scenarios"]
+        out = {**out, "scenarios": {k: x for k, x in out["scenarios"].items() if k in allowed}}
+    return out
 
 
 @router.post("/preview")

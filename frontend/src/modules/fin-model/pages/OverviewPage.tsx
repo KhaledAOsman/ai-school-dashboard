@@ -87,11 +87,14 @@ export default function OverviewPage() {
       {tot && (
         <Block n="1.1" title={ar ? "الوضع الحالي" : "Where we stand today"}
           lede={ar ? `أرقام فعلية من لوحة التحكم حتى ${aq.data!.as_of}.` : `Actual figures from the dashboard as of ${aq.data!.as_of}.`}>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Kpi label={ar ? "المبيعات المحصلة" : "Sales collected"} value={big(tot.sales_paid)} delay={60} />
             <Kpi label={ar ? "الاشتراكات المدفوعة" : "Paid subscriptions"} value={money(tot.subscriptions)} animate={false}
               sub={ar ? `${tot.customers} اشتراك جديد + ${tot.renewals} تجديد` : `${tot.customers} new + ${tot.renewals} renewal(s)`} delay={120} />
             <Kpi label={ar ? "إجمالي المصروفات" : "Total spend"} value={big(tot.spent)} delay={180} />
+            <Kpi label={ar ? "نسبة التجديد الفعلية" : "Actual renewal rate"} value={pct(tot.customers ? tot.renewals / tot.customers : 0, 1)} animate={false} delay={240}
+              sub={ar ? `${tot.renewals} تجديد ÷ ${tot.customers} عميل · تفترض الخطة ارتفاعها إلى ${pct(core.renewal_rate_target, 0)} خلال ${core.renewal_ramp_months ?? 12} شهرًا`
+                : `${tot.renewals} renewal ÷ ${tot.customers} customers · plan ramps to ${pct(core.renewal_rate_target, 0)} over ${core.renewal_ramp_months ?? 12} months`} />
           </div>
         </Block>
       )}

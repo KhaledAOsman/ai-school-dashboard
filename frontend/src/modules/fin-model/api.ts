@@ -12,8 +12,11 @@ export interface VersionMeta {
   updated_at: string | null;
   published_at: string | null;
   calibration_as_of: string | null;
+  /** published versions: the scenarios viewers can switch between and the one that opens first */
+  presentation?: Presentation;
   assumptions?: Assumptions;
 }
+export interface Presentation { scenarios: Scenario[]; default_scenario: Scenario }
 
 export interface Market {
   id: string; name_ar: string; name_en: string; start_month: string;
@@ -123,7 +126,7 @@ export interface ModelResult {
 export interface Sensitivity {
   pct: number;
   base: SensPoint;
-  drivers: { driver: string; name_ar: string; name_en: string; low: SensPoint; high: SensPoint }[];
+  drivers: { driver: string; name_ar: string; name_en: string; low: SensPoint; high: SensPoint; value?: number; unit?: "sar" | "pct" | "count"; per?: "per_month" | "per_year" | "per_package" | null }[];
   scenarios: Record<Scenario, SensPoint & { revenue_by_year: number[]; ebitda_by_year: number[]; cash_by_year: number[]; breakeven: string | null; loan: number; funding_gap: number; financeable: boolean; subs_y5: number }>;
 }
 export interface SensPoint { ebitda_y5: number; revenue_y5: number; min_cash: number; enterprise_value: number; funding_need: number }
@@ -146,7 +149,8 @@ export const fmApi = {
   create: async (name: string, copy_from?: string | null): Promise<VersionMeta> => (await api.post("/fin-model/versions", { name, copy_from: copy_from ?? null })).data,
   update: async (id: string, body: { name?: string; description?: string; assumptions?: Assumptions }): Promise<VersionMeta> =>
     (await api.put(`/fin-model/versions/${id}`, body)).data,
-  publish: async (id: string): Promise<VersionMeta> => (await api.post(`/fin-model/versions/${id}/publish`)).data,
+  publish: async (id: string, presentation?: Presentation): Promise<VersionMeta> => (await api.post(`/fin-model/versions/${id}/publish`, presentation ?? null)).data,
+  setPresentation: async (id: string, presentation: Presentation): Promise<VersionMeta> => (await api.put(`/fin-model/versions/${id}/presentation`, presentation)).data,
   archive: async (id: string) => { await api.post(`/fin-model/versions/${id}/archive`); },
   history: async (id: string): Promise<{ at: string; action: string; by: string | null; details: Record<string, unknown> | null }[]> =>
     (await api.get(`/fin-model/versions/${id}/history`)).data,

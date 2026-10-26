@@ -11,8 +11,7 @@ import { Download, FileText, Languages } from "lucide-react";
 import { usePermission } from "@/permissions/usePermission";
 import { PERMISSIONS } from "@/permissions/constants";
 import { FinModelProvider, useFM } from "./context";
-import { Segmented } from "./components/ui";
-import type { Scenario } from "./api";
+import { ScenarioBar } from "./components/ScenarioBar";
 import { CHAPTERS, TOOLS, ToolHeader } from "./components/chapters";
 
 const Overview = lazy(() => import("./pages/OverviewPage"));
@@ -38,7 +37,7 @@ export function FinModelSection() {
 
 function Shell() {
   const fm = useFM();
-  const { t, lang, setLang, dir, versions, version, setVersionId, scenario, setScenario, canEdit, result } = fm;
+  const { t, lang, setLang, dir, versions, version, setVersionId, canEdit, result } = fm;
   const canExport = usePermission(PERMISSIONS.FIN_MODEL_EXPORT);
   const location = useLocation();
   const isReport = location.pathname.endsWith("/report");
@@ -104,11 +103,6 @@ function Shell() {
                 ))}
               </select>
             </label>
-            <div className="flex items-center gap-2 text-[13px] text-ink-600">
-              <span>{t("scenario")}</span>
-              <Segmented<Scenario> size="sm" value={scenario} onChange={setScenario}
-                options={[{ value: "conservative", label: t("sc_conservative") }, { value: "base", label: t("sc_base") }, { value: "optimistic", label: t("sc_optimistic") }]} />
-            </div>
             {version && (
               <span className={clsx("text-[12.5px] font-semibold", version.status === "published" ? "text-[#136c3a]" : "text-accent-700")}>
                 ● {t(version.status)}
@@ -125,6 +119,8 @@ function Shell() {
               ))}
             </div>
           </div>
+
+          <ScenarioBar className="mb-5" />
 
           <nav className="mb-7 border-b border-ink-200" aria-label={lang === "ar" ? "فصول العرض" : "Chapters"}>
             <div className="thin-scrollbar -mx-1 flex items-end gap-0.5 overflow-x-auto px-1">

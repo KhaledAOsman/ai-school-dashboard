@@ -8,7 +8,7 @@ import { Reveal } from "@/components/motion";
 import clsx from "clsx";
 import { Block, ChapterHeader, ChapterNav } from "../components/chapters";
 
-const SC: Scenario[] = ["conservative", "base", "optimistic"];
+const SC_ALL: Scenario[] = ["conservative", "base", "optimistic"];
 const SC_COLOR: Record<Scenario, string> = { conservative: COLORS.slate, base: COLORS.purple, optimistic: COLORS.orange };
 
 export default function ScenariosPage() {
@@ -53,19 +53,54 @@ export default function ScenariosPage() {
   );
   if (q.isLoading || !q.data) return <div className="space-y-5">{head}<p className="py-10 text-center text-ink-600">{t("loading")}</p></div>;
   const s = q.data;
+  const SC = SC_ALL.filter((k) => k in s.scenarios);
   const years = s.scenarios.base.revenue_by_year.map((_, i) => ({
     name: `${t("y")}${i + 1}`,
     ...Object.fromEntries(SC.map((k) => [`rev_${k}`, Math.round(s.scenarios[k].revenue_by_year[i])])),
     ...Object.fromEntries(SC.map((k) => [`ebitda_${k}`, Math.round(s.scenarios[k].ebitda_by_year[i])])),
   }));
   const base = s.base.ebitda_y5;
-  const tornado = s.drivers.map((d) => ({ name: nm(d), low: Math.round(d.low.ebitda_y5 - base), high: Math.round(d.high.ebitda_y5 - base) }));
+  const fv = (v: number, u?: string) => (u === "pct" ? pct(v, 1) : u === "sar" ? (ar ? `${money(v)} ر.س` : `SAR ${money(v)}`) : money(v));
+  const perTxt = (p?: string | null) => (p === "per_month" ? (ar ? " شهريًا" : "/mo") : p === "per_year" ? (ar ? " سنويًا" : "/yr") : "");
+  const tornado = s.drivers.map((d) => {
+    const lowE = Math.round(d.low.ebitda_y5), highE = Math.round(d.high.ebitda_y5);
+    const v = d.value;
+    const valTxt = v === undefined ? "" : `${fv(v, d.unit)}${perTxt(d.per)}`;
+    const lowV = v === undefined ? "" : fv(v * (1 - s.pct), d.unit), highV = v === undefined ? "" : fv(v * (1 + s.pct), d.unit);
+    return { name: nm(d), valTxt, lowV, highV, lowE, highE, low: [Math.round(base), lowE] as [number, number], high: [Math.round(base), highE] as [number, number],
+      dLow: lowE - Math.round(base), dHigh: highE - Math.round(base) };
+  });
+  type TRow = (typeof tornado)[number];
+  const minX = Math.min(...tornado.map((x) => Math.min(x.lowE, x.highE)), base), maxX = Math.max(...tornado.map((x) => Math.max(x.lowE, x.highE)), base);
+  const pad = (maxX - minX) * 0.12;
+  const DriverTick = ({ x, y, payload }: { x: number; y: number; payload: { value: string; index: number } }) => {
+    const row = tornado[payload.index];
+    return (
+      <g transform={`translate(${x},${y})`}>
+        <text x={-8} y={-3} textAnchor="end" fontSize={12} fontWeight={600} fill="#1d2035" direction={ar ? "rtl" : "ltr"}>{row.name}</text>
+        {row.valTxt && <text x={-8} y={13} textAnchor="end" fontSize={11} fill="#6b7290" direction={ar ? "rtl" : "ltr"}>{ar ? `في الخطة: ${iso(row.valTxt)}` : `Plan: ${row.valTxt}`}</text>}
+      </g>
+    );
+  };
+  const TornadoTip = ({ active, payload }: { active?: boolean; payload?: { payload: TRow }[] }) => {
+    if (!active || !payload?.length) return null;
+    const r = payload[0].payload;
+    const sign = (v: number) => `${v > 0 ? "+" : ""}${money(v, { parens: false })}`;
+    return (
+      <div dir={ar ? "rtl" : "ltr"} className="rounded-lg border border-[#e1e7ef] bg-white px-3 py-2 text-[12.5px] shadow-md">
+        <p className="font-bold text-ink-900">{r.name}</p>
+        {r.valTxt && <p className="text-ink-600">{ar ? "القيمة في الخطة" : "Plan value"}: <span className="ltr-content">{r.valTxt}</span></p>}
+        <p className="mt-1 text-ink-700">{ar ? `خفض ${s.pct * 100}%` : `−${s.pct * 100}%`}{r.lowV && <span className="ltr-content"> ({r.lowV})</span>} ← EBITDA <span className="ltr-content font-semibold">{money(r.lowE)}</span> <span className="ltr-content text-ink-500">({sign(r.dLow)})</span></p>
+        <p className="text-ink-700">{ar ? `رفع ${s.pct * 100}%` : `+${s.pct * 100}%`}{r.highV && <span className="ltr-content"> ({r.highV})</span>} ← EBITDA <span className="ltr-content font-semibold">{money(r.highE)}</span> <span className="ltr-content text-ink-500">({sign(r.dHigh)})</span></p>
+      </div>
+    );
+  };
   const sp = result?.resolved_assumptions?.scenarios;
 
   return (
     <div className="space-y-5">
       {head}
-      <Block n="8.2" title={ar ? "ثلاثة سيناريوهات" : "Three scenarios"}
+      <Block n="8.2" title={SC.length === 3 ? (ar ? "ثلاثة سيناريوهات" : "Three scenarios") : (ar ? "السيناريوهات" : "Scenarios")}
         lede={ar ? "الخطة نفسها في حال جاءت النتائج أبطأ (متحفظ) أو أسرع (متفائل) من المتوقع، مع التمويل الذي يحتاجه كل سيناريو." : "The same plan if things go slower (conservative) or faster (optimistic) than expected, with the funding each one needs."}>
         <div className="grid gap-4 lg:grid-cols-3">
           {SC.map((k, i) => {
@@ -112,7 +147,7 @@ export default function ScenariosPage() {
         </div>
       </Block>
       <div className="grid gap-4 xl:grid-cols-2">
-        <Panel title={ar ? "الإيرادات في السيناريوهات الثلاثة" : "Revenue in the three scenarios"}>
+        <Panel title={ar ? "الإيرادات حسب السيناريو" : "Revenue by scenario"}>
           <div className="h-[280px]" dir="ltr">
             <ResponsiveContainer>
               <LineChart data={years} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
@@ -126,7 +161,7 @@ export default function ScenariosPage() {
             </ResponsiveContainer>
           </div>
         </Panel>
-        <Panel title={ar ? "EBITDA في السيناريوهات الثلاثة" : "EBITDA in the three scenarios"} delay={80}>
+        <Panel title={ar ? "EBITDA حسب السيناريو" : "EBITDA by scenario"} delay={80}>
           <div className="h-[280px]" dir="ltr">
             <ResponsiveContainer>
               <LineChart data={years} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
@@ -144,24 +179,28 @@ export default function ScenariosPage() {
       </div>
       <Panel title={ar ? `حساسية EBITDA السنة الخامسة لتغير ±${pct(s.pct, 0)} في كل متغير` : `Year-5 EBITDA sensitivity to ±${pct(s.pct, 0)} in each driver`}
         subtitle={ar ? `مقارنة بـ ${big(base)} في السيناريو ${t(`sc_${scenario}` as "sc_base")} — الأعلى تأثيرًا أولًا` : `Against ${big(base)} in the ${t(`sc_${scenario}` as "sc_base")} case — biggest impact first`}>
-        <div className="h-[520px]" dir="ltr">
+        <div className="h-[600px]" dir="ltr">
           <ResponsiveContainer>
-            <BarChart data={tornado} layout="vertical" barCategoryGap="22%" barGap={2} margin={{ top: 8, right: 56, left: 56, bottom: 0 }}>
+            <BarChart data={tornado} layout="vertical" barCategoryGap="20%" barGap={2} margin={{ top: 22, right: 64, left: 8, bottom: 0 }}>
               <CartesianGrid horizontal={false} stroke={COLORS.grid} />
-              <XAxis type="number" tickFormatter={(v) => compact(v, "en")} tickLine={false} axisLine={false} fontSize={12} />
-              <YAxis type="category" dataKey="name" width={ar ? 190 : 170} tickLine={false} axisLine={false} fontSize={12} />
-              <ReferenceLine x={0} stroke="#555b7a" />
-              <Tooltip content={<ChartTooltip formatter={(v) => `${v > 0 ? "+" : ""}${money(v, { parens: false })}`} />} cursor={{ fill: "#f4f1ff" }} />
+              <XAxis type="number" domain={[Math.floor(minX - pad), Math.ceil(maxX + pad)]} tickFormatter={(v) => compact(v, "en")} tickLine={false} axisLine={false} fontSize={12} />
+              <YAxis type="category" dataKey="name" width={ar ? 230 : 210} tickLine={false} axisLine={false} tick={DriverTick as never} interval={0} />
+              <ReferenceLine x={Math.round(base)} stroke="#1d2035" strokeWidth={1.5}
+                label={{ value: ar ? `EBITDA الخطة ${iso(compact(base, "en"))}` : `Plan EBITDA ${compact(base, "en")}`, position: "top", fontSize: 11.5, fontWeight: 700, fill: "#1d2035" }} />
+              <Tooltip content={<TornadoTip />} cursor={{ fill: "#f4f1ff" }} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="low" name={ar ? `خفض المتغير ${s.pct * 100}%` : `Driver −${s.pct * 100}%`} fill={COLORS.purpleSoft} radius={2}>
-                <LabelList dataKey="low" position="right" fontSize={10} formatter={(v: number) => compact(v, "en")} />
+                <LabelList dataKey="lowE" position="right" fontSize={10.5} formatter={(v: number) => compact(v, "en")} />
               </Bar>
               <Bar dataKey="high" name={ar ? `رفع المتغير ${s.pct * 100}%` : `Driver +${s.pct * 100}%`} fill={COLORS.purple} radius={2}>
-                <LabelList dataKey="high" position="right" fontSize={10} formatter={(v: number) => compact(v, "en")} />
+                <LabelList dataKey="highE" position="right" fontSize={10.5} formatter={(v: number) => compact(v, "en")} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
+        <p className="mt-2 text-[12.5px] leading-6 text-ink-600">{ar
+          ? `كل عمود يبدأ من EBITDA الخطة (${big(base)}) وينتهي عند الرقم الناتج بعد تغيير المتغير ${s.pct * 100}% مع ثبات باقي الافتراضات. القيمة تحت اسم كل متغير هي قيمته الحالية في الخطة (للبنود السنوية: السنة الخامسة).`
+          : `Each bar starts at plan EBITDA (${big(base)}) and ends at the result after moving the driver ${s.pct * 100}% with everything else unchanged. The value under each driver is its current plan value (year 5 where it changes by year).`}</p>
       </Panel>
       {sp && (
         <Panel title={ar ? "كيف تُبنى السيناريوهات" : "How the scenarios are built"}>

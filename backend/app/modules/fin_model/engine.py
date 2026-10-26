@@ -874,6 +874,33 @@ def _shock(a: dict, driver: str, f: float) -> dict:
     return a
 
 
+def _driver_values(a: dict) -> dict:
+    """Plan value of each sensitivity driver (year 5 where it changes by year), so the chart
+    can show what is being moved by ±20%. unit: sar | pct | count."""
+    streams = a.get("streams", [])
+    core = next((s for s in streams if s.get("id") == "core_b2c"), streams[0] if streams else {})
+    mk = next((m for m in a.get("markets", []) if m.get("id") == "ksa"), (a.get("markets") or [{}])[0])
+    t = a.get("team", {})
+    last = lambda xs: float((xs or [0])[-1])
+    b2b = sum(last(s.get("partners_by_year")) * float(s.get("students_per_partner", 0))
+              for s in streams if s.get("enabled", True) and s.get("driver") == "partners")
+    payroll = float(t.get("admin_payroll", 0)) + sum(last(t.get(k)) for k in (
+        "marketing_team_monthly_by_year", "cs_monthly_by_year", "quality_monthly_by_year"))
+    payroll += sum(float(h.get("salary", 0)) * int(h.get("count", 1)) for h in t.get("hires", []) if not h.get("in_budget"))
+    out = {
+        "price": (float(core.get("list_price", 0)), "sar", "per_package"),
+        "discount": (float(core.get("avg_discount", 0)), "pct", None),
+        "conversion": (float(mk.get("trial_to_paid_target", mk.get("trial_to_paid", 0))), "pct", None),
+        "cpl": (float(mk.get("cpl", 0)), "sar", None),
+        "renewal": (float(core.get("renewal_rate_target", 0)), "pct", None),
+        "teacher_cost": (float(core.get("teacher_cost_per_lesson", 0)), "sar", None),
+        "marketing": (last(mk.get("trials_by_year")), "count", "per_month"),
+        "b2b_volume": (b2b, "count", "per_year"),
+        "payroll": (payroll, "sar", "per_month"),
+    }
+    return {k: {"value": v, "unit": u, "per": per} for k, (v, u, per) in out.items()}
+
+
 def sensitivity(assumptions: dict, scenario: str = "base", pct: float = 0.2) -> dict:
     base = compute(assumptions, scenario)
 
@@ -882,11 +909,12 @@ def sensitivity(assumptions: dict, scenario: str = "base", pct: float = 0.2) -> 
                 "min_cash": r["kpis"]["min_cash"], "enterprise_value": r["kpis"]["enterprise_value"],
                 "funding_need": r["kpis"]["funding_need_without_loan"]}
 
+    vals = _driver_values(apply_scenario(assumptions, scenario))
     rows = []
     for key, ar, en in SENSITIVITY_DRIVERS:
         lo = pick(compute(_shock(assumptions, key, 1 - pct), scenario))
         hi = pick(compute(_shock(assumptions, key, 1 + pct), scenario))
-        rows.append({"driver": key, "name_ar": ar, "name_en": en, "low": lo, "high": hi})
+        rows.append({"driver": key, "name_ar": ar, "name_en": en, "low": lo, "high": hi, **vals.get(key, {})})
     b = pick(base)
     rows.sort(key=lambda r: -abs(r["high"]["ebitda_y5"] - r["low"]["ebitda_y5"]))
     scen = {}

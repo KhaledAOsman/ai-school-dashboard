@@ -21,7 +21,7 @@ type Kind = "launch" | "market" | "hire" | "capex" | "funding" | "milestone" | "
 const ICON: Record<Kind, typeof Rocket> = { launch: Rocket, market: Globe2, hire: Briefcase, capex: Server, funding: Banknote, milestone: Flag, tax: Receipt };
 
 export default function SalesPlanPage() {
-  const { result: r, t, nm, lang } = useFM();
+  const { result: r, t, nm, lang, scenario } = useFM();
   const { big } = useMoney();
   const inReport = useContext(ReportMode);
   const ar = lang === "ar";
@@ -54,12 +54,24 @@ export default function SalesPlanPage() {
     .reduce((acc, m) => acc + partnerStreams.reduce((a2, st) => a2 + (m.new_by_stream[st.id] ?? 0) / st.students_per_partner, 0), 0)));
   const partnersCols = [...partnersYear, partnersYear.reduce((a2, b) => a2 + b, 0)];
   const perPartner = partnerStreams[0]?.students_per_partner;
+  // assumed renewal probability of an individual package: starts at the actual rate and ramps to the
+  // target (engine: ramp(renewal_rate, renewal_rate_target, renewal_ramp_months)), times the scenario factor
+  const coreS = ra.streams.find((st) => st.id === "core_b2c") ?? ra.streams[0];
+  const renF = Number((ra.scenarios as unknown as Record<string, { renewal?: number }>)?.[scenario]?.renewal ?? 1);
+  const ymI = (ym: string) => { const [a1, b1] = ym.split("-").map(Number); const [a0, b0] = r.months[0].month.split("-").map(Number); return (a1 - a0) * 12 + (b1 - b0); };
+  const renewP = (i: number) => {
+    const t0 = i - ymI(coreS.start_month), rm = Number(coreS.renewal_ramp_months ?? 12);
+    const v = t0 < 0 ? coreS.renewal_rate : coreS.renewal_rate + (coreS.renewal_rate_target - coreS.renewal_rate) * Math.min(rm > 0 ? t0 / rm : 1, 1);
+    return Math.min(v * renF, 0.95);
+  };
+  const renewYear = r.years.map((y) => { const ms = r.months.map((m, i) => ({ m, i })).filter((x) => x.m.year === y.year); return ms.reduce((a2, x) => a2 + renewP(x.i), 0) / (ms.length || 1); });
   type Row = { label: string; v: (x: SalesRow, i: number) => string; kind?: "total" | "sub" | "pct" };
   const rows: Row[] = [
     { label: ar ? "المحاضرات المجانية المقدَّمة" : "Free lectures given", v: (x) => money(x.trials) },
     { label: ar ? "المحاضرات المجانية التي تم حضورها" : "Free lectures attended", v: (x) => money(x.attended) },
     { label: ar ? "نسبة الاشتراك ممن حضروا" : "Conversion of attendees", v: (x) => pct(x.attended ? x.fromTrials / x.attended : null, 1), kind: "pct" },
     { label: ar ? "اشتراكات جديدة من المحاضرات المجانية" : "New subscriptions from free lectures", v: (x) => money(x.fromTrials) },
+    { label: ar ? "احتمال تجديد الباقة الفردية (متوسط السنة)" : "Individual package renewal probability (year average)", v: (_x, i) => (i < renewYear.length ? pct(renewYear[i], 1) : "—"), kind: "pct" },
     { label: ar ? "تجديدات الاشتراكات الفردية" : "Individual renewals", v: (x) => money(x.renewals) },
     ...(hasOther ? [{ label: ar ? "برامج ومعسكرات فردية" : "Individual programmes & camps", v: (x: SalesRow) => money(x.otherB2c) }] : []),
     ...(partnerStreams.length ? [{ label: ar ? `جهات شريكة جديدة (كل جهة ${perPartner} طالبًا)` : `New partner institutions (${perPartner} students each)`, v: (_x: SalesRow, i: number) => money(partnersCols[i]), kind: "pct" as const }] : []),

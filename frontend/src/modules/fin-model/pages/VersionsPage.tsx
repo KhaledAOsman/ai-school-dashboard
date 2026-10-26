@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
 import { useFM } from "../context";
-import { fmApi } from "../api";
+import { fmApi, type Presentation, type Scenario, type VersionMeta } from "../api";
 import { CARD, Note, Panel } from "../components/ui";
 import { apiErrorMessage } from "@/modules/marketing/lib";
 
@@ -18,11 +18,13 @@ export default function VersionsPage() {
   const hq = useQuery({ queryKey: ["fm", "history", version?.id, version?.updated_at], queryFn: () => fmApi.history(version!.id), enabled: !!version });
   const done = () => qc.invalidateQueries({ queryKey: ["fm"] });
   const create = useMutation({ mutationFn: () => fmApi.create(name.trim(), copyFrom || null), onSuccess: (v) => { setName(""); done().then(() => setVersionId(v.id)); }, onError: (e) => setErr(apiErrorMessage(e)) });
-  const publish = useMutation({ mutationFn: (id: string) => fmApi.publish(id), onSuccess: done, onError: (e) => setErr(apiErrorMessage(e)) });
+  const [picking, setPicking] = useState<string | null>(null);
+  const publish = useMutation({ mutationFn: ({ id, p }: { id: string; p: Presentation }) => fmApi.publish(id, p), onSuccess: () => { setPicking(null); done(); }, onError: (e) => setErr(apiErrorMessage(e)) });
+  const present = useMutation({ mutationFn: ({ id, p }: { id: string; p: Presentation }) => fmApi.setPresentation(id, p), onSuccess: () => { setPicking(null); done(); }, onError: (e) => setErr(apiErrorMessage(e)) });
   const archive = useMutation({ mutationFn: (id: string) => fmApi.archive(id), onSuccess: done, onError: (e) => setErr(apiErrorMessage(e)) });
   const actionLabel: Record<string, [string, string]> = {
     "fin_model.create": ["إنشاء النسخة", "Created"], "fin_model.update": ["تعديل الافتراضات", "Assumptions edited"],
-    "fin_model.publish": ["نشر للمستثمرين", "Published to investors"], "fin_model.archive": ["أرشفة", "Archived"],
+    "fin_model.publish": ["نشر للمستثمرين", "Published to investors"], "fin_model.archive": ["أرشفة", "Archived"], "fin_model.presentation": ["تحديد السيناريوهات المعروضة", "Shown scenarios changed"],
   };
 
   return (
@@ -44,8 +46,12 @@ export default function VersionsPage() {
               <div className="flex flex-wrap gap-2">
                 {v.id !== version?.id && <button type="button" onClick={() => setVersionId(v.id)} className="rounded-full border border-[#e1e7ef] px-3 py-1.5 text-[13px] font-semibold text-ink-700 hover:bg-brand-50">{ar ? "عرض" : "Open"}</button>}
                 {canPublish && v.status === "draft" && (
-                  <button type="button" disabled={publish.isPending} onClick={() => { if (window.confirm(ar ? `نشر «${v.name}» للمستثمرين؟ ستُقفل النسخة بعد النشر.` : `Publish “${v.name}” to investors? It will be locked.`)) publish.mutate(v.id); }}
+                  <button type="button" disabled={publish.isPending} onClick={() => setPicking(picking === v.id ? null : v.id)}
                     className="rounded-full bg-brand-600 px-3.5 py-1.5 text-[13px] font-semibold text-white hover:bg-brand-700">{ar ? "نشر للمستثمرين" : "Publish"}</button>
+                )}
+                {canPublish && v.status === "published" && (
+                  <button type="button" onClick={() => setPicking(picking === v.id ? null : v.id)}
+                    className="rounded-full border border-[#e1e7ef] px-3 py-1.5 text-[13px] font-semibold text-ink-700 hover:bg-brand-50">{ar ? "السيناريوهات المعروضة" : "Shown scenarios"}</button>
                 )}
                 {canPublish && (
                   <button type="button" onClick={() => { if (window.confirm(ar ? `أرشفة «${v.name}»؟` : `Archive “${v.name}”?`)) archive.mutate(v.id); }}
@@ -53,6 +59,17 @@ export default function VersionsPage() {
                 )}
               </div>
             </div>
+            {v.status === "published" && v.presentation && picking !== v.id && (
+              <p className="mt-2 text-[12.5px] text-ink-600">{ar ? "يرى المشاهدون: " : "Viewers see: "}
+                {v.presentation.scenarios.map((sc) => t(`sc_${sc}` as "sc_base")).join(ar ? "، " : ", ")}
+                {" · "}{ar ? "يفتح على: " : "Opens on: "}<b className="text-ink-900">{t(`sc_${v.presentation.default_scenario}` as "sc_base")}</b></p>
+            )}
+            {picking === v.id && (
+              <PresentationPicker v={v} busy={publish.isPending || present.isPending}
+                cta={v.status === "draft" ? (ar ? "تأكيد النشر وقفل النسخة" : "Publish and lock") : (ar ? "حفظ" : "Save")}
+                onCancel={() => setPicking(null)}
+                onSave={(p) => (v.status === "draft" ? publish.mutate({ id: v.id, p }) : present.mutate({ id: v.id, p }))} />
+            )}
           </div>
         ))}
         {err && <p className="text-[13px] text-[#a02a24]">{err}</p>}
@@ -84,6 +101,48 @@ export default function VersionsPage() {
             {hq.data?.length === 0 && <li className="text-ink-500">{ar ? "لا توجد تعديلات بعد" : "No changes yet"}</li>}
           </ul>
         </Panel>
+      </div>
+    </div>
+  );
+}
+
+
+const ALL_SC: Scenario[] = ["conservative", "base", "optimistic"];
+
+/** Owner picks which scenarios viewers of the shared dashboard can switch between, and the one it opens on. */
+function PresentationPicker({ v, cta, busy, onSave, onCancel }: { v: VersionMeta; cta: string; busy: boolean; onSave: (p: Presentation) => void; onCancel: () => void }) {
+  const { t, lang } = useFM();
+  const ar = lang === "ar";
+  const [sel, setSel] = useState<Scenario[]>(v.presentation?.scenarios ?? ALL_SC);
+  const [def, setDef] = useState<Scenario>(v.presentation?.default_scenario ?? "base");
+  const toggle = (sc: Scenario) => setSel((x) => {
+    const n = x.includes(sc) ? x.filter((y) => y !== sc) : ALL_SC.filter((y) => y === sc || x.includes(y));
+    if (!n.length) return x;
+    if (!n.includes(def)) setDef(n.includes("base") ? "base" : n[0]);
+    return n;
+  });
+  return (
+    <div className="mt-3 rounded-xl border border-[#e1e7ef] bg-[#f8f9fc] p-3.5">
+      <p className="text-[13.5px] font-bold text-ink-900">{ar ? "السيناريوهات التي يراها من تشارك معه لوحة التحكم" : "Scenarios people you share the dashboard with can see"}</p>
+      <p className="mt-0.5 text-[12.5px] text-ink-600">{ar ? "يظهر زر فوق كل الصفحات للتبديل بين السيناريوهات المختارة، وتفتح اللوحة على السيناريو الافتراضي." : "A switcher on top of every page lets them change between the chosen scenarios; the dashboard opens on the default one."}</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        {ALL_SC.map((sc) => (
+          <div key={sc} className={clsx("rounded-lg border bg-white p-2.5", sel.includes(sc) ? "border-brand-600" : "border-[#e1e7ef]")}>
+            <label className="flex cursor-pointer items-center gap-2 text-[13.5px] font-semibold text-ink-900">
+              <input type="checkbox" className="h-4 w-4 accent-[#6d3af2]" checked={sel.includes(sc)} onChange={() => toggle(sc)} />
+              {t(`sc_${sc}` as "sc_base")}
+            </label>
+            <label className={clsx("mt-1.5 flex items-center gap-2 text-[12.5px]", sel.includes(sc) ? "cursor-pointer text-ink-600" : "text-ink-300")}>
+              <input type="radio" name={`def-${v.id}`} className="h-3.5 w-3.5 accent-[#6d3af2]" disabled={!sel.includes(sc)} checked={def === sc} onChange={() => setDef(sc)} />
+              {ar ? "يفتح عليه أولًا" : "Opens first"}
+            </label>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" disabled={busy} onClick={() => onSave({ scenarios: sel, default_scenario: def })}
+          className="rounded-full bg-brand-600 px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-brand-700 disabled:opacity-50">{cta}</button>
+        <button type="button" onClick={onCancel} className="rounded-full px-3 py-1.5 text-[13px] font-semibold text-ink-600 hover:bg-ink-100">{ar ? "إلغاء" : "Cancel"}</button>
       </div>
     </div>
   );

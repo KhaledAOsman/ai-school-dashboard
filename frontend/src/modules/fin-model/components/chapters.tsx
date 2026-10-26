@@ -10,24 +10,24 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Reveal } from "@/components/motion";
 import { useFM } from "../context";
 
-export interface Chapter { to: string; ar: string; en: string; lede_ar: string; lede_en: string; short?: [string, string] }
+export interface Chapter { to: string; img?: string; ar: string; en: string; lede_ar: string; lede_en: string; short?: [string, string] }
 
 export const CHAPTERS: Chapter[] = [
-  { to: "overview", short: ["الملخص", "Summary"], ar: "الملخص التنفيذي", en: "Executive summary",
+  { to: "overview", img: "cover.jpg", short: ["الملخص", "Summary"], ar: "الملخص التنفيذي", en: "Executive summary",
     lede_ar: "المشروع ووضعه الحالي وأهم أرقام الخطة في صفحة واحدة.", lede_en: "The business, where it stands today and the plan's key figures on one page." },
-  { to: "business-model", short: ["نموذج العمل", "Model"], ar: "نموذج العمل", en: "Business model",
+  { to: "business-model", img: "model.jpg", short: ["نموذج العمل", "Model"], ar: "نموذج العمل", en: "Business model",
     lede_ar: "كيف يصل العميل إلينا، وماذا يشتري، ومن يقدّم الخدمة.", lede_en: "How customers reach us, what they buy and who delivers the service." },
-  { to: "unit-economics", short: ["اقتصاديات الاشتراك", "Unit economics"], ar: "اقتصاديات الاشتراك", en: "Unit economics",
+  { to: "unit-economics", img: "units.jpg", short: ["اقتصاديات الاشتراك", "Unit economics"], ar: "اقتصاديات الاشتراك", en: "Unit economics",
     lede_ar: "إيراد الاشتراك الواحد وتكلفته وربحه، وتكلفة الحصول على مشترك جديد.", lede_en: "Revenue, cost and profit of one subscription, and the cost of winning a new subscriber." },
-  { to: "sales-plan", short: ["المبيعات", "Sales"], ar: "خطة المبيعات والإيرادات", en: "Sales & revenue plan",
+  { to: "sales-plan", img: "growth.jpg", short: ["المبيعات", "Sales"], ar: "خطة المبيعات والإيرادات", en: "Sales & revenue plan",
     lede_ar: "عدد المحاضرات المجانية والاشتراكات المدفوعة شهريًا وسنويًا، والإيراد الناتج عنها.", lede_en: "Free lectures and paid subscriptions per month and per year, and the revenue they produce." },
-  { to: "expenses", short: ["المصروفات", "Expenses"], ar: "المصروفات واستخدام الأموال", en: "Expenses & use of funds",
+  { to: "expenses", img: "team.jpg", short: ["المصروفات", "Expenses"], ar: "المصروفات واستخدام الأموال", en: "Expenses & use of funds",
     lede_ar: "أين تُصرف الأموال، موزعة على بنود واضحة لكل سنة.", lede_en: "Where the money goes, by clear category for every year." },
-  { to: "statements", short: ["القوائم المالية", "Statements"], ar: "القوائم المالية", en: "Financial statements",
+  { to: "statements", img: "statements.jpg", short: ["القوائم المالية", "Statements"], ar: "القوائم المالية", en: "Financial statements",
     lede_ar: "قائمة الدخل والتدفقات النقدية والمركز المالي لخمس سنوات.", lede_en: "Income statement, cash flow and balance sheet for five years." },
-  { to: "funding", short: ["التمويل", "Funding"], ar: "التمويل والعائد", en: "Funding & returns",
+  { to: "funding", img: "funding.jpg", short: ["التمويل", "Funding"], ar: "التمويل والعائد", en: "Funding & returns",
     lede_ar: "حجم التمويل المطلوب وأوجه استخدامه وطريقة سداده والعائد المتوقع.", lede_en: "The funding required, how it is used, how it is repaid and the expected return." },
-  { to: "scenarios", short: ["المخاطر", "Risks"], ar: "المخاطر والسيناريوهات", en: "Risks & scenarios",
+  { to: "scenarios", img: "scenarios.jpg", short: ["المخاطر", "Risks"], ar: "المخاطر والسيناريوهات", en: "Risks & scenarios",
     lede_ar: "العوامل التي قد تغيّر النتائج، وخطة التعامل معها.", lede_en: "What could change the outcome, and how it is managed." },
 ];
 
@@ -49,13 +49,22 @@ export function ChapterHeader({ id, children }: { id: string; children?: ReactNo
   const c = CHAPTERS[i];
   return (
     <Reveal>
-      <header className={clsx("mb-6 print:mb-3", i > 0 && "print:break-before-page")}>
-        <p className="text-[13px] font-semibold tracking-wide text-accent-600">
-          {ar ? `الفصل ${two(i + 1)} من ${two(CHAPTERS.length)}` : `Chapter ${two(i + 1)} of ${two(CHAPTERS.length)}`}
-        </p>
-        <h2 className="mt-1 text-[24px] font-bold leading-9 tracking-tight text-ink-900 sm:text-[28px] sm:leading-10">{ar ? c.ar : c.en}</h2>
-        <p className="mt-1 max-w-[760px] text-[15px] leading-7 text-ink-600">{ar ? c.lede_ar : c.lede_en}</p>
-        {children}
+      <header className={clsx("mb-6 overflow-hidden rounded-2xl border border-[#e1e7ef] bg-white print:mb-3 print:border-0", i > 0 && "print:break-before-page")}>
+        <div className="grid items-center sm:grid-cols-[1fr_minmax(0,300px)] lg:grid-cols-[1fr_minmax(0,380px)]">
+          <div className="p-5 sm:p-7">
+            <p className="text-[13px] font-semibold tracking-wide text-accent-600">
+              {ar ? `الفصل ${two(i + 1)} من ${two(CHAPTERS.length)}` : `Chapter ${two(i + 1)} of ${two(CHAPTERS.length)}`}
+            </p>
+            <h2 className="mt-1 text-[24px] font-bold leading-9 tracking-tight text-ink-900 sm:text-[30px] sm:leading-[44px]">{ar ? c.ar : c.en}</h2>
+            <p className="mt-1.5 max-w-[620px] text-[15px] leading-7 text-ink-600">{ar ? c.lede_ar : c.lede_en}</p>
+            <span className="mt-4 block h-1 w-14 rounded-full bg-brand-600" />
+            {children}
+          </div>
+          {c.img && (
+            <img src={`/fm/${c.img}`} alt="" loading="lazy" decoding="async"
+              className="hidden h-full max-h-[230px] w-full object-contain p-3 sm:block print:max-h-[160px]" />
+          )}
+        </div>
       </header>
     </Reveal>
   );

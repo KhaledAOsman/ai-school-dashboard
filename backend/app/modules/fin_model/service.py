@@ -304,6 +304,20 @@ def _changed_paths(old, new, prefix="") -> list[str]:
     return out
 
 
+ALL_SCENARIOS = ["conservative", "base", "optimistic"]
+
+
+def clean_presentation(p: dict | None) -> dict:
+    p = p if isinstance(p, dict) else {}
+    sc = [x for x in ALL_SCENARIOS if x in (p.get("scenarios") or ALL_SCENARIOS)] or ["base"]
+    d = p.get("default_scenario") if p.get("default_scenario") in sc else ("base" if "base" in sc else sc[0])
+    return {"scenarios": sc, "default_scenario": d}
+
+
+def presentation_of(v) -> dict:
+    return clean_presentation((v.calibration or {}).get("presentation") if v.status == "published" else None)
+
+
 class FinModelService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -373,17 +387,31 @@ class FinModelService:
         await self.db.refresh(v)
         return v
 
-    async def publish(self, version_id: uuid.UUID, user_id: uuid.UUID) -> FinModelVersion:
+    async def publish(self, version_id: uuid.UUID, user_id: uuid.UUID, presentation: dict | None = None) -> FinModelVersion:
         v = await self.get(version_id, True)
         if v.status != "draft":
             raise HTTPException(status.HTTP_409_CONFLICT, "النسخة منشورة بالفعل")
         cal = await calibrate(self.db)
-        v.calibration = {k: cal[k] for k in ("cal_version", "as_of", "values", "basis", "window", "funding_history", "totals")}
+        v.calibration = {**{k: cal[k] for k in ("cal_version", "as_of", "values", "basis", "window", "funding_history", "totals")},
+                         "presentation": clean_presentation(presentation)}
         v.status = "published"
         v.published_by = user_id
         v.published_at = datetime.now(timezone.utc)
         await self.audit.record(user_id=user_id, action="fin_model.publish", resource_type="fin_model_version",
                                 resource_id=str(v.id), new_value={"name": v.name, "calibration_as_of": cal["as_of"]})
+        await self.db.commit()
+        await self.db.refresh(v)
+        return v
+
+    async def set_presentation(self, version_id: uuid.UUID, user_id: uuid.UUID, presentation: dict) -> FinModelVersion:
+        """Which scenarios viewers of a published version can switch between, and which one opens first."""
+        v = await self.get(version_id, True)
+        if v.status != "published":
+            raise HTTPException(status.HTTP_409_CONFLICT, "اختيار السيناريوهات متاح للنسخ المنشورة فقط")
+        pres = clean_presentation(presentation)
+        v.calibration = {**(v.calibration or {}), "presentation": pres}
+        await self.audit.record(user_id=user_id, action="fin_model.presentation", resource_type="fin_model_version",
+                                resource_id=str(v.id), new_value=pres)
         await self.db.commit()
         await self.db.refresh(v)
         return v
