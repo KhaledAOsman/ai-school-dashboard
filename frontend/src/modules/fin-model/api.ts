@@ -16,7 +16,7 @@ export interface VersionMeta {
   presentation?: Presentation;
   assumptions?: Assumptions;
 }
-export interface Presentation { scenarios: Scenario[]; default_scenario: Scenario }
+export interface Presentation { scenarios: Scenario[]; default_scenario: Scenario; allow_report?: boolean }
 
 export interface Market {
   id: string; name_ar: string; name_en: string; start_month: string;

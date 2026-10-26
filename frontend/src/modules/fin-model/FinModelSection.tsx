@@ -4,7 +4,7 @@
  * Investors (financial_model.view) only ever see published versions; the
  * financial analyst (financial_model.edit) also works on drafts.
  */
-import { Suspense, lazy, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import clsx from "clsx";
 import { Download, FileText, Languages } from "lucide-react";
@@ -43,6 +43,12 @@ function Shell() {
   const isReport = location.pathname.endsWith("/report");
   const [exporting, setExporting] = useState(false);
   const qs = location.search;
+  // the full report (every chapter one after another): analysts with export rights, and viewers of a
+  // published version when the owner allowed it
+  const canReport = canExport || canEdit || (version?.status === "published" && version.presentation?.allow_report !== false);
+
+  // moving to another chapter/tool starts at the top of the page, not where the previous one was scrolled
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: "auto" }); }, [location.pathname]);
 
   async function exportExcel() {
     if (!result || !version) return;
@@ -79,16 +85,16 @@ function Shell() {
                 <Languages size={15} /> {lang === "ar" ? "English" : "العربية"}
               </button>
               {canExport && (
-                <>
-                  <button type="button" onClick={exportExcel} disabled={!result || exporting}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[#e1e7ef] bg-white px-3 text-[13px] font-semibold text-ink-700 hover:bg-brand-50 disabled:opacity-50">
-                    <Download size={15} /> {t("export_excel")}
-                  </button>
-                  <NavLink to={`report${qs}`}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-full bg-brand-600 px-3.5 text-[13px] font-semibold text-white hover:bg-brand-700">
-                    <FileText size={15} /> {t("export_pdf")}
-                  </NavLink>
-                </>
+                <button type="button" onClick={exportExcel} disabled={!result || exporting}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[#e1e7ef] bg-white px-3 text-[13px] font-semibold text-ink-700 hover:bg-brand-50 disabled:opacity-50">
+                  <Download size={15} /> {t("export_excel")}
+                </button>
+              )}
+              {canReport && (
+                <NavLink to={`report${qs}`}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full bg-brand-600 px-3.5 text-[13px] font-semibold text-white hover:bg-brand-700">
+                  <FileText size={15} /> {lang === "ar" ? "العرض الكامل / طباعة" : "Full report / print"}
+                </NavLink>
               )}
             </div>
           </div>
@@ -164,7 +170,7 @@ function Shell() {
           <Route path="funding" element={<Funding />} />
           <Route path="assumptions" element={<AssumptionsPage />} />
           <Route path="versions" element={canEdit || fm.versionsLoading ? <Versions /> : <Navigate to={`../overview${qs}`} replace />} />
-          <Route path="report" element={<Report />} />
+          <Route path="report" element={canReport || fm.versionsLoading ? <Report /> : <Navigate to={`../overview${qs}`} replace />} />
           <Route path="*" element={<Navigate to={`overview${qs}`} replace />} />
         </Routes>
       </Suspense>

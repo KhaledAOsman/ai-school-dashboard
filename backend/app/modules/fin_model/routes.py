@@ -41,6 +41,7 @@ class VersionUpdate(BaseModel):
 class Presentation(BaseModel):
     scenarios: list[str] = Field(default_factory=lambda: ["conservative", "base", "optimistic"], max_length=3)
     default_scenario: str = Field(default="base", pattern="^(conservative|base|optimistic)$")
+    allow_report: bool = True
 
 
 class PreviewRequest(BaseModel):

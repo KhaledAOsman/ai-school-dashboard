@@ -62,7 +62,8 @@ export default function VersionsPage() {
             {v.status === "published" && v.presentation && picking !== v.id && (
               <p className="mt-2 text-[12.5px] text-ink-600">{ar ? "يرى المشاهدون: " : "Viewers see: "}
                 {v.presentation.scenarios.map((sc) => t(`sc_${sc}` as "sc_base")).join(ar ? "، " : ", ")}
-                {" · "}{ar ? "يفتح على: " : "Opens on: "}<b className="text-ink-900">{t(`sc_${v.presentation.default_scenario}` as "sc_base")}</b></p>
+                {" · "}{ar ? "يفتح على: " : "Opens on: "}<b className="text-ink-900">{t(`sc_${v.presentation.default_scenario}` as "sc_base")}</b>
+                {" · "}{v.presentation.allow_report !== false ? (ar ? "العرض الكامل والطباعة مسموح" : "Full report allowed") : (ar ? "العرض الكامل غير مسموح" : "Full report not allowed")}</p>
             )}
             {picking === v.id && (
               <PresentationPicker v={v} busy={publish.isPending || present.isPending}
@@ -115,6 +116,7 @@ function PresentationPicker({ v, cta, busy, onSave, onCancel }: { v: VersionMeta
   const ar = lang === "ar";
   const [sel, setSel] = useState<Scenario[]>(v.presentation?.scenarios ?? ALL_SC);
   const [def, setDef] = useState<Scenario>(v.presentation?.default_scenario ?? "base");
+  const [report, setReport] = useState<boolean>(v.presentation?.allow_report !== false);
   const toggle = (sc: Scenario) => setSel((x) => {
     const n = x.includes(sc) ? x.filter((y) => y !== sc) : ALL_SC.filter((y) => y === sc || x.includes(y));
     if (!n.length) return x;
@@ -139,8 +141,13 @@ function PresentationPicker({ v, cta, busy, onSave, onCancel }: { v: VersionMeta
           </div>
         ))}
       </div>
+      <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-lg border border-[#e1e7ef] bg-white p-2.5 text-[13.5px] text-ink-900">
+        <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[#6d3af2]" checked={report} onChange={(e) => setReport(e.target.checked)} />
+        <span><b>{ar ? "السماح بالعرض الكامل والطباعة" : "Allow the full report and printing"}</b>
+          <span className="block text-[12.5px] text-ink-600">{ar ? "يظهر زر «العرض الكامل / طباعة» لمن تشارك معه اللوحة، ويعرض كل الفصول وراء بعض مع إمكانية الحفظ PDF." : "Viewers get a “Full report / print” button showing every chapter in sequence, printable to PDF."}</span></span>
+      </label>
       <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" disabled={busy} onClick={() => onSave({ scenarios: sel, default_scenario: def })}
+        <button type="button" disabled={busy} onClick={() => onSave({ scenarios: sel, default_scenario: def, allow_report: report })}
           className="rounded-full bg-brand-600 px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-brand-700 disabled:opacity-50">{cta}</button>
         <button type="button" onClick={onCancel} className="rounded-full px-3 py-1.5 text-[13px] font-semibold text-ink-600 hover:bg-ink-100">{ar ? "إلغاء" : "Cancel"}</button>
       </div>

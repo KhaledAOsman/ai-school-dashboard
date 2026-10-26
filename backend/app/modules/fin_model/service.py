@@ -321,7 +321,7 @@ def clean_presentation(p: dict | None) -> dict:
     p = p if isinstance(p, dict) else {}
     sc = [x for x in ALL_SCENARIOS if x in (p.get("scenarios") or ALL_SCENARIOS)] or ["base"]
     d = p.get("default_scenario") if p.get("default_scenario") in sc else ("base" if "base" in sc else sc[0])
-    return {"scenarios": sc, "default_scenario": d}
+    return {"scenarios": sc, "default_scenario": d, "allow_report": bool(p.get("allow_report", True))}
 
 
 def presentation_of(v) -> dict:
