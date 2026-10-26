@@ -316,10 +316,9 @@ export default function AssumptionsPage() {
 
         <Section title={ar ? "5. الفريق والتوظيف" : "5. Team & hiring"}>
           <div className={grid}>
-            {Num({ label: ["رواتب فريق التسويق الحالي شهريًا", "Current marketing team payroll / month"], value: draft.team.marketing_payroll, set: (v) => upd((d) => { d.team.marketing_payroll = v; }), kind: "money", autoPath: "team.marketing_payroll" })}
-            {Num({ label: ["رواتب بقية الفريق الحالي شهريًا", "Other current staff payroll / month"], value: draft.team.admin_payroll, set: (v) => upd((d) => { d.team.admin_payroll = v; }), kind: "money", autoPath: "team.admin_payroll" })}
+            {Num({ label: ["رواتب بقية الفريق الحالي شهريًا", "Other current staff payroll / month"], value: draft.team.admin_payroll, set: (v) => upd((d) => { d.team.admin_payroll = v; }), kind: "money" })}
             {Num({ label: ["عدد الفريق الحالي", "Current team size"], value: draft.team.base_headcount, set: (v) => upd((d) => { d.team.base_headcount = v; }), kind: "int", autoPath: "team.base_headcount" })}
-            {Num({ label: ["الزيادة السنوية للرواتب", "Yearly salary raise"], value: draft.team.annual_raise, set: (v) => upd((d) => { d.team.annual_raise = v; }), kind: "pct", hint: ["مرة واحدة سنويًا في الشهر المحدد", "Once a year in the chosen month"] })}
+            {Num({ label: ["الزيادة السنوية للرواتب", "Yearly salary raise"], value: draft.team.annual_raise, set: (v) => upd((d) => { d.team.annual_raise = v; }), kind: "pct", hint: ["تُطبَّق على التعيينات المخططة وبقية الفريق", "Applies to planned hires and other staff"] })}
             <FieldShell label={L(["شهر الزيادة", "Raise month"])}>
               <SelectInput value={draft.team.raise_month} disabled={readOnly} onChange={(v) => upd((d) => { d.team.raise_month = v; })} options={Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: (ar ? MONTHS_AR : MONTHS_EN)[i] }))} />
             </FieldShell>
@@ -327,15 +326,25 @@ export default function AssumptionsPage() {
             {Num({ label: ["رسوم التحويل الدولي للرواتب", "International transfer fees"], value: draft.team.intl_transfer_fee_pct, set: (v) => upd((d) => { d.team.intl_transfer_fee_pct = v; }), kind: "pct" })}
             {Num({ label: ["طاقة المعلم (محاضرة شهريًا)", "Teacher capacity (lectures / month)"], value: draft.team.teacher_capacity_lessons, set: (v) => upd((d) => { d.team.teacher_capacity_lessons = v; }), kind: "int", hint: ["من 60 إلى 80 محاضرة", "60 to 80 lectures"] })}
             {Num({ label: ["تكلفة تأهيل معلم جديد", "Onboarding cost per teacher"], value: draft.team.teacher_onboarding_cost, set: (v) => upd((d) => { d.team.teacher_onboarding_cost = v; }), kind: "money" })}
-            {Num({ label: ["طاقة موظف خدمة العملاء (حجوزات واشتراكات شهريًا)", "Support agent load (bookings + subscriptions / month)"], value: draft.team.cs_load_per_agent, set: (v) => upd((d) => { d.team.cs_load_per_agent = v; }), kind: "int" })}
-            {Num({ label: ["راتب موظف خدمة العملاء", "Support agent salary"], value: draft.team.cs_salary, set: (v) => upd((d) => { d.team.cs_salary = v; }), kind: "money", autoPath: "team.cs_salary" })}
-            {Num({ label: ["موظفو خدمة العملاء الحاليون", "Current support agents"], value: draft.team.cs_current_agents, set: (v) => upd((d) => { d.team.cs_current_agents = v; }), kind: "int", autoPath: "team.cs_current_agents" })}
-            {Month({ label: ["بداية فريق الجودة", "Quality team start"], value: draft.team.quality_start_month, set: (v) => upd((d) => { d.team.quality_start_month = v!; }) })}
-            {Num({ label: ["محاضرات لكل مراجع جودة شهريًا", "Lectures per quality reviewer / month"], value: draft.team.quality_lectures_per_reviewer, set: (v) => upd((d) => { d.team.quality_lectures_per_reviewer = v; }), kind: "int" })}
-            {Num({ label: ["راتب مراجع الجودة", "Quality reviewer salary"], value: draft.team.quality_salary, set: (v) => upd((d) => { d.team.quality_salary = v; }), kind: "money" })}
-            {Num({ label: ["إنفاق إعلاني لكل مشترٍ للإعلانات", "Ad spend per media buyer"], value: draft.team.ad_spend_per_media_buyer, set: (v) => upd((d) => { d.team.ad_spend_per_media_buyer = v; }), kind: "money" })}
-            {Num({ label: ["راتب مشتري الإعلانات", "Media buyer salary"], value: draft.team.media_buyer_salary, set: (v) => upd((d) => { d.team.media_buyer_salary = v; }), kind: "money" })}
-            {Num({ label: ["مشترو الإعلانات الحاليون", "Current media buyers"], value: draft.team.media_buyers_current, set: (v) => upd((d) => { d.team.media_buyers_current = v; }), kind: "int" })}
+          </div>
+          <p className="mb-2 mt-5 text-[13px] font-bold text-ink-800">{L(["تكلفة الفرق الشهرية في كل سنة (الرواتب الفعلية شاملة الزيادات)", "Monthly team cost in each year (actual salaries incl. raises)"])}</p>
+          <div className="space-y-3">
+            {([
+              ["marketing_team_monthly_by_year", "فريق التسويق والمبيعات", "Marketing & sales team"],
+              ["cs_monthly_by_year", "خدمة العملاء", "Customer service"],
+              ["quality_monthly_by_year", "الجودة ومتابعة المحاضرات", "Quality & lecture review"],
+            ] as const).map(([key, la, le]) => (
+              <div key={key}>
+                <p className="mb-1 text-[12.5px] font-semibold text-ink-700">{ar ? la : le}</p>
+                <div className="grid grid-cols-5 gap-2">
+                  {draft.team[key].map((v, yi) => (
+                    <FieldShell key={yi} label={`${t("y")}${yi + 1}`}>
+                      <NumInput value={v} kind="money" disabled={readOnly} onChange={(nv) => upd((d) => { d.team[key][yi] = nv; })} />
+                    </FieldShell>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
           <p className="mb-2 mt-5 text-[13px] font-bold text-ink-800">{L(["التوظيف المخطط", "Planned hires"])}</p>
           <div className="space-y-2">

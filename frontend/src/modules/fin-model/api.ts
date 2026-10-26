@@ -47,11 +47,10 @@ export interface Assumptions {
   tax: { vat_rate: number; vat_mode: "auto" | "month" | "never"; vat_threshold: number; vat_from_month: string; zakat_rate: number; zakat_pay_lag_months: number };
   payments: { gateway_fee_pct: number; gateway_fee_fixed: number };
   team: {
-    marketing_payroll: number; admin_payroll: number; base_headcount: number; annual_raise: number; raise_month: number; employer_oncost: number;
+    admin_payroll: number; base_headcount: number; annual_raise: number; raise_month: number; employer_oncost: number;
     intl_transfer_fee_pct: number; teacher_capacity_lessons: number; teacher_onboarding_cost: number;
-    cs_load_per_agent: number; cs_salary: number; cs_current_agents: number;
-    quality_start_month: string; quality_lectures_per_reviewer: number; quality_salary: number;
-    ad_spend_per_media_buyer: number; media_buyer_salary: number; media_buyers_current: number; hires: Hire[];
+    marketing_team_monthly_by_year: number[]; cs_monthly_by_year: number[]; quality_monthly_by_year: number[];
+    hires: Hire[];
   };
   opex: OpexLine[];
   capex: CapexItem[];
@@ -77,7 +76,7 @@ export interface MonthRow {
   cfo: number; capex: number; loan_draw: number; loan_principal: number; equity_injection: number; vat_paid: number; zakat_paid: number;
   net_cash_flow: number; cash: number; receivables: number; deferred_revenue: number; vat_payable: number; zakat_payable: number;
   fixed_assets: number; loan_balance: number; equity: number; teacher_lessons: number;
-  headcount: { fixed: number; cs_agents: number; quality: number; media_buyers: number; teachers: number };
+  headcount: { fixed: number; teachers: number };
   subscriptions: number; expense_by_category: Record<ExpenseCategory, number>;
 }
 
@@ -124,7 +123,7 @@ export interface Sensitivity {
   pct: number;
   base: SensPoint;
   drivers: { driver: string; name_ar: string; name_en: string; low: SensPoint; high: SensPoint }[];
-  scenarios: Record<Scenario, SensPoint & { revenue_by_year: number[]; ebitda_by_year: number[]; cash_by_year: number[]; breakeven: string | null; loan: number }>;
+  scenarios: Record<Scenario, SensPoint & { revenue_by_year: number[]; ebitda_by_year: number[]; cash_by_year: number[]; breakeven: string | null; loan: number; funding_gap: number; financeable: boolean; subs_y5: number }>;
 }
 export interface SensPoint { ebitda_y5: number; revenue_y5: number; min_cash: number; enterprise_value: number; funding_need: number }
 

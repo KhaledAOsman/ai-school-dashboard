@@ -196,6 +196,20 @@ def upgrade(assumptions: dict) -> dict:
                 return ("sales" in role or "مبيعات" in role) and any(w in role for w in ("school", "partner", "مدارس", "شراك"))
             team["hires"] = [h for h in (team.get("hires") or []) if isinstance(h, dict) and _partner_sales(h)]
         a["schema"] = 4
+    if schema < 5:
+        # v5: salaried teams follow management's monthly budgets per year (actual salaries) instead of
+        # scaling with volume; lower statutory fees
+        team = a.get("team") if isinstance(a.get("team"), dict) else None
+        if team is not None:
+            for k in ("marketing_team_monthly_by_year", "cs_monthly_by_year", "quality_monthly_by_year"):
+                team.pop(k, None)  # take the new defaults
+        for o in a.get("opex") or []:
+            if isinstance(o, dict) and o.get("id") == "legal" and float(o.get("monthly") or 0) > 500:
+                o["monthly"] = 500.0
+            if isinstance(o, dict) and o.get("id") == "accreditation" and float(o.get("monthly") or 0) > 150:
+                o["monthly"] = 150.0
+        a["auto_fields"] = [p for p in (a.get("auto_fields") or []) if p not in ("team.marketing_payroll", "team.admin_payroll", "team.cs_current_agents", "team.cs_salary")]
+        a["schema"] = 5
     for st in a.get("streams", []):
         if isinstance(st, dict):
             if "category" not in st:

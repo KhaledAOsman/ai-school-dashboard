@@ -38,7 +38,7 @@ const DICT = {
   ebitda_y5: ["EBITDA السنة الخامسة", "Year-5 EBITDA"],
   margin: ["الهامش", "Margin"],
   breakeven: ["نقطة التعادل التشغيلي", "Operating break-even"],
-  breakeven_hint: ["أول شهر يظل بعده مجموع EBITDA لآخر 12 شهرًا موجبًا", "First month after which trailing-12-month EBITDA stays positive"],
+  breakeven_hint: ["أول شهر يحقق فيه التشغيل ربحًا (EBITDA) ويستمر بعده دون خسارة", "First month operations make a profit (EBITDA) and keep doing so"],
   funding_need: ["التمويل المطلوب", "Funding required"],
   loan: ["القرض", "Loan"],
   ev: ["قيمة المنشأة اليوم (DCF)", "Enterprise value today (DCF)"],

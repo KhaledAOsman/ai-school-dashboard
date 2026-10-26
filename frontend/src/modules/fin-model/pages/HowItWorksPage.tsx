@@ -100,7 +100,7 @@ export default function BusinessModelPage() {
   // ---------------------------------------------------------------- delivery capacity (September of each year)
   const yearEnd = r.years.map((y) => {
     const m = r.months.find((x) => x.month === y.to)!;
-    return { y: y.year, lectures: Math.round(m.teacher_lessons), teachers: m.headcount.teachers, quality: m.headcount.quality, cs: m.headcount.cs_agents };
+    return { y: y.year, lectures: Math.round(m.teacher_lessons), teachers: m.headcount.teachers };
   });
 
   const marketY5 = onlineTutoringMarketSar(5);
@@ -168,8 +168,6 @@ export default function BusinessModelPage() {
                 {([
                   [ar ? "المحاضرات المقدَّمة (المدفوعة والمجانية)" : "Lectures given (paid and free)", "lectures"],
                   [ar ? `المعلمون المطلوبون (المحاضرات ÷ ${cap})` : `Teachers needed (lectures ÷ ${cap})`, "teachers"],
-                  [ar ? "فريق الجودة ومتابعة المحاضرات" : "Quality & lecture review team", "quality"],
-                  [ar ? "فريق خدمة العملاء" : "Customer service team", "cs"],
                 ] as const).map(([l, key]) => (
                   <tr key={key} className="border-b border-[#f0f2f7] last:border-0">
                     <td className={clsx("px-4 py-2.5", key === "teachers" ? "font-bold text-ink-900" : "text-ink-700")}>{l}</td>

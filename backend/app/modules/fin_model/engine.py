@@ -33,7 +33,7 @@ SCENARIOS = ("conservative", "base", "optimistic")
 
 # --------------------------------------------------------------- helpers
 # bump when the calculation changes so cached results are recomputed
-ENGINE_VERSION = 7
+ENGINE_VERSION = 9
 
 def ym_index(ym: str | None, start: str) -> int | None:
     if not ym:
@@ -319,22 +319,22 @@ def _run(a: dict, loan_amount: float) -> dict:
     spend_all = [sum(funnel[m][i]["spend"] for m in funnel) for i in range(H)]
     subs_all = [sum(S[k]["total"][i] for k in S) for i in range(H)]
     payroll, onboarding, headcount, pay_cat = [], [], [], []
-    max_teachers = max_cs = max_mb = max_q = 0
-    q_start = ym_index(team.get("quality_start_month"), start)
+    max_teachers = 0
     oncost = (1 + float(team.get("employer_oncost", 0))) * (1 + float(team.get("intl_transfer_fee_pct", 0)))
+
+    def budget(key: str, y: int) -> float:
+        """Monthly cost of a team in model year y (index 0 = year 1), as set by management."""
+        arr = team.get(key) or [0.0]
+        return float(arr[min(y, len(arr) - 1)])
+
     for i in range(H):
-        # customer service: trial bookings + paid subscriptions handled per month
-        cs_need = math.ceil((trials_all[i] + subs_all[i]) / float(team.get("cs_load_per_agent", 400) or 400) - 1e-9)
-        max_cs = max(max_cs, cs_need, int(team.get("cs_current_agents", 0)))
-        mb_need = math.ceil(spend_all[i] / float(team.get("ad_spend_per_media_buyer", 60000) or 60000) - 1e-9)
-        max_mb = max(max_mb, mb_need)
-        extra_mb = max(0, max_mb - int(team.get("media_buyers_current", 0)))
-        if q_start is not None and i >= q_start:
-            max_q = max(max_q, 1, math.ceil(teach_lessons[i] / float(team.get("quality_lectures_per_reviewer", 1500) or 1500) - 1e-9))
-        cat = {"marketing_team": float(team.get("marketing_payroll", 0)) + extra_mb * float(team.get("media_buyer_salary", 0)),
-               "cs": max_cs * float(team.get("cs_salary", 0)),
-               "quality": max_q * float(team.get("quality_salary", 0)),
-               "admin": float(team.get("admin_payroll", 0)), "content": 0.0}
+        y = i // 12
+        # salaried teams follow the monthly budgets per year (actual salaries, raises included);
+        # only teachers scale with volume, through the lectures they give
+        cat = {"marketing_team": budget("marketing_team_monthly_by_year", y),
+               "cs": budget("cs_monthly_by_year", y),
+               "quality": budget("quality_monthly_by_year", y),
+               "admin": float(team.get("admin_payroll", 0)) * raise_f[i], "content": 0.0}
         hires_n = 0
         for h in team.get("hires", []):
             hi = ym_index(h.get("month"), start)
@@ -342,19 +342,16 @@ def _run(a: dict, loan_amount: float) -> dict:
                 c = h.get("category") or "admin"
                 c = "marketing_team" if c == "marketing" else c
                 c = c if c in cat else "admin"
-                cat[c] += float(h.get("salary", 0)) * float(h.get("count", 1))
+                # planned hires get the yearly raise from their start
+                cat[c] += float(h.get("salary", 0)) * float(h.get("count", 1)) * raise_f[i] / raise_f[hi]
                 hires_n += int(h.get("count", 1))
-        # everyone gets the yearly raise; on-costs and transfer fees on top
-        cat = {k: v * raise_f[i] * oncost for k, v in cat.items()}
+        cat = {k: v * oncost for k, v in cat.items()}
         pay_cat.append(cat)
         payroll.append(sum(cat.values()))
         new_t = max(0, teachers[i] - max_teachers)
         max_teachers = max(max_teachers, teachers[i])
         onboarding.append(new_t * float(team.get("teacher_onboarding_cost", 0)) if i > 0 else 0.0)
-        headcount.append({"fixed": int(team.get("base_headcount", 0)) + max(0, max_cs - int(team.get("cs_current_agents", 0))) + extra_mb + max_q + hires_n,
-                          "cs_agents": max_cs, "quality": max_q,
-                          "media_buyers": max(max_mb, int(team.get("media_buyers_current", 0))),
-                          "teachers": teachers[i]})
+        headcount.append({"fixed": int(team.get("base_headcount", 0)) + hires_n, "teachers": teachers[i]})
 
     # ---- 6. other opex & capex
     opex_lines = {}
@@ -728,13 +725,10 @@ def compute(assumptions: dict, scenario: str = "base", funding_history: list[dic
 
     # KPIs
     def first_sustained(key):
-        """First month from which the trailing-12-month total of `key` stays positive
-        (a seasonal summer push alone does not undo break-even)."""
-        roll = []
+        """First month from which the monthly figure of `key` stays at or above zero
+        (the month operations start earning and keep earning)."""
         for i in range(len(months)):
-            roll.append(sum(m[key] for m in months[max(0, i - 11): i + 1]))
-        for i in range(len(months)):
-            if all(v >= 0 for v in roll[i:]):
+            if all(m[key] >= -0.5 for m in months[i:]):
                 return months[i]["month"]
         return None
 
@@ -864,8 +858,9 @@ def _shock(a: dict, driver: str, f: float) -> dict:
             mk["trials_by_year"] = [b * f for b in mk["trials_by_year"]]
     if driver == "payroll":
         t = a["team"]
-        for k in ("marketing_payroll", "admin_payroll", "cs_salary", "quality_salary", "media_buyer_salary"):
-            t[k] = float(t.get(k, 0)) * f
+        t["admin_payroll"] = float(t.get("admin_payroll", 0)) * f
+        for k in ("marketing_team_monthly_by_year", "cs_monthly_by_year", "quality_monthly_by_year"):
+            t[k] = [float(v) * f for v in (t.get(k) or [0.0])]
         for h in t.get("hires", []):
             h["salary"] = float(h.get("salary", 0)) * f
     return a
@@ -892,5 +887,7 @@ def sensitivity(assumptions: dict, scenario: str = "base", pct: float = 0.2) -> 
         scen[sc] = {**pick(r), "revenue_by_year": [y["revenue"] for y in r["years"]],
                     "ebitda_by_year": [y["ebitda"] for y in r["years"]],
                     "cash_by_year": [y["cash"] for y in r["years"]],
-                    "breakeven": r["kpis"]["ebitda_breakeven_month"], "loan": r["kpis"]["loan_amount"]}
+                    "breakeven": r["kpis"]["ebitda_breakeven_month"], "loan": r["kpis"]["loan_amount"],
+                    "funding_gap": r["kpis"]["funding_gap"], "financeable": r["kpis"]["financeable"],
+                    "subs_y5": r["years"][-1]["subscriptions"]}
     return {"pct": pct, "base": b, "drivers": rows, "scenarios": scen}

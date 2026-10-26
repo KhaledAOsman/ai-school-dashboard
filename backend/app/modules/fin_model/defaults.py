@@ -24,7 +24,7 @@ SEASONALITY = {
 }
 
 # bump with a one-time conversion in service.upgrade() when plan policy changes
-SCHEMA = 4
+SCHEMA = 5
 
 DEFAULT_ASSUMPTIONS: dict = {
     "schema": SCHEMA,
@@ -214,29 +214,20 @@ DEFAULT_ASSUMPTIONS: dict = {
     },
     # ---------------------------------------------------------------- team
     "team": {
-        # current salaried staff by function (monthly) - follow the staff list in Finance
-        "marketing_payroll": 2400.0,      # marketing & design team today (incl. current media buyer)
+        # salaried teams: monthly cost in each model year (actual salaries today, raises included).
+        # Set by management; the teams do not grow automatically with volume.
+        "marketing_team_monthly_by_year": [4000.0, 4500.0, 5000.0, 5500.0, 6000.0],
+        "cs_monthly_by_year": [4000.0, 5000.0, 6000.0, 7000.0, 8000.0],
+        "quality_monthly_by_year": [1500.0, 2000.0, 3000.0, 4000.0, 5000.0],
         "admin_payroll": 0.0,             # other salaried staff today
-        "base_headcount": 3,
-        "annual_raise": 0.10,
+        "base_headcount": 5,
+        "annual_raise": 0.10,      # applies to planned hires and other staff
         "raise_month": 1,          # calendar month when raises apply
         "employer_oncost": 0.0,    # GOSI / insurance on top of salary (0 for remote contractors)
         "intl_transfer_fee_pct": 0.015,  # bank fees on salaries paid abroad
         # teachers: paid per lecture, no salary. One teacher gives 60-80 lectures a month.
         "teacher_capacity_lessons": 70,
         "teacher_onboarding_cost": 300.0,
-        # customer service: one agent handles this many trial bookings + subscriptions a month
-        "cs_load_per_agent": 400,
-        "cs_salary": 1200.0,
-        "cs_current_agents": 2,
-        # lecture quality & monitoring team (new): reviews a sample of lectures, coaches teachers
-        "quality_start_month": "2027-01",
-        "quality_lectures_per_reviewer": 1500,
-        "quality_salary": 3000.0,
-        # media buyers join the marketing team as ad spend grows
-        "ad_spend_per_media_buyer": 60000.0,
-        "media_buyer_salary": 2500.0,
-        "media_buyers_current": 1,
         # planned hires (suggested plan; edit freely). category: marketing | cs | content | quality | admin
         "hires": [
             {"role_ar": "مسؤول مبيعات المدارس والشراكات", "role_en": "Schools & partnerships sales lead", "month": "2027-08", "salary": 4000.0, "count": 1, "category": "marketing"},
@@ -247,8 +238,8 @@ DEFAULT_ASSUMPTIONS: dict = {
         {"id": "content", "category": "content", "name_ar": "فريق تطوير المحتوى والمناهج", "name_en": "Content & curriculum development team", "monthly": 6000.0, "start_month": "2026-10", "end_month": None, "growth_yoy": 0.15},
         {"id": "tools", "category": "tools", "name_ar": "الاشتراكات الشهرية (منصات الحصص، أدوات الذكاء الاصطناعي، الاتصالات)", "name_en": "Monthly subscriptions (lesson platforms, AI tools, telecom)", "monthly": 800.0, "start_month": "2026-10", "end_month": None, "growth_yoy": 0.30},
         {"id": "marketing_content", "category": "marketing_extra", "name_ar": "المؤثرون ومحتوى UGC والإنتاج التسويقي", "name_en": "Influencers, UGC & marketing production", "monthly": 3000.0, "start_month": "2026-10", "end_month": None, "growth_yoy": 0.25},
-        {"id": "legal", "category": "admin", "name_ar": "التراخيص والمحاسب القانوني والرسوم الحكومية", "name_en": "Licences, auditor & government fees", "monthly": 1200.0, "start_month": "2027-01", "end_month": None, "growth_yoy": 0.05},
-        {"id": "accreditation", "category": "admin", "name_ar": "الاعتمادات (STEM وغيرها)", "name_en": "Accreditations (STEM etc.)", "monthly": 250.0, "start_month": "2026-10", "end_month": None, "growth_yoy": 0.0},
+        {"id": "legal", "category": "admin", "name_ar": "التراخيص والمحاسب القانوني والرسوم الحكومية", "name_en": "Licences, auditor & government fees", "monthly": 500.0, "start_month": "2027-01", "end_month": None, "growth_yoy": 0.05},
+        {"id": "accreditation", "category": "admin", "name_ar": "الاعتمادات (STEM وغيرها)", "name_en": "Accreditations (STEM etc.)", "monthly": 150.0, "start_month": "2026-10", "end_month": None, "growth_yoy": 0.0},
     ],
     # --------------------------------------------------------------- capex
     "capex": [
@@ -291,10 +282,6 @@ DEFAULT_ASSUMPTIONS: dict = {
         "markets.ksa.show_rate",
         "markets.ksa.trial_to_paid",
         "streams.core_b2c.renewal_rate",
-        "team.marketing_payroll",
-        "team.admin_payroll",
-        "team.cs_current_agents",
-        "team.cs_salary",
         "team.base_headcount",
         "financing.opening_cash",
         "financing.owner_invested_to_date",

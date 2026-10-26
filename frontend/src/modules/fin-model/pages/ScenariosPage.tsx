@@ -2,8 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useFM } from "../context";
 import { fmApi, type Scenario } from "../api";
-import { COLORS, compact, monthLabel, pct } from "../i18n";
+import { COLORS, compact, iso, money, monthLabel, pct } from "../i18n";
 import { CARD, ChartTooltip, Note, Panel, useMoney } from "../components/ui";
+import { Reveal } from "@/components/motion";
+import clsx from "clsx";
 import { Block, ChapterHeader, ChapterNav } from "../components/chapters";
 
 const SC: Scenario[] = ["conservative", "base", "optimistic"];
@@ -63,24 +65,52 @@ export default function ScenariosPage() {
   return (
     <div className="space-y-5">
       {head}
-      <Block n="8.2" title={ar ? "ثلاثة سيناريوهات" : "Three scenarios"} lede={ar ? "الخطة نفسها في حال جاءت النتائج أبطأ (متحفظ) أو أسرع (متفائل) من المتوقع." : "The same plan if things go slower (conservative) or faster (optimistic) than expected."}><span /></Block>
-      <div className="grid gap-3 md:grid-cols-3">
-        {SC.map((k, i) => {
-          const x = s.scenarios[k];
-          return (
-            <Panel key={k} delay={i * 60} title={<span style={{ color: SC_COLOR[k] }}>● {t(`sc_${k}` as "sc_base")}</span>}>
-              <dl className="grid grid-cols-2 gap-y-2 text-[13px]">
-                <dt className="text-ink-600">{t("revenue_y5")}</dt><dd className="ltr-content text-end font-bold text-ink-900">{big(x.revenue_y5)}</dd>
-                <dt className="text-ink-600">{t("ebitda_y5")}</dt><dd className={`ltr-content text-end font-bold ${x.ebitda_y5 >= 0 ? "text-[#136c3a]" : "text-[#a02a24]"}`}>{big(x.ebitda_y5)}</dd>
-                <dt className="text-ink-600">{t("breakeven")}</dt><dd className="text-end font-semibold text-ink-900">{x.breakeven ? monthLabel(x.breakeven, lang) : t("not_reached")}</dd>
-                <dt className="text-ink-600">{t("loan")}</dt><dd className="ltr-content text-end font-semibold text-ink-900">{big(x.loan)}</dd>
-                <dt className="text-ink-600">{ar ? "العجز النقدي دون تمويل" : "Need without loan"}</dt><dd className="ltr-content text-end font-semibold text-ink-900">{big(x.funding_need)}</dd>
-                <dt className="text-ink-600">{t("ev")}</dt><dd className="ltr-content text-end font-semibold text-ink-900">{big(x.enterprise_value)}</dd>
-              </dl>
-            </Panel>
-          );
-        })}
-      </div>
+      <Block n="8.2" title={ar ? "ثلاثة سيناريوهات" : "Three scenarios"}
+        lede={ar ? "الخطة نفسها في حال جاءت النتائج أبطأ (متحفظ) أو أسرع (متفائل) من المتوقع، مع التمويل الذي يحتاجه كل سيناريو." : "The same plan if things go slower (conservative) or faster (optimistic) than expected, with the funding each one needs."}>
+        <div className="grid gap-4 lg:grid-cols-3">
+          {SC.map((k, i) => {
+            const x = s.scenarios[k];
+            const isBase = k === "base";
+            const p = sp?.[k];
+            const pctChange = (f: number) => `${f >= 1 ? "+" : "−"}${Math.round(Math.abs(f - 1) * 100)}%`;
+            const changes = p ? ([
+              ["trials_volume", "المحاضرات المجانية", "Free lectures"], ["conversion", "التحويل", "Conversion"], ["cpl", "تكلفة العميل المحتمل", "Cost per lead"],
+              ["renewal", "التجديد", "Renewal"], ["growth_volume", "الشراكات", "Partnerships"], ["price", "السعر", "Price"],
+            ] as const).filter(([key]) => Math.abs((p[key] as number) - 1) > 1e-9).map(([key, la, le]) => `${ar ? la : le} ${iso(pctChange(p[key] as number))}`) : [];
+            if (p && p.delay_months) changes.push(ar ? `تأخير المنتجات الجديدة ${p.delay_months} أشهر` : `${p.delay_months}-month delay of new products`);
+            const totalFunding = x.loan + (x.funding_gap ?? 0);
+            return (
+              <Reveal key={k} delay={i * 70} className="h-full">
+                <section className={clsx(CARD, "flex h-full flex-col overflow-hidden print:shadow-none", isBase && "ring-2 ring-brand-600")}>
+                  <div className="h-1.5" style={{ backgroundColor: SC_COLOR[k] }} />
+                  <div className="flex flex-1 flex-col p-5">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <h4 className="text-[18px] font-bold text-ink-900">{t(`sc_${k}` as "sc_base")}</h4>
+                      {isBase && <span className="text-[12px] font-semibold text-brand-600">{ar ? "الخطة المعتمدة" : "The plan"}</span>}
+                    </div>
+                    <p className="mt-1 min-h-[40px] text-[12.5px] leading-5 text-ink-500">
+                      {changes.length ? changes.join(ar ? "، " : ", ") : (ar ? "الافتراضات كما هي في الخطة" : "Assumptions as in the plan")}
+                    </p>
+                    <p className="mt-4 text-[12.5px] text-ink-500">{t("revenue_y5")}</p>
+                    <p className="ltr-content text-right text-[26px] font-bold leading-9 text-ink-900">{big(x.revenue_y5)}</p>
+                    <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-ink-100 pt-4 text-[12.5px]">
+                      <div><dt className="text-ink-500">{t("ebitda_y5")}</dt><dd className={clsx("ltr-content mt-0.5 text-right text-[16px] font-bold", x.ebitda_y5 >= 0 ? "text-[#136c3a]" : "text-[#a02a24]")}>{big(x.ebitda_y5)}</dd></div>
+                      <div><dt className="text-ink-500">{t("breakeven")}</dt><dd className="mt-0.5 text-[16px] font-bold text-ink-900">{x.breakeven ? monthLabel(x.breakeven, lang) : (ar ? "بعد السنة الخامسة" : "After year 5")}</dd></div>
+                      <div><dt className="text-ink-500">{ar ? "الاشتراكات في السنة الخامسة" : "Subscriptions, year 5"}</dt><dd className="ltr-content mt-0.5 text-right text-[16px] font-bold text-ink-900">{money(Math.round(x.subs_y5 ?? 0))}</dd></div>
+                      <div><dt className="text-ink-500">{ar ? "التمويل المطلوب" : "Funding required"}</dt><dd className="ltr-content mt-0.5 text-right text-[16px] font-bold text-ink-900">{big(totalFunding)}</dd></div>
+                    </dl>
+                    <p className={clsx("mt-auto pt-4 text-[12.5px] font-semibold leading-5", x.funding_gap > 0 ? "text-[#a02a24]" : "text-[#136c3a]")}>
+                      {x.funding_gap > 0
+                        ? (ar ? `قرض ${big(x.loan)} + تمويل إضافي ${big(x.funding_gap)}` : `Loan ${big(x.loan)} + additional ${big(x.funding_gap)}`)
+                        : (ar ? `يكفي قرض ${big(x.loan)} دون تمويل إضافي` : `A ${big(x.loan)} loan is enough`)}
+                    </p>
+                  </div>
+                </section>
+              </Reveal>
+            );
+          })}
+        </div>
+      </Block>
       <div className="grid gap-4 xl:grid-cols-2">
         <Panel title={ar ? "الإيرادات في السيناريوهات الثلاثة" : "Revenue in the three scenarios"}>
           <div className="h-[280px]" dir="ltr">
@@ -138,7 +168,7 @@ export default function ScenariosPage() {
                 {SC.map((k) => <th key={k} className="px-2 py-2 text-start font-semibold">{t(`sc_${k}` as "sc_base")}</th>)}
               </tr></thead>
               <tbody>
-                {([["trials_volume", "عدد المحاضرات المجانية", "Free trial lectures"], ["conversion", "التحويل إلى اشتراك", "Conversion"], ["cpl", "تكلفة العميل المحتمل", "Cost per lead"], ["renewal", "التجديد", "Renewal"], ["growth_volume", "حجم الشراكات والبرامج", "Partnerships & programs volume"], ["price", "السعر", "Price"], ["delay_months", "تأخير المنتجات الجديدة (بالأشهر)", "Delay of new products (months)"]] as const).map(([key, a, e]) => (
+                {([["trials_volume", "عدد المحاضرات المجانية", "Free trial lectures"], ["conversion", "التحويل إلى اشتراك", "Conversion"], ["cpl", "تكلفة العميل المحتمل", "Cost per lead"], ["renewal", "التجديد", "Renewal"], ["growth_volume", "حجم الشراكات المؤسسية", "Partnerships volume"], ["price", "السعر", "Price"], ["delay_months", "تأخير المنتجات الجديدة (بالأشهر)", "Delay of new products (months)"]] as const).map(([key, a, e]) => (
                   <tr key={key} className="border-b border-[#f0f2f7]">
                     <td className="px-2 py-1.5 text-ink-700">{ar ? a : e}</td>
                     {SC.map((k) => <td key={k} className="ltr-content px-2 py-1.5 font-semibold">{key === "delay_months" ? sp[k][key] : `×${sp[k][key]}`}</td>)}
