@@ -38,7 +38,7 @@ export default function BusinessModelPage() {
   // ---------------------------------------------------------------- segments
   const segments = [
     {
-      icon: User, img: "cover.jpg", title: ar ? "الاشتراكات الفردية (B2C)" : "Individual subscriptions (B2C)",
+      icon: User, title: ar ? "الاشتراكات الفردية (B2C)" : "Individual subscriptions (B2C)",
       body: ar
         ? `يشترك ولي الأمر لطفله في باقة محاضرات فردية عبر الإنترنت بعد محاضرة تجريبية مجانية. سعر الباقة ${money(core.list_price)} ${sar} شاملة الضريبة، بخصم أقصاه ${pct(core.avg_discount, 0)}.`
         : `A parent buys a package of one-to-one online lectures for their child after a free trial lecture. The package costs ${sar} ${money(core.list_price)} incl. VAT, with a maximum ${pct(core.avg_discount, 0)} discount.`,
@@ -46,7 +46,7 @@ export default function BusinessModelPage() {
       share: segRevenue("b2c") / (y5.revenue || 1),
     },
     {
-      icon: Building2, img: "partners.jpg", title: ar ? "الاشتراكات المؤسسية (B2B)" : "Institutional subscriptions (B2B)",
+      icon: Building2, title: ar ? "الاشتراكات المؤسسية (B2B)" : "Institutional subscriptions (B2B)",
       body: ar
         ? `باقات للمدارس والجمعيات والشركات، ويُبنى حجمها على عدد الجهات الشريكة وعدد طلاب كل جهة${partner ? ` (${money(partner.partners_by_year[1] ?? 0)} جهات جديدة شهريًا في السنة الثانية × ${money(partner.students_per_partner)} طالبًا)` : ""}. يحصل كل طالب على محاضرات فردية بخصم يصل إلى ${pct(b2bMaxDiscount, 0)}، دون تكلفة تسويق أو محاضرات مجانية.`
         : `Packages for schools, associations and companies, sized by partner institutions and students per institution${partner ? ` (${money(partner.partners_by_year[1] ?? 0)} new institutions a month in year 2 × ${money(partner.students_per_partner)} students)` : ""}. Each student takes one-to-one lectures at up to ${pct(b2bMaxDiscount, 0)} off, with no marketing or free-lecture cost.`,
@@ -115,8 +115,7 @@ export default function BusinessModelPage() {
         <div className="grid gap-4 md:grid-cols-2">
           {segments.map((s, i) => (
             <Reveal key={s.title} delay={i * 70} className="h-full">
-              <div className={clsx(CARD, "flex h-full flex-col overflow-hidden p-5 print:shadow-none")}>
-                <img src={`/fm/${s.img}`} alt="" loading="lazy" className="-mx-5 -mt-5 mb-4 aspect-[16/7] w-[calc(100%+2.5rem)] max-w-none border-b border-ink-100 object-cover print:hidden" />
+              <div className={clsx(CARD, "flex h-full flex-col p-5 print:shadow-none")}>
                 <div className="flex items-center gap-3">
                   <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-brand-200 text-brand-600"><s.icon size={20} strokeWidth={1.8} /></span>
                   <h4 className="text-[17px] font-bold text-ink-900">{s.title}</h4>
