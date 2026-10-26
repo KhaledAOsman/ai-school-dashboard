@@ -265,6 +265,16 @@ def upgrade(assumptions: dict) -> dict:
             if isinstance(o, dict) and o.get("id") in ("content", "tools") and float(o.get("growth_yoy") or 0) > 0.10:
                 o["growth_yoy"] = 0.10
         a["schema"] = 7
+    if schema < 8:
+        # owner's decision: individual package renewals are planned conservatively at 20 % (from the
+        # actual rate today), not 60 %; institutional contracts keep their own assumption
+        for st in a.get("streams") or []:
+            if isinstance(st, dict) and st.get("id") in ("core_b2c", "gcc_b2c"):
+                if float(st.get("renewal_rate_target") or 0) > 0.20:
+                    st["renewal_rate_target"] = 0.20
+                if float(st.get("renewal_rate") or 0) > st["renewal_rate_target"]:
+                    st["renewal_rate"] = st["renewal_rate_target"]
+        a["schema"] = 8
     for st in a.get("streams", []):
         if isinstance(st, dict):
             if "category" not in st:

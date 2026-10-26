@@ -24,7 +24,7 @@ SEASONALITY = {
 }
 
 # bump with a one-time conversion in service.upgrade() when plan policy changes
-SCHEMA = 7
+SCHEMA = 8
 
 DEFAULT_ASSUMPTIONS: dict = {
     "schema": SCHEMA,
@@ -107,7 +107,7 @@ DEFAULT_ASSUMPTIONS: dict = {
             "commission_per_enrolment": 50.0,
             "renewal_rate": 0.083,
             # a levelled curriculum (level 1, 2, 3 ...) is what turns one purchase into several
-            "renewal_rate_target": 0.60,
+            "renewal_rate_target": 0.20,
             "renewal_ramp_months": 12,
             "payment_lag_months": 0,
             "uses_gateway": True,
@@ -164,8 +164,8 @@ DEFAULT_ASSUMPTIONS: dict = {
             "group_size": 1,
             "teacher_cost_per_lesson": 15.0,
             "commission_per_enrolment": 50.0,
-            "renewal_rate": 0.30,
-            "renewal_rate_target": 0.55,
+            "renewal_rate": 0.083,
+            "renewal_rate_target": 0.20,
             "renewal_ramp_months": 12,
             "payment_lag_months": 0,
             "uses_gateway": True,
