@@ -25,7 +25,8 @@ export interface Market {
 
 export interface Stream {
   id: string; name_ar: string; name_en: string; enabled: boolean; suggested: boolean; category: Segment;
-  driver: "funnel" | "growth"; market?: string; funnel_share: number; start_month: string;
+  driver: "funnel" | "growth" | "partners"; market?: string; funnel_share: number; start_month: string;
+  partners_by_year: number[]; students_per_partner: number;
   initial_monthly: number; monthly_growth: number; max_monthly: number; active_months: number[];
   list_price: number; avg_discount: number; lessons: number; lessons_per_week: number; service_months?: number;
   group_size: number; teacher_cost_per_lesson: number; commission_per_enrolment: number;

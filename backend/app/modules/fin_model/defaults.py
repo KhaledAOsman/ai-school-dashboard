@@ -24,7 +24,7 @@ SEASONALITY = {
 }
 
 # bump with a one-time conversion in service.upgrade() when plan policy changes
-SCHEMA = 5
+SCHEMA = 6
 
 DEFAULT_ASSUMPTIONS: dict = {
     "schema": SCHEMA,
@@ -120,12 +120,15 @@ DEFAULT_ASSUMPTIONS: dict = {
             "name_en": "Partnerships: schools, associations & companies",
             "enabled": True,
             "suggested": False,
-            "driver": "growth",
+            # new partner institutions signed each month (by model year) x students per institution
+            "driver": "partners",
             # partnerships start with the second model year
             "start_month": "2027-10",
-            "initial_monthly": 20,
-            "monthly_growth": 0.12,
-            "max_monthly": 400,
+            "partners_by_year": [0, 4, 6, 8, 10],
+            "students_per_partner": 40,
+            "initial_monthly": 0,
+            "monthly_growth": 0.0,
+            "max_monthly": 0,
             # school year only: no new school enrolments in Jun-Aug
             "active_months": [1, 2, 3, 4, 5, 9, 10, 11, 12],
             "list_price": 850.0,

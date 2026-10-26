@@ -98,7 +98,7 @@ def normalize(data: dict) -> dict:
     out = _merge({k: v for k, v in t.items() if k not in ("streams", "markets", "opex", "capex", "auto_fields", "scenarios")}, data)
     # lists of objects with their own templates
     stream_t = {**t["streams"][0], "active_months": list(range(1, 13)), "initial_monthly": 0.0, "monthly_growth": 0.0,
-                "max_monthly": 0.0, "service_months": 12}
+                "max_monthly": 0.0, "service_months": 12, "partners_by_year": [0.0, 0.0, 0.0, 0.0, 0.0], "students_per_partner": 0.0}
     market_t = t["markets"][0]
     opex_t = t["opex"][0]
     capex_t = t["capex"][0]
@@ -122,8 +122,8 @@ def normalize(data: dict) -> dict:
                     raise _bad(f"الخصم في «{m.get('name_ar')}» يجب ألا يتجاوز {int(cap * 100)}%")
                 am = x.get("active_months", list(range(1, 13))) if isinstance(x, dict) else list(range(1, 13))
                 m["active_months"] = sorted({int(v) for v in am if 1 <= int(v) <= 12}) or list(range(1, 13))
-                if m["driver"] not in ("funnel", "growth"):
-                    raise _bad("نوع المحرك لازم يكون funnel أو growth")
+                if m["driver"] not in ("funnel", "growth", "partners"):
+                    raise _bad("مصدر العملاء يجب أن يكون المحاضرات المجانية أو النمو الشهري أو الجهات الشريكة")
                 if m["driver"] == "funnel" and not any(mk.get("id") == m.get("market") for mk in data.get("markets", t["markets"])):
                     raise _bad(f"مصدر الإيراد «{m.get('name_ar')}» مرتبط بسوق غير موجود")
             if key == "markets":
@@ -210,6 +210,17 @@ def upgrade(assumptions: dict) -> dict:
                 o["monthly"] = 150.0
         a["auto_fields"] = [p for p in (a.get("auto_fields") or []) if p not in ("team.marketing_payroll", "team.admin_payroll", "team.cs_current_agents", "team.cs_salary")]
         a["schema"] = 5
+    if schema < 6:
+        # v6: institutional subscriptions are driven by partner institutions x students per institution
+        for st in a.get("streams") or []:
+            if isinstance(st, dict) and st.get("id") == "schools":
+                for k in ("driver", "partners_by_year", "students_per_partner", "renewal_rate", "renewal_rate_target"):
+                    st.pop(k, None)
+                tmpl = next((x for x in DEFAULT_ASSUMPTIONS["streams"] if x["id"] == "schools"), {})
+                for k in ("driver", "partners_by_year", "students_per_partner", "renewal_rate", "renewal_rate_target"):
+                    if k in tmpl:
+                        st[k] = copy.deepcopy(tmpl[k])
+        a["schema"] = 6
     for st in a.get("streams", []):
         if isinstance(st, dict):
             if "category" not in st:

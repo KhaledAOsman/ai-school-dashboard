@@ -48,7 +48,13 @@ export default function SalesPlanPage() {
   const cols = [...annual, total5];
   const colLabels = [...r.years.map((y) => `${t("y")}${y.year}`), ar ? "الإجمالي" : "Total"];
 
-  type Row = { label: string; v: (x: SalesRow) => string; kind?: "total" | "sub" | "pct" };
+  // new partner institutions signed per year = new institutional students / students per institution
+  const partnerStreams = ra.streams.filter((st) => st.enabled && st.driver === "partners" && st.students_per_partner > 0);
+  const partnersYear = r.years.map((y) => Math.round(r.months.filter((m) => m.year === y.year)
+    .reduce((acc, m) => acc + partnerStreams.reduce((a2, st) => a2 + (m.new_by_stream[st.id] ?? 0) / st.students_per_partner, 0), 0)));
+  const partnersCols = [...partnersYear, partnersYear.reduce((a2, b) => a2 + b, 0)];
+  const perPartner = partnerStreams[0]?.students_per_partner;
+  type Row = { label: string; v: (x: SalesRow, i: number) => string; kind?: "total" | "sub" | "pct" };
   const rows: Row[] = [
     { label: ar ? "المحاضرات المجانية المقدَّمة" : "Free lectures given", v: (x) => money(x.trials) },
     { label: ar ? "المحاضرات المجانية التي تم حضورها" : "Free lectures attended", v: (x) => money(x.attended) },
@@ -56,7 +62,8 @@ export default function SalesPlanPage() {
     { label: ar ? "اشتراكات جديدة من المحاضرات المجانية" : "New subscriptions from free lectures", v: (x) => money(x.fromTrials) },
     { label: ar ? "تجديدات الاشتراكات الفردية" : "Individual renewals", v: (x) => money(x.renewals) },
     ...(hasOther ? [{ label: ar ? "برامج ومعسكرات فردية" : "Individual programmes & camps", v: (x: SalesRow) => money(x.otherB2c) }] : []),
-    { label: ar ? "اشتراكات مؤسسية (B2B)" : "Institutional subscriptions (B2B)", v: (x) => money(x.b2b) },
+    ...(partnerStreams.length ? [{ label: ar ? `جهات شريكة جديدة (كل جهة ${perPartner} طالبًا)` : `New partner institutions (${perPartner} students each)`, v: (_x: SalesRow, i: number) => money(partnersCols[i]), kind: "pct" as const }] : []),
+    { label: ar ? "اشتراكات مؤسسية (B2B) شاملة التجديد" : "Institutional subscriptions (B2B) incl. renewals", v: (x) => money(x.b2b) },
     { label: ar ? "إجمالي الاشتراكات المدفوعة" : "Total paid subscriptions", v: (x) => money(x.subs), kind: "total" },
     { label: ar ? "إيراد الاشتراكات الفردية" : "Individual subscription revenue", v: (x) => money(x.revenueB2c) },
     { label: ar ? "إيراد الاشتراكات المؤسسية" : "Institutional subscription revenue", v: (x) => money(x.revenueB2b) },
@@ -107,7 +114,7 @@ export default function SalesPlanPage() {
                     {cols.map((c, i) => (
                       <td key={i} className={clsx("ltr-content px-3 py-2.5 text-end tabular-nums", i === cols.length - 1 && "bg-ink-100/40",
                         row.kind === "total" ? "font-bold text-ink-900" : row.kind === "sub" ? (c.grossProfit < 0 ? "font-bold text-[#a02a24]" : "font-bold text-[#136c3a]") : row.kind === "pct" ? "text-ink-500" : "text-ink-800")}>
-                        {row.kind === "sub" && c.grossProfit < 0 ? `(${money(-c.grossProfit)})` : row.v(c)}
+                        {row.v(c, i)}
                       </td>
                     ))}
                   </tr>

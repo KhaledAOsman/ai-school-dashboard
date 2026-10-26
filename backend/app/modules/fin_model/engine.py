@@ -33,7 +33,7 @@ SCENARIOS = ("conservative", "base", "optimistic")
 
 # --------------------------------------------------------------- helpers
 # bump when the calculation changes so cached results are recomputed
-ENGINE_VERSION = 9
+ENGINE_VERSION = 10
 
 def ym_index(ym: str | None, start: str) -> int | None:
     if not ym:
@@ -167,6 +167,8 @@ def apply_scenario(a: dict, name: str) -> dict:
         if s.get("driver") == "growth":
             s["initial_monthly"] = s["initial_monthly"] * vol
             s["max_monthly"] = s["max_monthly"] * vol
+        if s.get("driver") == "partners":
+            s["partners_by_year"] = [float(v) * vol for v in (s.get("partners_by_year") or [0])]
         if delay and (ym_index(s.get("start_month"), start) or 0) > 0:
             s["start_month"] = idx_ym(ym_index(s["start_month"], start) + delay, start)
     return a
@@ -233,6 +235,16 @@ def _run(a: dict, loan_amount: float) -> dict:
                        and i >= (ym_index(x.get("start_month"), start) or 0)]
                 tot = sum(float(x.get("funnel_share", 0)) for x in act) or 1.0
                 new[i] = funnel[mid][i]["paid"] * float(s.get("funnel_share", 0)) / tot
+        elif s.get("driver") == "partners":
+            # institutional: new partner institutions signed per month (by model year) x students each;
+            # every student buys a package in the month of enrolment (school-year months only)
+            active = set(int(x) for x in (s.get("active_months") or range(1, 13)))
+            pby = s.get("partners_by_year") or [0]
+            per = float(s.get("students_per_partner", 0) or 0)
+            for i in range(H):
+                if i < st or cal_month(i, start) not in active:
+                    continue
+                new[i] = float(pby[min(i // 12, len(pby) - 1)]) * per
         else:
             active = set(int(x) for x in (s.get("active_months") or range(1, 13)))
             n_active = 0
@@ -725,10 +737,11 @@ def compute(assumptions: dict, scenario: str = "base", funding_history: list[dic
 
     # KPIs
     def first_sustained(key):
-        """First month from which the monthly figure of `key` stays at or above zero
-        (the month operations start earning and keep earning)."""
+        """First month from which the trailing-12-month total of `key` stays positive.
+        Seasonal months (no school enrolments and doubled ads in summer) do not undo break-even."""
+        roll = [sum(m[key] for m in months[max(0, i - 11): i + 1]) for i in range(len(months))]
         for i in range(len(months)):
-            if all(m[key] >= -0.5 for m in months[i:]):
+            if all(v >= 0 for v in roll[i:]):
                 return months[i]["month"]
         return None
 
@@ -828,7 +841,7 @@ SENSITIVITY_DRIVERS = [
     ("renewal", "نسبة التجديد", "Renewal rate"),
     ("teacher_cost", "أجر المعلم للمحاضرة", "Teacher fee per lecture"),
     ("marketing", "عدد المحاضرات المجانية", "Free trial lectures"),
-    ("b2b_volume", "حجم الشراكات والبرامج", "Partnerships & programs volume"),
+    ("b2b_volume", "عدد طلاب الشراكات المؤسسية", "Institutional students"),
     ("payroll", "رواتب الفريق", "Team payroll"),
 ]
 
@@ -848,6 +861,8 @@ def _shock(a: dict, driver: str, f: float) -> dict:
         elif driver == "b2b_volume" and s.get("driver") == "growth":
             s["initial_monthly"] *= f
             s["max_monthly"] *= f
+        elif driver == "b2b_volume" and s.get("driver") == "partners":
+            s["partners_by_year"] = [float(v) * f for v in (s.get("partners_by_year") or [0])]
     for mk in a["markets"]:
         if driver == "conversion":
             mk["trial_to_paid"] = min(mk["trial_to_paid"] * f, 1)

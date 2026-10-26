@@ -246,7 +246,7 @@ export default function AssumptionsPage() {
                     </FieldShell>
                     <FieldShell label={L(["مصدر العملاء الجدد", "Where new customers come from"])}>
                       <SelectInput value={s.driver} disabled={readOnly} onChange={(v) => ss((x) => { x.driver = v; if (v === "funnel" && !x.market) x.market = draft.markets[0]?.id; })}
-                        options={[{ value: "funnel", label: L(["المحاضرات المجانية", "Free trial lectures"]) }, { value: "growth", label: L(["نمو شهري (شراكات / برامج)", "Monthly growth (partnerships / programs)"]) }]} />
+                        options={[{ value: "funnel", label: L(["المحاضرات المجانية", "Free trial lectures"]) }, { value: "partners", label: L(["الجهات الشريكة × عدد الطلاب", "Partner institutions × students"]) }, { value: "growth", label: L(["نمو شهري", "Monthly growth"]) }]} />
                     </FieldShell>
                     {s.driver === "funnel" ? (
                       <>
@@ -255,9 +255,27 @@ export default function AssumptionsPage() {
                       </>
                     ) : (
                       <>
-                        {Num({ label: ["التسجيلات في أول شهر", "Enrolments in first month"], value: s.initial_monthly, set: (v) => ss((x) => { x.initial_monthly = v; }) })}
-                        {Num({ label: ["النمو الشهري", "Monthly growth"], value: s.monthly_growth, set: (v) => ss((x) => { x.monthly_growth = v; }), kind: "pct" })}
-                        {Num({ label: ["أقصى تسجيلات شهرية", "Max enrolments / month"], value: s.max_monthly, set: (v) => ss((x) => { x.max_monthly = v; }) })}
+                        {s.driver === "partners" ? (
+                          <>
+                            {Num({ label: ["عدد الطلاب لكل جهة", "Students per institution"], value: s.students_per_partner, set: (v) => ss((x) => { x.students_per_partner = v; }), kind: "int" })}
+                            <div className="sm:col-span-2 lg:col-span-4">
+                              <p className="mb-1 text-[12.5px] font-semibold text-ink-800">{L(["الجهات الشريكة الجديدة شهريًا في كل سنة", "New partner institutions per month, by year"])}</p>
+                              <div className="grid grid-cols-5 gap-2">
+                                {(s.partners_by_year ?? [0, 0, 0, 0, 0]).map((v, yi) => (
+                                  <FieldShell key={yi} label={`${t("y")}${yi + 1} · ${money(v * s.students_per_partner)} ${ar ? "طالب/شهر" : "students/mo"}`}>
+                                    <NumInput value={v} kind="num" disabled={readOnly} onChange={(nv) => ss((x) => { x.partners_by_year[yi] = nv; })} />
+                                  </FieldShell>
+                                ))}
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            {Num({ label: ["التسجيلات في أول شهر", "Enrolments in first month"], value: s.initial_monthly, set: (v) => ss((x) => { x.initial_monthly = v; }) })}
+                            {Num({ label: ["النمو الشهري", "Monthly growth"], value: s.monthly_growth, set: (v) => ss((x) => { x.monthly_growth = v; }), kind: "pct" })}
+                            {Num({ label: ["أقصى تسجيلات شهرية", "Max enrolments / month"], value: s.max_monthly, set: (v) => ss((x) => { x.max_monthly = v; }) })}
+                          </>
+                        )}
                         <div className="sm:col-span-2 lg:col-span-4">
                           <p className="mb-1 text-[12.5px] font-semibold text-ink-800">{L(["شهور التسجيل", "Enrolment months"])}</p>
                           <div className="flex flex-wrap gap-1.5">

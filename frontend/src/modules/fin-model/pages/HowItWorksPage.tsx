@@ -30,6 +30,7 @@ export default function BusinessModelPage() {
   const segRevenue = (c: "b2c" | "b2b") => Object.entries(y5.revenue_by_stream).filter(([id]) => seg.get(id) === c).reduce((a, [, v]) => a + v, 0);
   const b2bStreams = ra.streams.filter((s) => s.enabled && s.category === "b2b");
   const b2bStart = b2bStreams.map((s) => s.start_month).sort()[0];
+  const partner = b2bStreams.find((s) => s.driver === "partners");
   const b2bMaxDiscount = Math.max(0, ...b2bStreams.map((s) => s.avg_discount));
   const weeks = core.lessons / (core.lessons_per_week || 1);
   const cap = ra.team.teacher_capacity_lessons;
@@ -47,8 +48,8 @@ export default function BusinessModelPage() {
     {
       icon: Building2, title: ar ? "الاشتراكات المؤسسية (B2B)" : "Institutional subscriptions (B2B)",
       body: ar
-        ? `باقات للمدارس والجمعيات والشركات يحصل فيها كل طالب على محاضرات فردية بخصم يصل إلى ${pct(b2bMaxDiscount, 0)}، دون تكلفة تسويق أو محاضرات مجانية.`
-        : `Packages for schools, associations and companies; each student takes one-to-one lectures at up to ${pct(b2bMaxDiscount, 0)} off, with no marketing or free-lecture cost.`,
+        ? `باقات للمدارس والجمعيات والشركات، ويُبنى حجمها على عدد الجهات الشريكة وعدد طلاب كل جهة${partner ? ` (${money(partner.partners_by_year[1] ?? 0)} جهات جديدة شهريًا في السنة الثانية × ${money(partner.students_per_partner)} طالبًا)` : ""}. يحصل كل طالب على محاضرات فردية بخصم يصل إلى ${pct(b2bMaxDiscount, 0)}، دون تكلفة تسويق أو محاضرات مجانية.`
+        : `Packages for schools, associations and companies, sized by partner institutions and students per institution${partner ? ` (${money(partner.partners_by_year[1] ?? 0)} new institutions a month in year 2 × ${money(partner.students_per_partner)} students)` : ""}. Each student takes one-to-one lectures at up to ${pct(b2bMaxDiscount, 0)} off, with no marketing or free-lecture cost.`,
       start: b2bStart ? (ar ? `تبدأ ${monthLabel(b2bStart, lang)} (السنة الثانية)` : `From ${monthLabel(b2bStart, lang)} (year 2)`) : "—",
       share: segRevenue("b2b") / (y5.revenue || 1),
     },
