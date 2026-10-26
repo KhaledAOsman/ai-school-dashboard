@@ -2,7 +2,7 @@ import { Area, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, 
 import { useFM } from "../context";
 import { COLORS, compact, money, monthLabel, pct } from "../i18n";
 import { ChartTooltip, Kpi, Note, Panel, useMoney } from "../components/ui";
-import { computeUseOfFunds } from "./OverviewPage";
+import { FUND_LABELS, computeUseOfFunds } from "../components/funds";
 import { ChapterHeader, ChapterNav } from "../components/chapters";
 
 export default function FundingPage() {
@@ -15,43 +15,42 @@ export default function FundingPage() {
   const v = r.valuation;
   const data = r.months.map((m) => ({ name: m.month, loan: Math.round(m.loan_balance), cash: Math.round(m.cash) }));
   const funds = computeUseOfFunds(r);
-  const fundLabels: Record<string, [string, string]> = {
-    marketing: ["التسويق واكتساب العملاء", "Marketing & acquisition"], team: ["الفريق والتوظيف", "Team & hiring"],
-    product: ["المنتجات والمحتوى والمنصة", "Products, content & platform"], finance: ["تكلفة التمويل", "Financing cost"], buffer: ["احتياطي نقدي", "Cash buffer"],
-  };
+  const fundLabels = FUND_LABELS;
+  const biggest = [...funds.rows].filter((x) => x.key !== "reserve").sort((a, b) => b.value - a.value)[0];
+  const hasInterest = r.years.some((y) => Math.abs(y.interest) >= 1);
 
   return (
     <div className="space-y-5">
       <ChapterHeader id="funding" />
       <div className="grid gap-3 md:grid-cols-3">
         {(ar ? [
-          ["كام محتاجين؟", `${big(k.loan_amount)} قرض${k.owner_bridge ? ` + ${big(k.owner_bridge)} من الملاك لحد ما القرض يتصرف` : ""}.`],
-          ["هيتصرف في إيه؟", `أكبر بند ${fundLabels[[...funds.rows].sort((a, b) => b.value - a.value)[0].key][0]} (${big([...funds.rows].sort((a, b) => b.value - a.value)[0].value)}) — التفاصيل في الجدول تحت.`],
-          ["هيرجع إزاي؟", `${f?.loan_grace_months} شهر سماح بندفع فيهم الأرباح بس، وبعدها قسط ${full(k.loan_monthly_payment)} شهريًا من أرباح التشغيل${k.loan_repaid_month ? ` لحد ${monthLabel(k.loan_repaid_month, lang)}` : ""}.`],
+          ["حجم التمويل", `قرض بقيمة ${big(k.loan_amount)} دون فوائد${k.owner_bridge ? `، إضافة إلى ${big(k.owner_bridge)} يموّلها الملاك حتى استلام القرض` : ""}.`],
+          ["أوجه الاستخدام", biggest ? `أكبر البنود: ${fundLabels[biggest.key][0]} بقيمة ${big(biggest.value)}، والتفاصيل في الفصل 05.` : "—"],
+          ["طريقة السداد", `فترة سماح ${f?.loan_grace_months} شهرًا دون أقساط، ثم قسط شهري قدره ${full(k.loan_monthly_payment)} من أرباح التشغيل${k.loan_repaid_month ? ` حتى ${monthLabel(k.loan_repaid_month, lang)}` : ""}.`],
         ] : [
-          ["How much?", `A ${big(k.loan_amount)} loan${k.owner_bridge ? ` + ${big(k.owner_bridge)} from owners until it is drawn` : ""}.`],
-          ["Spent on what?", `Largest item: ${fundLabels[[...funds.rows].sort((a, b) => b.value - a.value)[0].key][1]} (${big([...funds.rows].sort((a, b) => b.value - a.value)[0].value)}) — details below.`],
-          ["Paid back how?", `${f?.loan_grace_months} months of profit-only payments, then ${full(k.loan_monthly_payment)} a month from operating profit${k.loan_repaid_month ? ` until ${monthLabel(k.loan_repaid_month, lang)}` : ""}.`],
+          ["How much", `An interest-free loan of ${big(k.loan_amount)}${k.owner_bridge ? `, plus ${big(k.owner_bridge)} from the owners until it is received` : ""}.`],
+          ["Use of funds", biggest ? `Largest item: ${fundLabels[biggest.key][1]} at ${big(biggest.value)}; details in chapter 05.` : "—"],
+          ["Repayment", `A ${f?.loan_grace_months}-month grace period with no instalments, then ${full(k.loan_monthly_payment)} a month from operating profit${k.loan_repaid_month ? ` until ${monthLabel(k.loan_repaid_month, lang)}` : ""}.`],
         ]).map(([h, d]) => (
           <div key={h} className="rounded-xl border border-[#e1e7ef] bg-white p-4"><p className="text-[14.5px] font-bold text-ink-900">{h}</p><p className="mt-1 text-[14px] leading-6 text-ink-700">{d}</p></div>
         ))}
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label={ar ? "القرض المقترح" : "Proposed loan"} value={big(k.loan_amount)} tone="accent" sub={ar ? `يغطي أقل رصيد + احتياطي ${f?.cash_buffer_months} شهور` : `Covers the trough + ${f?.cash_buffer_months}-month buffer`} />
-        <Kpi label={ar ? "التمويل المطلوب بدون قرض" : "Funding need without a loan"} value={big(k.funding_need_without_loan)} sub={ar ? "أعمق عجز تراكمي في الكاش" : "Deepest cumulative cash deficit"} delay={60} />
+        <Kpi label={ar ? "القرض المقترح" : "Proposed loan"} value={big(k.loan_amount)} tone="accent" sub={ar ? `يغطي العجز النقدي واحتياطيًا لمدة ${f?.cash_buffer_months} أشهر` : `Covers the cash deficit + a ${f?.cash_buffer_months}-month reserve`} />
+        <Kpi label={ar ? "العجز النقدي دون تمويل" : "Cash deficit without financing"} value={big(k.funding_need_without_loan)} sub={ar ? "أكبر عجز تراكمي في النقد" : "Deepest cumulative cash deficit"} delay={60} />
         <Kpi label={ar ? "القسط الشهري بعد فترة السماح" : "Monthly instalment after grace"} value={full(k.loan_monthly_payment)}
-          sub={k.loan_repaid_month ? (ar ? `يُسدد بالكامل ${monthLabel(k.loan_repaid_month, lang)}` : `Fully repaid ${monthLabel(k.loan_repaid_month, lang)}`) : (ar ? "يمتد بعد السنة الخامسة" : "Runs beyond year 5")} delay={120} />
-        <Kpi label={ar ? "تمويل جسر من الملاك" : "Owner bridge"} value={big(k.owner_bridge)} sub={ar ? `حتى صرف القرض ${monthLabel(f?.loan_draw_month, lang)}` : `Until the loan is drawn ${monthLabel(f?.loan_draw_month, lang)}`} delay={180} />
+          sub={k.loan_repaid_month ? (ar ? `يُسدَّد بالكامل في ${monthLabel(k.loan_repaid_month, lang)}` : `Fully repaid ${monthLabel(k.loan_repaid_month, lang)}`) : (ar ? "يمتد السداد إلى ما بعد السنة الخامسة" : "Runs beyond year 5")} delay={120} />
+        <Kpi label={ar ? "تمويل مرحلي من الملاك" : "Owner bridge"} value={big(k.owner_bridge)} sub={ar ? `حتى استلام القرض في ${monthLabel(f?.loan_draw_month, lang)}` : `Until the loan is drawn ${monthLabel(f?.loan_draw_month, lang)}`} delay={180} />
       </div>
       {f && (
         <Note tone={k.financeable ? "info" : "warn"}>
           {ar
-            ? `شروط القرض في الخطة: ربح ${pct(f.loan_rate, 1)} سنويًا (سايبور + هامش البنك)، مدة ${f.loan_tenor_months} شهر منها ${f.loan_grace_months} شهر سماح (سداد الأرباح فقط)، ورسوم ${pct(f.loan_upfront_fee, 1)} (ترتيب + ضمان كفالة). ${k.financeable ? "الكاش يفضل موجب طول الفترة بعد الصرف." : `الأقساط تبدأ قبل ما التشغيل يقدر يغطيها${k.suggested_grace_months ? ` — فترة سماح ${k.suggested_grace_months} شهر تحل المشكلة` : " — محتاج فترة سماح أطول أو جزء تمويل بالحصص"}.`} البنوك عادة بتطلب قوائم مالية لسنة على الأقل وتدفق نقدي يغطي الأقساط (DSCR ≥ 1.25)، فالأرقام دي تأكيدها مع البنك أو برنامج كفالة.`
-            : `Loan terms in the plan: ${pct(f.loan_rate, 1)} annual profit rate (SAIBOR + bank margin), ${f.loan_tenor_months}-month tenor incl. ${f.loan_grace_months} months grace (profit only), ${pct(f.loan_upfront_fee, 1)} fees (arrangement + Kafalah guarantee). ${k.financeable ? "Cash stays positive throughout after the draw." : `Repayments start before operations can carry them${k.suggested_grace_months ? ` — a ${k.suggested_grace_months}-month grace period fixes it` : " — needs a longer grace period or partial equity"}.`} Banks usually ask for at least a year of financial statements and cash flow covering the instalments (DSCR ≥ 1.25); confirm these terms with the bank or the Kafalah programme.`}
+            ? `شروط التمويل في الخطة: قرض دون فوائد${f.loan_rate > 0 ? ` (معدل ربح ${pct(f.loan_rate, 1)} سنويًا)` : ""} لمدة ${f.loan_tenor_months} شهرًا، منها ${f.loan_grace_months} شهرًا فترة سماح${f.loan_upfront_fee > 0 ? `، ورسوم ${pct(f.loan_upfront_fee, 1)}` : ""}. ${k.financeable ? "يبقى الرصيد النقدي موجبًا طوال الفترة بعد استلام التمويل." : `تبدأ الأقساط قبل قدرة التشغيل على سدادها${k.suggested_grace_months ? `، وتُعالَج بفترة سماح ${k.suggested_grace_months} شهرًا` : "، ويلزم فترة سماح أطول أو تمويل جزئي بحصص ملكية"}.`} وتشترط جهات التمويل عادةً قوائم مالية لسنة على الأقل وتدفقًا نقديًا يغطي الأقساط (DSCR ≥ 1.25)، لذا تُعتمد هذه الشروط بعد التفاوض مع جهة التمويل.`
+            : `Financing terms in the plan: an interest-free loan${f.loan_rate > 0 ? ` (${pct(f.loan_rate, 1)} annual rate)` : ""} over ${f.loan_tenor_months} months including a ${f.loan_grace_months}-month grace period${f.loan_upfront_fee > 0 ? `, with ${pct(f.loan_upfront_fee, 1)} fees` : ""}. ${k.financeable ? "Cash stays positive throughout after the financing is received." : `Repayments start before operations can carry them${k.suggested_grace_months ? `; a ${k.suggested_grace_months}-month grace period resolves it` : "; a longer grace period or partial equity is needed"}.`} Lenders usually require a year of financial statements and cash flow covering the instalments (DSCR ≥ 1.25), so the terms are confirmed in negotiation with the lender.`}
         </Note>
       )}
       <div className="grid gap-4 xl:grid-cols-2">
-        <Panel title={ar ? "رصيد القرض والكاش" : "Loan balance & cash"}>
+        <Panel title={ar ? "الرصيد النقدي ورصيد القرض" : "Cash and loan balance"}>
           <div className="h-[280px]" dir="ltr">
             <ResponsiveContainer>
               <ComposedChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
@@ -81,7 +80,7 @@ export default function FundingPage() {
           </table>
         </Panel>
       </div>
-      <Panel title={ar ? "خدمة الدين سنويًا" : "Debt service by year"}>
+      <Panel title={ar ? "سداد التمويل سنويًا" : "Debt service by year"}>
         <div className="thin-scrollbar overflow-x-auto">
           <table className="w-full min-w-[620px] text-[13px]">
             <thead><tr className="border-b border-[#e1e7ef] text-ink-600">
@@ -90,9 +89,9 @@ export default function FundingPage() {
             <tbody>
               {([
                 [ar ? "EBITDA" : "EBITDA", (y: typeof r.years[0]) => money(y.ebitda)],
-                [ar ? "أرباح القرض" : "Loan profit", (y: typeof r.years[0]) => money(-y.interest)],
-                [ar ? "سداد الأصل" : "Principal", (y: typeof r.years[0]) => money(-y.loan_principal)],
-                [ar ? "رصيد القرض آخر السنة" : "Loan balance (year end)", (y: typeof r.years[0]) => money(y.loan_balance)],
+                ...(hasInterest ? [[ar ? "تكلفة التمويل" : "Financing cost", (y: typeof r.years[0]) => money(-y.interest)] as const] : []),
+                [ar ? "سداد أصل القرض" : "Principal repaid", (y: typeof r.years[0]) => money(-y.loan_principal)],
+                [ar ? "رصيد القرض في نهاية السنة" : "Loan balance (year end)", (y: typeof r.years[0]) => money(y.loan_balance)],
                 [ar ? "تغطية خدمة الدين (DSCR)" : "Debt service coverage (DSCR)", (y: typeof r.years[0]) => (y.dscr === null ? "—" : `${y.dscr.toFixed(2)}x`)],
               ] as const).map(([l, fn]) => (
                 <tr key={l} className="border-b border-[#f0f2f7]"><td className="px-2 py-1.5 text-ink-700">{l}</td>{r.years.map((y) => <td key={y.year} className="ltr-content px-2 py-1.5 text-end">{fn(y)}</td>)}</tr>
@@ -129,7 +128,7 @@ export default function FundingPage() {
           </div>
           <p className="mt-3 text-[12.5px] leading-6 text-ink-600">
             {ar
-              ? "قيمة حقوق الملكية = القيمة النهائية − رصيد القرض + الكاش في نهاية السنة الخامسة. العائد محسوب من تواريخ دفعات تمويل الملاك الفعلية المسجلة في المالية. لأن المبلغ المستثمر حتى الآن صغير مقارنة بقيمة المنشأة، المضاعف كبير؛ المستثمر الجديد يتقيّم على «قيمة المنشأة اليوم»."
+              ? "قيمة حقوق الملكية = القيمة النهائية − رصيد القرض + النقد في نهاية السنة الخامسة. ويُحتسب العائد من تواريخ دفعات تمويل الملاك الفعلية المسجلة في النظام المالي. ونظرًا لصغر المبلغ المستثمر حتى الآن مقارنةً بقيمة المنشأة يظهر المضاعف مرتفعًا، بينما يُقيَّم أي مستثمر جديد على أساس «قيمة المنشأة اليوم»."
               : "Equity value = terminal value − loan balance + cash at the end of year 5. Returns use the actual dates of owner funding recorded in Finance. Because little has been invested so far relative to the business value, the multiple is high; a new investor would price off today's enterprise value."}
           </p>
         </Panel>

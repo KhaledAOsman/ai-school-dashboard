@@ -116,6 +116,10 @@ def normalize(data: dict) -> dict:
                     raise _bad(f"المعرّف «{m['id']}» مكرر في {key}")
                 seen.add(m["id"])
             if key == "streams":
+                m["category"] = "b2b" if m.get("category") == "b2b" else "b2c"
+                cap = 0.5 if m["category"] == "b2b" else 0.3
+                if not 0 <= float(m.get("avg_discount", 0)) <= cap:
+                    raise _bad(f"الخصم في «{m.get('name_ar')}» يجب ألا يتجاوز {int(cap * 100)}%")
                 am = x.get("active_months", list(range(1, 13))) if isinstance(x, dict) else list(range(1, 13))
                 m["active_months"] = sorted({int(v) for v in am if 1 <= int(v) <= 12}) or list(range(1, 13))
                 if m["driver"] not in ("funnel", "growth"):
@@ -123,8 +127,8 @@ def normalize(data: dict) -> dict:
                 if m["driver"] == "funnel" and not any(mk.get("id") == m.get("market") for mk in data.get("markets", t["markets"])):
                     raise _bad(f"مصدر الإيراد «{m.get('name_ar')}» مرتبط بسوق غير موجود")
             if key == "markets":
-                b = m.get("budget_by_year") or [0.0]
-                m["budget_by_year"] = [float(v) for v in b][:10]
+                b = m.get("trials_by_year") or [0.0]
+                m["trials_by_year"] = [max(0.0, float(v)) for v in b][:10]
             merged.append(m)
         out[key] = merged
     sc = data.get("scenarios", t["scenarios"])
@@ -138,10 +142,48 @@ def normalize(data: dict) -> dict:
 
 def upgrade(assumptions: dict) -> dict:
     """Stored assumptions completed with fields added to the model after they were saved."""
+    a = copy.deepcopy(assumptions)
     try:
-        return normalize(copy.deepcopy(assumptions))
+        schema = int(a.get("schema") or 1)
+    except (TypeError, ValueError):
+        schema = 1
+    if schema < 3:
+        # board decisions of v3, applied once to plans saved before them:
+        # fixed 30 % discount (not the actual average), partnerships from model year 2, interest-free loan
+        a["auto_fields"] = [p for p in (a.get("auto_fields") or []) if p != "streams.core_b2c.avg_discount"]
+        for st in a.get("streams", []):
+            if isinstance(st, dict) and st.get("id") == "core_b2c":
+                st["avg_discount"] = 0.30
+            if isinstance(st, dict) and st.get("id") == "schools" and str(st.get("start_month") or "") < "2027-10":
+                st["start_month"] = "2027-10"
+        # cost lines saved before expense categories existed
+        opex_cat = {"content": "content", "tools": "tools", "marketing_content": "marketing_extra", "legal": "admin", "accreditation": "admin"}
+        for o in a.get("opex", []) or []:
+            if isinstance(o, dict) and not o.get("category"):
+                o["category"] = opex_cat.get(str(o.get("id")), "admin")
+        team = a.get("team") if isinstance(a.get("team"), dict) else {}
+        for h in team.get("hires", []) or []:
+            if isinstance(h, dict) and not h.get("category"):
+                role = f"{h.get('role_en', '')} {h.get('role_ar', '')}".lower()
+                h["category"] = "marketing" if any(w in role for w in ("sales", "marketing", "gcc", "مبيعات", "تسويق", "الخليج")) else "admin"
+        fin = a.setdefault("financing", {})
+        if isinstance(fin, dict):
+            fin["loan_rate"] = 0.0
+            fin["loan_upfront_fee"] = 0.0
+        a["schema"] = 3
+    for st in a.get("streams", []):
+        if isinstance(st, dict):
+            if "category" not in st:
+                st["category"] = "b2b" if st.get("id") in ("schools", "platform_license") else "b2c"
+            cap = 0.5 if st["category"] == "b2b" else 0.3
+            try:
+                st["avg_discount"] = min(max(float(st.get("avg_discount", 0)), 0.0), cap)
+            except (TypeError, ValueError):
+                pass
+    try:
+        return normalize(a)
     except HTTPException:
-        return copy.deepcopy(assumptions)
+        return a
 
 
 def resolve(assumptions: dict, calibration: dict | None) -> dict:

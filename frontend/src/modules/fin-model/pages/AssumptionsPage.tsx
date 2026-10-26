@@ -10,7 +10,8 @@ import { useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { ChevronDown, Copy, Plus, Trash2 } from "lucide-react";
 import { useFM } from "../context";
-import { fmApi, type Assumptions, type Market, type ModelResult, type Stream } from "../api";
+import { fmApi, type Assumptions, type ExpenseCategory, type Market, type ModelResult, type Stream } from "../api";
+import { EXPENSE_LABELS, HIRE_CATEGORIES } from "../components/expenses";
 import { money, monthLabel, pct } from "../i18n";
 import { CARD, Note } from "../components/ui";
 import { AutoBadge, FieldShell, MonthInput, NumInput, SelectInput, TextInput, Toggle } from "../components/fields";
@@ -137,11 +138,11 @@ export default function AssumptionsPage() {
           <Note tone="warn">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span>{canEdit ? t("read_only") : (ar ? "عرض فقط." : "View only.")}</span>
-              {canEdit && <button type="button" onClick={() => copy.mutate()} className="rounded-full bg-brand-600 px-3.5 py-1.5 text-[13px] font-semibold text-white">{ar ? "اعمل نسخة للتعديل" : "Create editable copy"}</button>}
+              {canEdit && <button type="button" onClick={() => copy.mutate()} className="rounded-full bg-brand-600 px-3.5 py-1.5 text-[13px] font-semibold text-white">{ar ? "إنشاء نسخة قابلة للتعديل" : "Create editable copy"}</button>}
             </div>
           </Note>
         ) : (
-          <Note>{ar ? "عدّل أي رقم وشوف أثره فورًا في المعاينة. الحقول اللي عليها «تلقائي من الفعلي» بتتحدث من بيانات الداشبورد لحد ما تحولها ليدوي. النسب تُكتب كنسبة مئوية." : "Change any number and see its effect instantly in the preview. Fields marked “Auto from actuals” follow the dashboard data until switched to manual. Rates are entered as percentages."}</Note>
+          <Note>{ar ? "يظهر أثر أي تعديل فورًا في المعاينة. الحقول المعلَّمة «تلقائي من الفعلي» تُحدَّث من بيانات لوحة التحكم إلى أن تُحوَّل إلى إدخال يدوي. تُكتب النسب كنسب مئوية." : "Change any number and see its effect instantly in the preview. Fields marked “Auto from actuals” follow the dashboard data until switched to manual. Rates are entered as percentages."}</Note>
         )}
 
         <Section title={ar ? "1. عام" : "1. General"} open>
@@ -152,6 +153,10 @@ export default function AssumptionsPage() {
                 options={[36, 48, 60, 72, 84, 120].map((n) => ({ value: n, label: ar ? `${n / 12} سنوات` : `${n / 12} years` }))} />
             </FieldShell>
             {Num({ label: ["أسابيع الشهر", "Weeks per month"], value: draft.general.weeks_per_month, set: (v) => upd((d) => { d.general.weeks_per_month = v; }) })}
+            <FieldShell label={L(["أساس احتساب الإيراد", "Revenue basis"])}>
+              <SelectInput value={draft.general.revenue_basis} disabled={readOnly} onChange={(v) => upd((d) => { d.general.revenue_basis = v; })}
+                options={[{ value: "billing", label: L(["الاشتراكات المدفوعة في الفترة", "Subscriptions paid in the period"]) }, { value: "delivery", label: L(["المحاضرات المقدَّمة في الفترة", "Lectures delivered in the period"]) }]} />
+            </FieldShell>
           </div>
         </Section>
 
@@ -172,15 +177,15 @@ export default function AssumptionsPage() {
                     {Txt({ label: ["الاسم بالعربي", "Name (Arabic)"], value: m.name_ar, set: (v) => sm((x) => { x.name_ar = v; }) })}
                     {Txt({ label: ["الاسم بالإنجليزي", "Name (English)"], value: m.name_en, set: (v) => sm((x) => { x.name_en = v; }), dir: "ltr" })}
                     {Month({ label: ["بداية السوق", "Market start"], value: m.start_month, set: (v) => sm((x) => { x.start_month = v!; }) })}
-                    {Num({ label: ["تكلفة المحاضرة التجريبية", "Trial lecture cost"], value: m.trial_cost, set: (v) => sm((x) => { x.trial_cost = v; }), kind: "money", hint: ["تُدفع للمعلم حتى لو الطالب غاب", "Paid to the teacher even on a no-show"] })}
+                    {Num({ label: ["تكلفة المحاضرة التجريبية", "Trial lecture cost"], value: m.trial_cost, set: (v) => sm((x) => { x.trial_cost = v; }), kind: "money", hint: ["تُدفع للمعلم حتى عند غياب الطالب", "Paid to the teacher even on a no-show"] })}
                   </div>
-                  <p className="mb-2 mt-4 text-[12.5px] font-bold text-ink-700">{L(["ميزانية الإعلانات الشهرية الأساسية لكل سنة (قبل الموسمية)", "Base monthly ad budget per year (before seasonality)"])}</p>
+                  <p className="mb-2 mt-4 text-[12.5px] font-bold text-ink-700">{L(["عدد المحاضرات المجانية شهريًا (متوسط كل سنة) — تُحسب منه الإعلانات والاشتراكات", "Free trial lectures per month (yearly average) — drives ad spend and subscriptions"])}</p>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                    {m.budget_by_year.map((b, yi) => (
-                      <FieldShell key={yi} label={`${t("y")}${yi + 1}`}><NumInput value={b} kind="money" disabled={readOnly} onChange={(v) => sm((x) => { x.budget_by_year[yi] = v; })} /></FieldShell>
+                    {m.trials_by_year.map((b, yi) => (
+                      <FieldShell key={yi} label={`${t("y")}${yi + 1} · ${money(b * 12)} ${ar ? "سنويًا" : "a year"}`}><NumInput value={b} kind="int" disabled={readOnly} onChange={(v) => sm((x) => { x.trials_by_year[yi] = v; })} /></FieldShell>
                     ))}
                   </div>
-                  <p className="mb-2 mt-4 text-[12.5px] font-bold text-ink-700">{L(["معامل الموسمية لكل شهر (1 = عادي، 2 = الضعف)", "Monthly seasonality (1 = normal, 2 = double)"])}</p>
+                  <p className="mb-2 mt-4 text-[12.5px] font-bold text-ink-700">{L(["توزيع المحاضرات على أشهر السنة (1 = شهر عادي، 2 = الضعف)؛ يُعاد ضبطه ليبقى إجمالي السنة ثابتًا", "Spread over the year (1 = normal, 2 = double); rescaled so the yearly total is unchanged"])}</p>
                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
                     {Array.from({ length: 12 }, (_, i) => String(i + 1)).map((k) => (
                       <FieldShell key={k} label={(ar ? MONTHS_AR : MONTHS_EN)[Number(k) - 1]}>
@@ -190,17 +195,17 @@ export default function AssumptionsPage() {
                   </div>
                   <p className="mb-2 mt-4 text-[12.5px] font-bold text-ink-700">{L(["القمع: الآن ← المستهدف", "Funnel: now → target"])}</p>
                   <div className={grid}>
-                    {Num({ label: ["تكلفة الليد المدفوع", "Cost per paid lead"], value: m.cpl, set: (v) => sm((x) => { x.cpl = v; }), kind: "money", autoPath: ap("cpl") })}
-                    {Num({ label: ["زيادة تكلفة الليد سنويًا", "Yearly CPL increase"], value: m.cpl_growth_yoy, set: (v) => sm((x) => { x.cpl_growth_yoy = v; }), kind: "pct" })}
-                    {Num({ label: ["ليدز مجانية (زيارات مباشرة) الآن", "Free leads (direct) now"], value: m.organic_share, set: (v) => sm((x) => { x.organic_share = v; }), kind: "pct", autoPath: ap("organic_share") })}
-                    {Num({ label: ["ليدز مجانية — المستهدف", "Free leads — target"], value: m.organic_share_target, set: (v) => sm((x) => { x.organic_share_target = v; }), kind: "pct" })}
-                    {Num({ label: ["حجز محاضرة تجريبية الآن", "Book a trial now"], value: m.lead_to_trial, set: (v) => sm((x) => { x.lead_to_trial = v; }), kind: "pct", autoPath: ap("lead_to_trial") })}
-                    {Num({ label: ["حجز تجريبية — المستهدف", "Book a trial — target"], value: m.lead_to_trial_target, set: (v) => sm((x) => { x.lead_to_trial_target = v; }), kind: "pct" })}
-                    {Num({ label: ["نسبة الحضور الآن", "Show rate now"], value: m.show_rate, set: (v) => sm((x) => { x.show_rate = v; }), kind: "pct", autoPath: ap("show_rate") })}
-                    {Num({ label: ["نسبة الحضور — المستهدف", "Show rate — target"], value: m.show_rate_target, set: (v) => sm((x) => { x.show_rate_target = v; }), kind: "pct" })}
-                    {Num({ label: ["التحويل من الحضور للاشتراك الآن", "Attended-to-paid now"], value: m.trial_to_paid, set: (v) => sm((x) => { x.trial_to_paid = v; }), kind: "pct", autoPath: ap("trial_to_paid") })}
-                    {Num({ label: ["التحويل — المستهدف", "Conversion — target"], value: m.trial_to_paid_target, set: (v) => sm((x) => { x.trial_to_paid_target = v; }), kind: "pct" })}
-                    {Num({ label: ["شهور الوصول للمستهدف", "Months to reach targets"], value: m.ramp_months, set: (v) => sm((x) => { x.ramp_months = v; }), kind: "int" })}
+                    {Num({ label: ["تكلفة العميل المحتمل من الإعلانات", "Cost per paid lead"], value: m.cpl, set: (v) => sm((x) => { x.cpl = v; }), kind: "money", autoPath: ap("cpl") })}
+                    {Num({ label: ["الزيادة السنوية في تكلفة العميل المحتمل", "Yearly CPL increase"], value: m.cpl_growth_yoy, set: (v) => sm((x) => { x.cpl_growth_yoy = v; }), kind: "pct" })}
+                    {Num({ label: ["العملاء المحتملون دون إعلان — الحالي", "Free (non-ad) leads — now"], value: m.organic_share, set: (v) => sm((x) => { x.organic_share = v; }), kind: "pct", autoPath: ap("organic_share") })}
+                    {Num({ label: ["العملاء المحتملون دون إعلان — المستهدف", "Free (non-ad) leads — target"], value: m.organic_share_target, set: (v) => sm((x) => { x.organic_share_target = v; }), kind: "pct" })}
+                    {Num({ label: ["نسبة حجز المحاضرة المجانية — الحالية", "Leads booking a trial — now"], value: m.lead_to_trial, set: (v) => sm((x) => { x.lead_to_trial = v; }), kind: "pct", autoPath: ap("lead_to_trial") })}
+                    {Num({ label: ["نسبة حجز المحاضرة المجانية — المستهدفة", "Leads booking a trial — target"], value: m.lead_to_trial_target, set: (v) => sm((x) => { x.lead_to_trial_target = v; }), kind: "pct" })}
+                    {Num({ label: ["نسبة الحضور — الحالية", "Show rate — now"], value: m.show_rate, set: (v) => sm((x) => { x.show_rate = v; }), kind: "pct", autoPath: ap("show_rate") })}
+                    {Num({ label: ["نسبة الحضور — المستهدفة", "Show rate — target"], value: m.show_rate_target, set: (v) => sm((x) => { x.show_rate_target = v; }), kind: "pct" })}
+                    {Num({ label: ["التحويل من الحضور إلى اشتراك — الحالي", "Attended-to-paid — now"], value: m.trial_to_paid, set: (v) => sm((x) => { x.trial_to_paid = v; }), kind: "pct", autoPath: ap("trial_to_paid") })}
+                    {Num({ label: ["التحويل — المستهدف", "Attended-to-paid — target"], value: m.trial_to_paid_target, set: (v) => sm((x) => { x.trial_to_paid_target = v; }), kind: "pct" })}
+                    {Num({ label: ["عدد الأشهر للوصول إلى المستهدف", "Months to reach targets"], value: m.ramp_months, set: (v) => sm((x) => { x.ramp_months = v; }), kind: "int" })}
                   </div>
                 </div>
               );
@@ -235,14 +240,18 @@ export default function AssumptionsPage() {
                     {Txt({ label: ["الاسم بالعربي", "Name (Arabic)"], value: s.name_ar, set: (v) => ss((x) => { x.name_ar = v; }) })}
                     {Txt({ label: ["الاسم بالإنجليزي", "Name (English)"], value: s.name_en, set: (v) => ss((x) => { x.name_en = v; }), dir: "ltr" })}
                     {Month({ label: ["شهر الإطلاق", "Launch month"], value: s.start_month, set: (v) => ss((x) => { x.start_month = v!; }) })}
+                    <FieldShell label={L(["الفئة", "Segment"])}>
+                      <SelectInput value={s.category} disabled={readOnly} onChange={(v) => ss((x) => { x.category = v; x.avg_discount = Math.min(x.avg_discount, v === "b2b" ? 0.5 : 0.3); })}
+                        options={[{ value: "b2c", label: L(["اشتراكات فردية (B2C)", "Individual (B2C)"]) }, { value: "b2b", label: L(["اشتراكات مؤسسية (B2B)", "Institutional (B2B)"]) }]} />
+                    </FieldShell>
                     <FieldShell label={L(["مصدر العملاء الجدد", "Where new customers come from"])}>
                       <SelectInput value={s.driver} disabled={readOnly} onChange={(v) => ss((x) => { x.driver = v; if (v === "funnel" && !x.market) x.market = draft.markets[0]?.id; })}
-                        options={[{ value: "funnel", label: L(["قمع الإعلانات", "Ad funnel"]) }, { value: "growth", label: L(["نمو شهري (مدارس / برامج)", "Monthly growth (schools / programs)"]) }]} />
+                        options={[{ value: "funnel", label: L(["المحاضرات المجانية", "Free trial lectures"]) }, { value: "growth", label: L(["نمو شهري (شراكات / برامج)", "Monthly growth (partnerships / programs)"]) }]} />
                     </FieldShell>
                     {s.driver === "funnel" ? (
                       <>
                         <FieldShell label={L(["السوق", "Market"])}><SelectInput value={s.market ?? ""} disabled={readOnly} onChange={(v) => ss((x) => { x.market = v; })} options={marketOptions} /></FieldShell>
-                        {Num({ label: ["حصته من مشتركي القمع", "Share of funnel subscribers"], value: s.funnel_share, set: (v) => ss((x) => { x.funnel_share = v; }), kind: "pct", hint: ["تتوزع حسب النسب بين المصادر المفعّلة", "Split by share across active streams"] })}
+                        {Num({ label: ["نصيبه من المشتركين الجدد", "Share of new subscribers"], value: s.funnel_share, set: (v) => ss((x) => { x.funnel_share = v; }), kind: "pct", hint: ["توزَّع بالنسبة بين المصادر المفعّلة", "Split by share across active streams"] })}
                       </>
                     ) : (
                       <>
@@ -266,11 +275,11 @@ export default function AssumptionsPage() {
                       </>
                     )}
                     {Num({ label: ["سعر القائمة (يدفعه العميل)", "List price (customer pays)"], value: s.list_price, set: (v) => ss((x) => { x.list_price = v; }), kind: "money" })}
-                    {Num({ label: ["متوسط الخصم", "Average discount"], value: s.avg_discount, set: (v) => ss((x) => { x.avg_discount = v; }), kind: "pct", autoPath: ap("avg_discount") })}
-                    {Num({ label: ["عدد الحصص", "Lessons"], value: s.lessons, set: (v) => ss((x) => { x.lessons = v; }), kind: "int", hint: ["0 = ترخيص/خدمة بدون حصص", "0 = licence/service without lessons"] })}
-                    {Num({ label: ["حصص في الأسبوع", "Lessons per week"], value: s.lessons_per_week, set: (v) => ss((x) => { x.lessons_per_week = v; }) })}
-                    {Num({ label: ["طلاب في الحصة", "Students per lesson"], value: s.group_size, set: (v) => ss((x) => { x.group_size = v; }), kind: "int" })}
-                    {Num({ label: ["أجر المعلم للحصة", "Teacher fee per lesson"], value: s.teacher_cost_per_lesson, set: (v) => ss((x) => { x.teacher_cost_per_lesson = v; }), kind: "money" })}
+                    {Num({ label: ["نسبة الخصم", "Discount"], value: s.avg_discount, set: (v) => ss((x) => { x.avg_discount = Math.min(v, s.category === "b2b" ? 0.5 : 0.3); }), kind: "pct", hint: s.category === "b2b" ? ["الحد الأقصى 50%", "Maximum 50%"] : ["الحد الأقصى 30%", "Maximum 30%"] })}
+                    {Num({ label: ["عدد المحاضرات", "Lessons"], value: s.lessons, set: (v) => ss((x) => { x.lessons = v; }), kind: "int", hint: ["0 = ترخيص/خدمة بدون محاضرات", "0 = licence/service without lessons"] })}
+                    {Num({ label: ["محاضرات في الأسبوع", "Lessons per week"], value: s.lessons_per_week, set: (v) => ss((x) => { x.lessons_per_week = v; }) })}
+                    {Num({ label: ["طلاب في المحاضرة", "Students per lesson"], value: s.group_size, set: (v) => ss((x) => { x.group_size = v; }), kind: "int" })}
+                    {Num({ label: ["أجر المعلم للمحاضرة", "Teacher fee per lesson"], value: s.teacher_cost_per_lesson, set: (v) => ss((x) => { x.teacher_cost_per_lesson = v; }), kind: "money" })}
                     {Num({ label: ["عمولة مبيعات لكل اشتراك", "Sales commission per enrolment"], value: s.commission_per_enrolment, set: (v) => ss((x) => { x.commission_per_enrolment = v; }), kind: "money" })}
                     {Num({ label: ["تكلفة الإطلاق (مرة واحدة)", "Launch cost (one-off)"], value: s.launch_cost, set: (v) => ss((x) => { x.launch_cost = v; }), kind: "money" })}
                     {Num({ label: ["التجديد الآن", "Renewal now"], value: s.renewal_rate, set: (v) => ss((x) => { x.renewal_rate = v; }), kind: "pct", autoPath: ap("renewal_rate") })}
@@ -307,39 +316,43 @@ export default function AssumptionsPage() {
 
         <Section title={ar ? "5. الفريق والتوظيف" : "5. Team & hiring"}>
           <div className={grid}>
-            {Num({ label: ["رواتب الفريق الحالي شهريًا", "Current team payroll / month"], value: draft.team.base_payroll, set: (v) => upd((d) => { d.team.base_payroll = v; }), kind: "money", autoPath: "team.base_payroll" })}
+            {Num({ label: ["رواتب فريق التسويق الحالي شهريًا", "Current marketing team payroll / month"], value: draft.team.marketing_payroll, set: (v) => upd((d) => { d.team.marketing_payroll = v; }), kind: "money", autoPath: "team.marketing_payroll" })}
+            {Num({ label: ["رواتب بقية الفريق الحالي شهريًا", "Other current staff payroll / month"], value: draft.team.admin_payroll, set: (v) => upd((d) => { d.team.admin_payroll = v; }), kind: "money", autoPath: "team.admin_payroll" })}
             {Num({ label: ["عدد الفريق الحالي", "Current team size"], value: draft.team.base_headcount, set: (v) => upd((d) => { d.team.base_headcount = v; }), kind: "int", autoPath: "team.base_headcount" })}
-            {Num({ label: ["الزيادة السنوية للرواتب", "Yearly salary raise"], value: draft.team.annual_raise, set: (v) => upd((d) => { d.team.annual_raise = v; }), kind: "pct", hint: ["مرة كل سنة في الشهر المحدد", "Once a year in the chosen month"] })}
+            {Num({ label: ["الزيادة السنوية للرواتب", "Yearly salary raise"], value: draft.team.annual_raise, set: (v) => upd((d) => { d.team.annual_raise = v; }), kind: "pct", hint: ["مرة واحدة سنويًا في الشهر المحدد", "Once a year in the chosen month"] })}
             <FieldShell label={L(["شهر الزيادة", "Raise month"])}>
               <SelectInput value={draft.team.raise_month} disabled={readOnly} onChange={(v) => upd((d) => { d.team.raise_month = v; })} options={Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: (ar ? MONTHS_AR : MONTHS_EN)[i] }))} />
             </FieldShell>
             {Num({ label: ["تأمينات ومزايا فوق الراتب", "Employer on-costs"], value: draft.team.employer_oncost, set: (v) => upd((d) => { d.team.employer_oncost = v; }), kind: "pct" })}
             {Num({ label: ["رسوم التحويل الدولي للرواتب", "International transfer fees"], value: draft.team.intl_transfer_fee_pct, set: (v) => upd((d) => { d.team.intl_transfer_fee_pct = v; }), kind: "pct" })}
-            {Num({ label: ["طلاب لكل معلم في الشهر", "Students per teacher / month"], value: draft.team.teacher_max_students, set: (v) => upd((d) => { d.team.teacher_max_students = v; }), kind: "int", hint: ["60–70 طالب حصص فردية", "60–70 one-to-one students"] })}
-            {Num({ label: ["حصص الطالب في الشهر", "Lessons per student / month"], value: draft.team.teacher_lessons_per_student_month, set: (v) => upd((d) => { d.team.teacher_lessons_per_student_month = v; }), kind: "num", hint: [`طاقة المعلم = ${Math.round(draft.team.teacher_max_students * draft.team.teacher_lessons_per_student_month)} حصة/شهر`, `Teacher capacity = ${Math.round(draft.team.teacher_max_students * draft.team.teacher_lessons_per_student_month)} lessons/month`] })}
-            {Num({ label: ["تكلفة تعيين وتدريب معلم", "Onboarding cost per teacher"], value: draft.team.teacher_onboarding_cost, set: (v) => upd((d) => { d.team.teacher_onboarding_cost = v; }), kind: "money" })}
-            {Num({ label: ["معلمين لكل مشرف أكاديمي", "Teachers per supervisor"], value: draft.team.teachers_per_supervisor, set: (v) => upd((d) => { d.team.teachers_per_supervisor = v; }), kind: "int" })}
-            {Num({ label: ["راتب المشرف", "Supervisor salary"], value: draft.team.supervisor_salary, set: (v) => upd((d) => { d.team.supervisor_salary = v; }), kind: "money" })}
-            {Num({ label: ["طلاب لكل موظف خدمة عملاء", "Students per support agent"], value: draft.team.cs_students_per_agent, set: (v) => upd((d) => { d.team.cs_students_per_agent = v; }), kind: "int" })}
-            {Num({ label: ["راتب خدمة العملاء", "Support agent salary"], value: draft.team.cs_salary, set: (v) => upd((d) => { d.team.cs_salary = v; }), kind: "money" })}
-            {Num({ label: ["موظفي خدمة العملاء الحاليين", "Current support agents"], value: draft.team.cs_current_agents, set: (v) => upd((d) => { d.team.cs_current_agents = v; }), kind: "int" })}
-            {Num({ label: ["إنفاق إعلاني لكل ميديا باير", "Ad spend per media buyer"], value: draft.team.ad_spend_per_media_buyer, set: (v) => upd((d) => { d.team.ad_spend_per_media_buyer = v; }), kind: "money" })}
-            {Num({ label: ["راتب الميديا باير", "Media buyer salary"], value: draft.team.media_buyer_salary, set: (v) => upd((d) => { d.team.media_buyer_salary = v; }), kind: "money" })}
-            {Num({ label: ["الميديا باير الحاليين", "Current media buyers"], value: draft.team.media_buyers_current, set: (v) => upd((d) => { d.team.media_buyers_current = v; }), kind: "int" })}
+            {Num({ label: ["طاقة المعلم (محاضرة شهريًا)", "Teacher capacity (lectures / month)"], value: draft.team.teacher_capacity_lessons, set: (v) => upd((d) => { d.team.teacher_capacity_lessons = v; }), kind: "int", hint: ["من 60 إلى 80 محاضرة", "60 to 80 lectures"] })}
+            {Num({ label: ["تكلفة تأهيل معلم جديد", "Onboarding cost per teacher"], value: draft.team.teacher_onboarding_cost, set: (v) => upd((d) => { d.team.teacher_onboarding_cost = v; }), kind: "money" })}
+            {Num({ label: ["طاقة موظف خدمة العملاء (حجوزات واشتراكات شهريًا)", "Support agent load (bookings + subscriptions / month)"], value: draft.team.cs_load_per_agent, set: (v) => upd((d) => { d.team.cs_load_per_agent = v; }), kind: "int" })}
+            {Num({ label: ["راتب موظف خدمة العملاء", "Support agent salary"], value: draft.team.cs_salary, set: (v) => upd((d) => { d.team.cs_salary = v; }), kind: "money", autoPath: "team.cs_salary" })}
+            {Num({ label: ["موظفو خدمة العملاء الحاليون", "Current support agents"], value: draft.team.cs_current_agents, set: (v) => upd((d) => { d.team.cs_current_agents = v; }), kind: "int", autoPath: "team.cs_current_agents" })}
+            {Month({ label: ["بداية فريق الجودة", "Quality team start"], value: draft.team.quality_start_month, set: (v) => upd((d) => { d.team.quality_start_month = v!; }) })}
+            {Num({ label: ["محاضرات لكل مراجع جودة شهريًا", "Lectures per quality reviewer / month"], value: draft.team.quality_lectures_per_reviewer, set: (v) => upd((d) => { d.team.quality_lectures_per_reviewer = v; }), kind: "int" })}
+            {Num({ label: ["راتب مراجع الجودة", "Quality reviewer salary"], value: draft.team.quality_salary, set: (v) => upd((d) => { d.team.quality_salary = v; }), kind: "money" })}
+            {Num({ label: ["إنفاق إعلاني لكل مشترٍ للإعلانات", "Ad spend per media buyer"], value: draft.team.ad_spend_per_media_buyer, set: (v) => upd((d) => { d.team.ad_spend_per_media_buyer = v; }), kind: "money" })}
+            {Num({ label: ["راتب مشتري الإعلانات", "Media buyer salary"], value: draft.team.media_buyer_salary, set: (v) => upd((d) => { d.team.media_buyer_salary = v; }), kind: "money" })}
+            {Num({ label: ["مشترو الإعلانات الحاليون", "Current media buyers"], value: draft.team.media_buyers_current, set: (v) => upd((d) => { d.team.media_buyers_current = v; }), kind: "int" })}
           </div>
           <p className="mb-2 mt-5 text-[13px] font-bold text-ink-800">{L(["التوظيف المخطط", "Planned hires"])}</p>
           <div className="space-y-2">
             {draft.team.hires.map((h, hi) => (
-              <div key={hi} className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[1.4fr_1.4fr_1fr_1fr_.6fr_auto]">
+              <div key={hi} className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[1.4fr_1.4fr_1fr_1fr_1fr_.6fr_auto]">
                 {Txt({ label: ["الوظيفة", "Role (AR)"], value: h.role_ar, set: (v) => upd((d) => { d.team.hires[hi].role_ar = v; }) })}
                 {Txt({ label: ["Role", "Role (EN)"], value: h.role_en, set: (v) => upd((d) => { d.team.hires[hi].role_en = v; }), dir: "ltr" })}
+                <FieldShell label={L(["القسم", "Function"])}>
+                  <SelectInput value={h.category} disabled={readOnly} onChange={(v) => upd((d) => { d.team.hires[hi].category = v; })} options={HIRE_CATEGORIES.map((c) => ({ value: c.value, label: ar ? c.ar : c.en }))} />
+                </FieldShell>
                 {Month({ label: ["من شهر", "From"], value: h.month, set: (v) => upd((d) => { d.team.hires[hi].month = v!; }) })}
                 {Num({ label: ["الراتب", "Salary"], value: h.salary, set: (v) => upd((d) => { d.team.hires[hi].salary = v; }), kind: "money" })}
                 {Num({ label: ["العدد", "Count"], value: h.count, set: (v) => upd((d) => { d.team.hires[hi].count = v; }), kind: "int" })}
                 {!readOnly && <button type="button" aria-label={t("remove")} onClick={() => upd((d) => { d.team.hires.splice(hi, 1); })} className="mb-2 text-[#a02a24]"><Trash2 size={16} /></button>}
               </div>
             ))}
-            {!readOnly && <button type="button" onClick={() => upd((d) => { d.team.hires.push({ role_ar: "وظيفة جديدة", role_en: "New role", month: d.general.start_month, salary: 3000, count: 1 }); })}
+            {!readOnly && <button type="button" onClick={() => upd((d) => { d.team.hires.push({ role_ar: "وظيفة جديدة", role_en: "New role", month: d.general.start_month, salary: 3000, count: 1, category: "admin" }); })}
               className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-brand-300 px-3.5 py-1.5 text-[13px] font-semibold text-brand-600 hover:bg-brand-50"><Plus size={14} /> {ar ? "إضافة وظيفة" : "Add hire"}</button>}
           </div>
         </Section>
@@ -347,8 +360,11 @@ export default function AssumptionsPage() {
         <Section title={ar ? "6. مصروفات تشغيلية أخرى" : "6. Other operating expenses"}>
           <div className="space-y-2">
             {draft.opex.map((o, oi) => (
-              <div key={o.id} className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[1.5fr_1fr_1fr_1fr_.8fr_auto]">
+              <div key={o.id} className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_.8fr_auto]">
                 {Txt({ label: ["البند", "Item"], value: ar ? o.name_ar : o.name_en, set: (v) => upd((d) => { if (ar) d.opex[oi].name_ar = v; else d.opex[oi].name_en = v; }) })}
+                <FieldShell label={L(["التصنيف", "Category"])}>
+                  <SelectInput value={o.category} disabled={readOnly} onChange={(v) => upd((d) => { d.opex[oi].category = v; })} options={(["content", "marketing_extra", "tools", "admin"] as ExpenseCategory[]).map((c) => ({ value: c, label: ar ? EXPENSE_LABELS[c].ar : EXPENSE_LABELS[c].en }))} />
+                </FieldShell>
                 {Num({ label: ["شهريًا", "Monthly"], value: o.monthly, set: (v) => upd((d) => { d.opex[oi].monthly = v; }), kind: "money" })}
                 {Month({ label: ["من", "From"], value: o.start_month, set: (v) => upd((d) => { d.opex[oi].start_month = v!; }) })}
                 {Month({ label: ["إلى (اختياري)", "To (optional)"], value: o.end_month, set: (v) => upd((d) => { d.opex[oi].end_month = v; }), allowEmpty: true })}
@@ -356,7 +372,7 @@ export default function AssumptionsPage() {
                 {!readOnly && <button type="button" aria-label={t("remove")} onClick={() => upd((d) => { d.opex.splice(oi, 1); })} className="mb-2 text-[#a02a24]"><Trash2 size={16} /></button>}
               </div>
             ))}
-            {!readOnly && <button type="button" onClick={() => upd((d) => { d.opex.push({ id: `opex_${Date.now().toString(36)}`, name_ar: "بند جديد", name_en: "New item", monthly: 500, start_month: d.general.start_month, end_month: null, growth_yoy: 0 }); })}
+            {!readOnly && <button type="button" onClick={() => upd((d) => { d.opex.push({ id: `opex_${Date.now().toString(36)}`, category: "admin", name_ar: "بند جديد", name_en: "New item", monthly: 500, start_month: d.general.start_month, end_month: null, growth_yoy: 0 }); })}
               className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-brand-300 px-3.5 py-1.5 text-[13px] font-semibold text-brand-600 hover:bg-brand-50"><Plus size={14} /> {ar ? "إضافة بند" : "Add item"}</button>}
           </div>
         </Section>
@@ -426,7 +442,7 @@ export default function AssumptionsPage() {
             <table className="w-full min-w-[620px] text-[13px]">
               <thead><tr className="text-ink-600"><th className="px-2 py-1 text-start" />{(["conservative", "base", "optimistic"] as const).map((k) => <th key={k} className="px-2 py-1 text-start">{t(`sc_${k}` as "sc_base")}</th>)}</tr></thead>
               <tbody>
-                {([["conversion", "مضاعف التحويل", "Conversion ×"], ["cpl", "مضاعف تكلفة الليد", "Cost per lead ×"], ["renewal", "مضاعف التجديد", "Renewal ×"], ["growth_volume", "مضاعف حجم المدارس والبرامج", "Schools & programs volume ×"], ["price", "مضاعف السعر", "Price ×"], ["delay_months", "تأخير المنتجات الجديدة (شهور)", "Delay of new products (months)"]] as const).map(([key, a, e]) => (
+                {([["trials_volume", "مضاعف عدد المحاضرات المجانية", "Free lectures ×"], ["conversion", "مضاعف التحويل", "Conversion ×"], ["cpl", "مضاعف تكلفة العميل المحتمل", "Cost per lead ×"], ["renewal", "مضاعف التجديد", "Renewal ×"], ["growth_volume", "مضاعف حجم الشراكات والبرامج", "Partnerships & programs volume ×"], ["price", "مضاعف السعر", "Price ×"], ["delay_months", "تأخير المنتجات الجديدة (بالأشهر)", "Delay of new products (months)"]] as const).map(([key, a, e]) => (
                   <tr key={key}>
                     <td className="px-2 py-1 text-ink-700">{ar ? a : e}</td>
                     {(["conservative", "base", "optimistic"] as const).map((k) => (

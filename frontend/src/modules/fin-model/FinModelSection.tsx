@@ -24,8 +24,9 @@ const Funding = lazy(() => import("./pages/FundingPage"));
 const AssumptionsPage = lazy(() => import("./pages/AssumptionsPage"));
 const Versions = lazy(() => import("./pages/VersionsPage"));
 const Report = lazy(() => import("./pages/ReportPage"));
-const HowItWorks = lazy(() => import("./pages/HowItWorksPage"));
-const Growth = lazy(() => import("./pages/GrowthPage"));
+const BusinessModel = lazy(() => import("./pages/HowItWorksPage"));
+const SalesPlan = lazy(() => import("./pages/GrowthPage"));
+const Expenses = lazy(() => import("./pages/ExpensesPage"));
 
 export function FinModelSection() {
   return (
@@ -129,7 +130,7 @@ function Shell() {
             <div className="thin-scrollbar -mx-1 flex items-end gap-0.5 overflow-x-auto px-1">
               {CHAPTERS.map((c, i) => (
                 <NavLink key={c.to} to={`${c.to}${qs}`}
-                  className={({ isActive }) => clsx("group -mb-px flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3 text-[14.5px] font-semibold transition-colors",
+                  className={({ isActive }) => clsx("group -mb-px flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-2.5 py-3 text-[14px] font-semibold transition-colors",
                     isActive ? "border-brand-600 text-brand-700" : "border-transparent text-ink-600 hover:text-ink-900")}>
                   {({ isActive }) => (
                     <>
@@ -137,7 +138,7 @@ function Shell() {
                         isActive ? "border-brand-600 bg-brand-600 text-white" : "border-ink-300 text-ink-500 group-hover:border-ink-500")}>
                         {String(i + 1).padStart(2, "0")}
                       </span>
-                      {lang === "ar" ? c.ar : c.en}
+                      <span title={lang === "ar" ? c.ar : c.en}>{c.short ? c.short[lang === "ar" ? 0 : 1] : lang === "ar" ? c.ar : c.en}</span>
                     </>
                   )}
                 </NavLink>
@@ -155,8 +156,11 @@ function Shell() {
         <Routes>
           <Route index element={<Navigate to={`overview${qs}`} replace />} />
           <Route path="overview" element={<Overview />} />
-          <Route path="how-it-works" element={<HowItWorks />} />
-          <Route path="growth" element={<Growth />} />
+          <Route path="business-model" element={<BusinessModel />} />
+          <Route path="sales-plan" element={<SalesPlan />} />
+          <Route path="expenses" element={<Expenses />} />
+          <Route path="how-it-works" element={<Navigate to={`../business-model${qs}`} replace />} />
+          <Route path="growth" element={<Navigate to={`../sales-plan${qs}`} replace />} />
           <Route path="statements" element={<Statements />} />
           <Route path="unit-economics" element={<Units />} />
           <Route path="actual-vs-plan" element={<ActualVsPlan />} />

@@ -33,7 +33,7 @@ SCENARIOS = ("conservative", "base", "optimistic")
 
 # --------------------------------------------------------------- helpers
 # bump when the calculation changes so cached results are recomputed
-ENGINE_VERSION = 2
+ENGINE_VERSION = 5
 
 def ym_index(ym: str | None, start: str) -> int | None:
     if not ym:
@@ -96,9 +96,23 @@ _PROFILE_CACHE: dict[tuple, tuple[list[float], list[float]]] = {}
 
 
 def teacher_capacity_lessons(team: dict) -> float:
-    """Lessons one teacher can give per month = students they carry x lessons per student."""
-    cap = float(team.get("teacher_max_students", 65) or 0) * float(team.get("teacher_lessons_per_student_month", 8) or 0)
-    return cap if cap > 0 else 520.0
+    """Lectures one teacher can give per month (60-80)."""
+    cap = float(team.get("teacher_capacity_lessons", 70) or 0)
+    return cap if cap > 0 else 70.0
+
+
+# expense categories shown to the board; every cost line of the model maps to exactly one
+EXPENSE_CATEGORIES = (
+    "teachers", "content", "marketing_team", "ads", "marketing_extra", "cs", "quality", "tools",
+    "commissions", "payment_fees", "admin", "launch",
+)
+
+
+def seasonality_norm(mk: dict) -> dict[int, float]:
+    """Calendar-month factors rescaled to average 1 (a year = 12 x the monthly figure)."""
+    raw = {m: float((mk.get("seasonality") or {}).get(str(m), 1.0)) for m in range(1, 13)}
+    avg = sum(raw.values()) / 12 or 1.0
+    return {m: v / avg for m, v in raw.items()}
 
 
 def delivery_profile(service_weeks: float, weeks_per_month: float) -> tuple[list[float], list[float]]:
@@ -135,11 +149,13 @@ def apply_scenario(a: dict, name: str) -> dict:
     cplm = float(sc.get("cpl", 1.0))
     ren = float(sc.get("renewal", 1.0))
     vol = float(sc.get("growth_volume", 1.0))
+    tvol = float(sc.get("trials_volume", 1.0))
     price = float(sc.get("price", 1.0))
     delay = int(sc.get("delay_months", 0) or 0)
     start = a["general"]["start_month"]
     for mk in a.get("markets", []):
         mk["cpl"] = mk["cpl"] * cplm
+        mk["trials_by_year"] = [float(v) * tvol for v in (mk.get("trials_by_year") or [0])]
         for f in ("trial_to_paid", "trial_to_paid_target"):
             mk[f] = min(mk[f] * conv, 1.0)
         if delay and (ym_index(mk.get("start_month"), start) or 0) > 0:
@@ -164,6 +180,7 @@ def _run(a: dict, loan_amount: float) -> dict:
     M = float(g.get("weeks_per_month", 4.345))
     tax, pay, team, fin = a["tax"], a["payments"], a["team"], a["financing"]
     vat_rate = float(tax.get("vat_rate", 0.15))
+    billing_basis = g.get("revenue_basis", "billing") != "delivery"
 
     markets = {m["id"]: m for m in a.get("markets", [])}
     streams = [s for s in a.get("streams", []) if s.get("enabled", True)]
@@ -179,18 +196,17 @@ def _run(a: dict, loan_amount: float) -> dict:
                                  and i >= (ym_index(s.get("start_month"), start) or 0) for s in streams):
                 rows.append({"spend": 0.0, "leads": 0.0, "trials": 0.0, "attended": 0.0, "paid": 0.0, "trial_cost": 0.0})
                 continue
-            bud = mk.get("budget_by_year") or [0]
-            base = float(bud[min(y, len(bud) - 1)])
-            season = float((mk.get("seasonality") or {}).get(str(cal_month(i, start)), 1.0))
-            spend = base * season
-            cpl = float(mk["cpl"]) * (1 + float(mk.get("cpl_growth_yoy", 0))) ** y
+            tby = mk.get("trials_by_year") or [0]
+            season = seasonality_norm(mk)[cal_month(i, start)]
             t = i - ms
             rm = float(mk.get("ramp_months", 12))
-            paid_leads = spend / cpl if cpl > 0 else 0.0
-            # organic / referral / direct-visit leads come on top of paid ones at no ad cost
+            trials = float(tby[min(y, len(tby) - 1)]) * season
+            l2t = ramp(mk["lead_to_trial"], mk["lead_to_trial_target"], rm, t)
+            leads = trials / l2t if l2t > 0 else 0.0
+            # organic / referral / direct-visit leads cost nothing; the rest come from paid ads
             org = min(ramp(float(mk.get("organic_share", 0)), float(mk.get("organic_share_target", mk.get("organic_share", 0))), rm, t), 0.9)
-            leads = paid_leads / (1 - org)
-            trials = leads * ramp(mk["lead_to_trial"], mk["lead_to_trial_target"], rm, t)
+            cpl = float(mk["cpl"]) * (1 + float(mk.get("cpl_growth_yoy", 0))) ** y
+            spend = leads * (1 - org) * cpl
             att = trials * ramp(mk["show_rate"], mk["show_rate_target"], rm, t)
             paid = att * ramp(mk["trial_to_paid"], mk["trial_to_paid_target"], rm, t)
             rows.append({"spend": spend, "leads": leads, "trials": trials, "attended": att, "paid": paid,
@@ -260,11 +276,17 @@ def _run(a: dict, loan_amount: float) -> dict:
         gross = [d["total"][i] * d["net_price"] for i in range(H)]
         net = [gross[i] / (1 + vat_rate) if registered[i] else gross[i] for i in range(H)]
         vat = [gross[i] - net[i] for i in range(H)]
-        rev = [sum(d["deliver"][k] * net[i - k] for k in range(len(d["deliver"])) if i - k >= 0) for i in range(H)]
+        # lessons physically taught each month (capacity, active students)
         stud_lessons = [sum(d["deliver"][k] * d["total"][i - k] for k in range(len(d["deliver"])) if i - k >= 0) * d["lessons"]
                         for i in range(H)]
         grp = max(float(s.get("group_size", 1) or 1), 1.0)
-        teacher = [x / grp * float(s.get("teacher_cost_per_lesson", 0)) for x in stud_lessons]
+        if billing_basis:
+            # revenue = subscriptions paid in the month; the lessons they buy are costed in the same month
+            rev = list(net)
+            teacher = [d["total"][i] * d["lessons"] / grp * float(s.get("teacher_cost_per_lesson", 0)) for i in range(H)]
+        else:
+            rev = [sum(d["deliver"][k] * net[i - k] for k in range(len(d["deliver"])) if i - k >= 0) for i in range(H)]
+            teacher = [x / grp * float(s.get("teacher_cost_per_lesson", 0)) for x in stud_lessons]
         coll = [gross[i - lag] if i - lag >= 0 else 0.0 for i in range(H)]
         coll_n = [d["total"][i - lag] if i - lag >= 0 else 0.0 for i in range(H)]
         gw = [(coll[i] * gfp + coll_n[i] * gff) if s.get("uses_gateway") else 0.0 for i in range(H)]
@@ -293,36 +315,45 @@ def _run(a: dict, loan_amount: float) -> dict:
     cap = teacher_capacity_lessons(team)
     teachers = [math.ceil(x / cap - 1e-9) for x in teach_lessons]
     active_all = [sum(S[k]["active"][i] for k in S) for i in range(H)]
+
     spend_all = [sum(funnel[m][i]["spend"] for m in funnel) for i in range(H)]
-    payroll, onboarding, headcount = [], [], []
-    max_teachers = max_cs = max_mb = 0
-    sup_max = 0
+    subs_all = [sum(S[k]["total"][i] for k in S) for i in range(H)]
+    payroll, onboarding, headcount, pay_cat = [], [], [], []
+    max_teachers = max_cs = max_mb = max_q = 0
+    q_start = ym_index(team.get("quality_start_month"), start)
+    oncost = (1 + float(team.get("employer_oncost", 0))) * (1 + float(team.get("intl_transfer_fee_pct", 0)))
     for i in range(H):
-        base = float(team.get("base_payroll", 0)) * raise_f[i]
-        cs_need = math.ceil(active_all[i] / float(team.get("cs_students_per_agent", 120) or 120) - 1e-9)
-        max_cs = max(max_cs, cs_need)
-        extra_cs = max(0, max_cs - int(team.get("cs_current_agents", 0)))
+        # customer service: trial bookings + paid subscriptions handled per month
+        cs_need = math.ceil((trials_all[i] + subs_all[i]) / float(team.get("cs_load_per_agent", 400) or 400) - 1e-9)
+        max_cs = max(max_cs, cs_need, int(team.get("cs_current_agents", 0)))
         mb_need = math.ceil(spend_all[i] / float(team.get("ad_spend_per_media_buyer", 60000) or 60000) - 1e-9)
         max_mb = max(max_mb, mb_need)
         extra_mb = max(0, max_mb - int(team.get("media_buyers_current", 0)))
-        sup_max = max(sup_max, teachers[i] // int(team.get("teachers_per_supervisor", 15) or 15))
-        hires_cost, hires_n = 0.0, 0
+        if q_start is not None and i >= q_start:
+            max_q = max(max_q, 1, math.ceil(teach_lessons[i] / float(team.get("quality_lectures_per_reviewer", 1500) or 1500) - 1e-9))
+        cat = {"marketing_team": float(team.get("marketing_payroll", 0)) + extra_mb * float(team.get("media_buyer_salary", 0)),
+               "cs": max_cs * float(team.get("cs_salary", 0)),
+               "quality": max_q * float(team.get("quality_salary", 0)),
+               "admin": float(team.get("admin_payroll", 0)), "content": 0.0}
+        hires_n = 0
         for h in team.get("hires", []):
             hi = ym_index(h.get("month"), start)
             if hi is not None and i >= hi:
-                hires_cost += float(h.get("salary", 0)) * float(h.get("count", 1))
+                c = h.get("category") or "admin"
+                c = "marketing_team" if c == "marketing" else c
+                c = c if c in cat else "admin"
+                cat[c] += float(h.get("salary", 0)) * float(h.get("count", 1))
                 hires_n += int(h.get("count", 1))
-        # base payroll already carries its raises; new roles get the same yearly raises
-        gross_pay = base + (extra_cs * float(team.get("cs_salary", 0)) + extra_mb * float(team.get("media_buyer_salary", 0))
-                            + sup_max * float(team.get("supervisor_salary", 0)) + hires_cost) * raise_f[i]
-        total_pay = gross_pay * (1 + float(team.get("employer_oncost", 0))) * (1 + float(team.get("intl_transfer_fee_pct", 0)))
-        payroll.append(total_pay)
+        # everyone gets the yearly raise; on-costs and transfer fees on top
+        cat = {k: v * raise_f[i] * oncost for k, v in cat.items()}
+        pay_cat.append(cat)
+        payroll.append(sum(cat.values()))
         new_t = max(0, teachers[i] - max_teachers)
         max_teachers = max(max_teachers, teachers[i])
         onboarding.append(new_t * float(team.get("teacher_onboarding_cost", 0)) if i > 0 else 0.0)
-        headcount.append({"fixed": int(team.get("base_headcount", 0)) + extra_cs + extra_mb + sup_max + hires_n,
-                          "cs_agents": max(max_cs, int(team.get("cs_current_agents", 0))),
-                          "supervisors": sup_max, "media_buyers": max(max_mb, int(team.get("media_buyers_current", 0))),
+        headcount.append({"fixed": int(team.get("base_headcount", 0)) + max(0, max_cs - int(team.get("cs_current_agents", 0))) + extra_mb + max_q + hires_n,
+                          "cs_agents": max_cs, "quality": max_q,
+                          "media_buyers": max(max_mb, int(team.get("media_buyers_current", 0))),
                           "teachers": teachers[i]})
 
     # ---- 6. other opex & capex
@@ -411,6 +442,17 @@ def _run(a: dict, loan_amount: float) -> dict:
                 zakat_due[i + zl] = zakat_due.get(i + zl, 0.0) + zakat
             cum_ni_year = 0.0
         ni = ebt - zakat
+        exp = {c: 0.0 for c in EXPENSE_CATEGORIES}
+        exp["teachers"] = teacher + trials_cost + onboarding[i]
+        exp["ads"] = mkt
+        exp["commissions"] = comm
+        exp["payment_fees"] = gw
+        exp["launch"] = launch
+        for c, v in pay_cat[i].items():
+            exp[c] += v
+        for o in a.get("opex", []):
+            c = o.get("category") or "admin"
+            exp[c if c in exp else "admin"] += opex_lines[o["id"]][i]
         # balance-sheet movements
         billed_gross = sum(S[k]["gross"][i] for k in S)
         billed_net = sum(S[k]["net"][i] for k in S)
@@ -462,6 +504,7 @@ def _run(a: dict, loan_amount: float) -> dict:
             "receivables": ar, "deferred_revenue": deferred, "vat_payable": vat_pay, "zakat_payable": zakat_pay,
             "fixed_assets": nfa, "loan_balance": loan_bal[i], "equity": equity,
             "teacher_lessons": teach_lessons[i], "headcount": headcount[i],
+            "subscriptions": subs_all[i], "expense_by_category": exp,
         })
     return {"months": months, "streams": S, "funnel": funnel, "vat_from": vat_from,
             "checks": {"balance_sheet_ok": checks_ok, "max_difference": round(max_diff, 4)},
@@ -469,7 +512,7 @@ def _run(a: dict, loan_amount: float) -> dict:
 
 
 # --------------------------------------------------------------- summaries
-FLOW_KEYS = ("revenue", "billed_gross", "collections", "new_customers", "renewals", "leads", "trials", "attended",
+FLOW_KEYS = ("subscriptions", "revenue", "billed_gross", "collections", "new_customers", "renewals", "leads", "trials", "attended",
              "teacher_cost", "trial_cost", "commissions", "gateway_fees", "cogs", "gross_profit", "marketing",
              "payroll", "teacher_onboarding", "launch_costs", "other_opex", "opex", "ebitda", "depreciation", "ebit",
              "interest", "loan_fees", "ebt", "zakat", "net_income", "cfo", "capex", "loan_draw", "loan_principal",
@@ -494,6 +537,10 @@ def _annual(months: list[dict], start: str) -> list[dict]:
                 row["revenue_by_stream"][k] = row["revenue_by_stream"].get(k, 0.0) + v
             for k, v in m["enrolments_by_stream"].items():
                 row["enrolments_by_stream"][k] = row["enrolments_by_stream"].get(k, 0.0) + v
+        row["expense_by_category"] = {}
+        for m in ms:
+            for k, v in m["expense_by_category"].items():
+                row["expense_by_category"][k] = row["expense_by_category"].get(k, 0.0) + v
         row["opex_by_line"] = {}
         for m in ms:
             for k, v in m["opex_by_line"].items():
@@ -638,6 +685,21 @@ def compute(assumptions: dict, scenario: str = "base", funding_history: list[dic
     loan = suggested if fin.get("loan_mode", "auto") == "auto" else float(fin.get("loan_amount", 0))
     run = _run(a, loan)
     financeable = min(m["cash"] for m in run["months"][draw_i:]) >= 0
+    last12 = sum(m["ebitda"] for m in run["months"][-12:])
+    if fin.get("loan_mode", "auto") == "auto" and loan > 0 and not financeable and last12 > 0:
+        # repayments open a second cash gap: borrow a little more so the instalments are covered too
+        # (only when operations turn profitable - a plan that never does is reported as not financeable)
+        cap_loan = max(1.5 * loan, loan + 4 * rounding)
+        trial_loan = loan
+        while trial_loan < cap_loan:
+            trial_loan += rounding
+            trial_run = _run(a, trial_loan)
+            low = min(m["cash"] for m in trial_run["months"][draw_i:])
+            if low >= 0 and not financeable:
+                loan, run, financeable, suggested = trial_loan, trial_run, True, trial_loan
+            if low >= buffer:
+                loan, run, suggested = trial_loan, trial_run, trial_loan
+                break
     # if repayments start before the business can carry them, find the grace period that works
     suggested_grace = None
     if loan > 0 and not financeable:
@@ -717,13 +779,15 @@ def compute(assumptions: dict, scenario: str = "base", funding_history: list[dic
     checks = dict(run["checks"])
     checks["revenue_equals_streams"] = all(abs(m["revenue"] - sum(m["revenue_by_stream"].values())) < 0.01 for m in months)
     checks["opex_equals_lines"] = all(abs(m["opex"] - (m["marketing"] + m["payroll"] + m["teacher_onboarding"] + m["launch_costs"] + m["other_opex"])) < 0.01 for m in months)
+    checks["expenses_equal_categories"] = all(abs(m["cogs"] + m["opex"] - sum(m["expense_by_category"].values())) < 0.01 for m in months)
     checks["annual_equals_months"] = all(abs(y["revenue"] - sum(m["revenue"] for m in months if m["year"] == y["year"])) < 0.01 for y in years)
     checks["cash_bridge"] = abs((months[0]["cash"] - months[0]["net_cash_flow"]) + sum(m["net_cash_flow"] for m in months) - months[-1]["cash"]) < 0.5
     checks["all_ok"] = all(v for k, v in checks.items() if isinstance(v, bool))
 
     streams_meta = [{"id": k, "name_ar": d["s"].get("name_ar"), "name_en": d["s"].get("name_en"),
                      "suggested": bool(d["s"].get("suggested")), "driver": d["s"].get("driver"),
-                     "start_month": d["s"].get("start_month")} for k, d in run["streams"].items()]
+                     "start_month": d["s"].get("start_month"),
+                     "category": "b2b" if d["s"].get("category") == "b2b" else "b2c"} for k, d in run["streams"].items()]
     return {
         "scenario": scenario, "start_month": start,
         "months": months, "years": years, "kpis": kpis,
@@ -736,13 +800,13 @@ def compute(assumptions: dict, scenario: str = "base", funding_history: list[dic
 
 SENSITIVITY_DRIVERS = [
     ("price", "سعر الاشتراك", "Price"),
-    ("discount", "متوسط الخصم", "Average discount"),
+    ("discount", "نسبة الخصم", "Discount"),
     ("conversion", "نسبة التحويل من التجربة للاشتراك", "Trial-to-paid conversion"),
-    ("cpl", "تكلفة الليد", "Cost per lead"),
+    ("cpl", "تكلفة العميل المحتمل", "Cost per lead"),
     ("renewal", "نسبة التجديد", "Renewal rate"),
-    ("teacher_cost", "أجر المعلم للحصة", "Teacher fee per lesson"),
-    ("marketing", "ميزانية التسويق", "Marketing budget"),
-    ("b2b_volume", "حجم المدارس والبرامج", "Schools & programs volume"),
+    ("teacher_cost", "أجر المعلم للمحاضرة", "Teacher fee per lecture"),
+    ("marketing", "عدد المحاضرات المجانية", "Free trial lectures"),
+    ("b2b_volume", "حجم الشراكات والبرامج", "Partnerships & programs volume"),
     ("payroll", "رواتب الفريق", "Team payroll"),
 ]
 
@@ -769,10 +833,11 @@ def _shock(a: dict, driver: str, f: float) -> dict:
         elif driver == "cpl":
             mk["cpl"] *= f
         elif driver == "marketing":
-            mk["budget_by_year"] = [b * f for b in mk["budget_by_year"]]
+            mk["trials_by_year"] = [b * f for b in mk["trials_by_year"]]
     if driver == "payroll":
         t = a["team"]
-        t["base_payroll"] *= f
+        for k in ("marketing_payroll", "admin_payroll", "cs_salary", "quality_salary", "media_buyer_salary"):
+            t[k] = float(t.get(k, 0)) * f
         for h in t.get("hires", []):
             h["salary"] = float(h.get("salary", 0)) * f
     return a

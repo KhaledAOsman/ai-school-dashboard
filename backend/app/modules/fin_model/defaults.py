@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import copy
 
-# calendar-month seasonality of the marketing budget (1 = normal month).
+# calendar-month seasonality of free trial lectures (1 = normal month). The
+# engine rescales it to average 1, so a year always has 12 x the monthly figure.
 # Saudi school calendar: summer holiday (Jun-Aug) is the main expansion
 # season (x2), with smaller peaks before the autumn / winter / Eid breaks.
 SEASONALITY = {
@@ -22,11 +23,18 @@ SEASONALITY = {
     "7": 2.0, "8": 1.5, "9": 1.1, "10": 1.0, "11": 1.3, "12": 1.2,
 }
 
+# bump with a one-time conversion in service.upgrade() when plan policy changes
+SCHEMA = 3
+
 DEFAULT_ASSUMPTIONS: dict = {
+    "schema": SCHEMA,
     "general": {
         "start_month": "2026-10",
         "horizon_months": 60,
         "weeks_per_month": 4.345,
+        # revenue is the subscriptions paid in the period ("billing");
+        # "delivery" recognises it as lessons are taught instead
+        "revenue_basis": "billing",
     },
     # ------------------------------------------------------------ markets
     # Marketing funnels. Every "funnel" revenue stream draws its new
@@ -37,8 +45,9 @@ DEFAULT_ASSUMPTIONS: dict = {
             "name_ar": "السعودية",
             "name_en": "Saudi Arabia",
             "start_month": "2026-10",
-            # base monthly ad budget per model year (before seasonality)
-            "budget_by_year": [15000, 20000, 28000, 35000, 42000],
+            # free trial lectures given per month (yearly average) - the volume driver.
+            # Ad spend is derived: trials / lead_to_trial = leads; paid leads x cost per lead.
+            "trials_by_year": [200, 350, 500, 650, 800],
             "seasonality": dict(SEASONALITY),
             "cpl": 46.0,                # cost per paid (ad) lead, SAR
             "organic_share": 0.25,      # share of all leads that come free (direct visits, referrals, organic social)
@@ -58,7 +67,7 @@ DEFAULT_ASSUMPTIONS: dict = {
             "name_ar": "الخليج",
             "name_en": "GCC",
             "start_month": "2027-09",
-            "budget_by_year": [0, 10000, 18000, 25000, 30000],
+            "trials_by_year": [0, 80, 150, 220, 300],
             "seasonality": dict(SEASONALITY),
             "cpl": 55.0,
             "organic_share": 0.10,
@@ -80,6 +89,7 @@ DEFAULT_ASSUMPTIONS: dict = {
     "streams": [
         {
             "id": "core_b2c",
+            "category": "b2c",
             "name_ar": "الاشتراك الأساسي (أفراد - السعودية)",
             "name_en": "Core subscription (B2C - KSA)",
             "enabled": True,
@@ -89,7 +99,7 @@ DEFAULT_ASSUMPTIONS: dict = {
             "funnel_share": 0.85,
             "start_month": "2026-10",
             "list_price": 850.0,
-            "avg_discount": 0.25,
+            "avg_discount": 0.30,       # discount applied (B2C maximum 30 %)
             "lessons": 12,
             "lessons_per_week": 2,
             "group_size": 1,
@@ -105,6 +115,7 @@ DEFAULT_ASSUMPTIONS: dict = {
         },
         {
             "id": "curriculum",
+            "category": "b2c",
             "name_ar": "كورسات البرمجة للمناهج السعودية (مجموعات صغيرة)",
             "name_en": "Saudi-curriculum coding courses (small groups)",
             "enabled": True,
@@ -129,12 +140,14 @@ DEFAULT_ASSUMPTIONS: dict = {
         },
         {
             "id": "schools",
-            "name_ar": "المدارس والشركات والشراكات (خصم 50%)",
-            "name_en": "Schools, companies & partnerships (50% off)",
+            "category": "b2b",
+            "name_ar": "الشراكات المؤسسية: المدارس والجمعيات والشركات",
+            "name_en": "Partnerships: schools, associations & companies",
             "enabled": True,
             "suggested": False,
             "driver": "growth",
-            "start_month": "2027-03",
+            # partnerships start with the second model year
+            "start_month": "2027-10",
             "initial_monthly": 20,
             "monthly_growth": 0.12,
             "max_monthly": 400,
@@ -157,6 +170,7 @@ DEFAULT_ASSUMPTIONS: dict = {
         },
         {
             "id": "nsma",
+            "category": "b2c",
             "name_ar": "برنامج أولمبياد البرمجة NSMA (السعودية)",
             "name_en": "NSMA programming olympiad program (KSA)",
             "enabled": True,
@@ -184,6 +198,7 @@ DEFAULT_ASSUMPTIONS: dict = {
         },
         {
             "id": "gcc_b2c",
+            "category": "b2c",
             "name_ar": "الاشتراك الأساسي (أفراد - الخليج)",
             "name_en": "Core subscription (B2C - GCC)",
             "enabled": True,
@@ -193,7 +208,7 @@ DEFAULT_ASSUMPTIONS: dict = {
             "funnel_share": 1.0,
             "start_month": "2027-09",
             "list_price": 1050.0,
-            "avg_discount": 0.25,
+            "avg_discount": 0.30,
             "lessons": 12,
             "lessons_per_week": 2,
             "group_size": 1,
@@ -208,6 +223,7 @@ DEFAULT_ASSUMPTIONS: dict = {
         },
         {
             "id": "summer_camp",
+            "category": "b2c",
             "name_ar": "المعسكرات الصيفية المكثفة (مقترح)",
             "name_en": "Intensive summer camps (suggested)",
             "enabled": True,
@@ -234,6 +250,7 @@ DEFAULT_ASSUMPTIONS: dict = {
         },
         {
             "id": "platform_license",
+            "category": "b2b",
             "name_ar": "ترخيص المنصة والمحتوى للمدارس - سنوي (مقترح)",
             "name_en": "Annual platform & content license for schools (suggested)",
             "enabled": False,
@@ -277,42 +294,44 @@ DEFAULT_ASSUMPTIONS: dict = {
     },
     # ---------------------------------------------------------------- team
     "team": {
-        # current fixed team (monthly salaries) - replaced by the staff list in Finance
-        "base_payroll": 4800.0,
-        "base_headcount": 5,
+        # current salaried staff by function (monthly) - follow the staff list in Finance
+        "marketing_payroll": 2400.0,      # marketing & design team today (incl. current media buyer)
+        "admin_payroll": 0.0,             # other salaried staff today
+        "base_headcount": 3,
         "annual_raise": 0.10,
         "raise_month": 1,          # calendar month when raises apply
         "employer_oncost": 0.0,    # GOSI / insurance on top of salary (0 for remote contractors)
         "intl_transfer_fee_pct": 0.015,  # bank fees on salaries paid abroad
-        # capacity-driven hiring
-        "cs_students_per_agent": 120,
+        # teachers: paid per lecture, no salary. One teacher gives 60-80 lectures a month.
+        "teacher_capacity_lessons": 70,
+        "teacher_onboarding_cost": 300.0,
+        # customer service: one agent handles this many trial bookings + subscriptions a month
+        "cs_load_per_agent": 400,
         "cs_salary": 1200.0,
         "cs_current_agents": 2,
-        # teacher capacity is counted in lessons: one teacher carries 60-70 students a month,
-        # and a 12-lesson plan is delivered over 1-2 months (~8 lessons per student per month)
-        "teacher_max_students": 65,
-        "teacher_lessons_per_student_month": 8.0,
-        "teachers_per_supervisor": 20,
-        "supervisor_salary": 3000.0,
-        "teacher_onboarding_cost": 300.0,
+        # lecture quality & monitoring team (new): reviews a sample of lectures, coaches teachers
+        "quality_start_month": "2027-01",
+        "quality_lectures_per_reviewer": 1500,
+        "quality_salary": 3000.0,
+        # media buyers join the marketing team as ad spend grows
         "ad_spend_per_media_buyer": 60000.0,
         "media_buyer_salary": 2500.0,
         "media_buyers_current": 1,
-        # planned hires (suggested plan; edit freely)
+        # planned hires (suggested plan; edit freely). category: marketing | cs | content | quality | admin
         "hires": [
-            {"role_ar": "مسؤول مبيعات المدارس والشراكات", "role_en": "Schools & partnerships sales", "month": "2027-02", "salary": 4000.0, "count": 1},
-            {"role_ar": "مدير عمليات", "role_en": "Operations manager", "month": "2027-04", "salary": 5000.0, "count": 1},
-            {"role_ar": "محاسب (دوام جزئي)", "role_en": "Accountant (part-time)", "month": "2027-06", "salary": 2500.0, "count": 1},
-            {"role_ar": "مسؤول التوسع الخليجي", "role_en": "GCC expansion lead", "month": "2027-08", "salary": 6000.0, "count": 1},
+            {"role_ar": "مسؤول مبيعات الشراكات المؤسسية", "role_en": "Partnerships sales lead", "month": "2027-08", "salary": 4000.0, "count": 1, "category": "marketing"},
+            {"role_ar": "مدير عمليات", "role_en": "Operations manager", "month": "2027-04", "salary": 5000.0, "count": 1, "category": "admin"},
+            {"role_ar": "محاسب (دوام جزئي)", "role_en": "Accountant (part-time)", "month": "2027-06", "salary": 2500.0, "count": 1, "category": "admin"},
+            {"role_ar": "مسؤول التوسع الخليجي", "role_en": "GCC expansion lead", "month": "2027-08", "salary": 6000.0, "count": 1, "category": "marketing"},
         ],
     },
     # --------------------------------------------------------- other opex
     "opex": [
-        {"id": "content", "name_ar": "تطوير المحتوى التعليمي", "name_en": "Curriculum & content development", "monthly": 4000.0, "start_month": "2026-10", "end_month": None, "growth_yoy": 0.15},
-        {"id": "tools", "name_ar": "الأدوات والاشتراكات (زوم، الذكاء الاصطناعي، الاتصالات)", "name_en": "Tools & subscriptions (Zoom, AI, telecom)", "monthly": 600.0, "start_month": "2026-10", "end_month": None, "growth_yoy": 0.30},
-        {"id": "marketing_content", "name_ar": "إنتاج مواد تسويقية", "name_en": "Marketing content production", "monthly": 1500.0, "start_month": "2026-10", "end_month": None, "growth_yoy": 0.20},
-        {"id": "legal", "name_ar": "التراخيص والمحاسب القانوني والرسوم الحكومية", "name_en": "Licences, auditor & government fees", "monthly": 1200.0, "start_month": "2027-01", "end_month": None, "growth_yoy": 0.05},
-        {"id": "accreditation", "name_ar": "الاعتمادات (STEM وغيرها)", "name_en": "Accreditations (STEM etc.)", "monthly": 250.0, "start_month": "2026-10", "end_month": None, "growth_yoy": 0.0},
+        {"id": "content", "category": "content", "name_ar": "فريق تطوير المحتوى والمناهج", "name_en": "Content & curriculum development team", "monthly": 6000.0, "start_month": "2026-10", "end_month": None, "growth_yoy": 0.15},
+        {"id": "tools", "category": "tools", "name_ar": "الاشتراكات الشهرية (منصات الحصص، أدوات الذكاء الاصطناعي، الاتصالات)", "name_en": "Monthly subscriptions (lesson platforms, AI tools, telecom)", "monthly": 800.0, "start_month": "2026-10", "end_month": None, "growth_yoy": 0.30},
+        {"id": "marketing_content", "category": "marketing_extra", "name_ar": "المؤثرون ومحتوى UGC والإنتاج التسويقي", "name_en": "Influencers, UGC & marketing production", "monthly": 3000.0, "start_month": "2026-10", "end_month": None, "growth_yoy": 0.25},
+        {"id": "legal", "category": "admin", "name_ar": "التراخيص والمحاسب القانوني والرسوم الحكومية", "name_en": "Licences, auditor & government fees", "monthly": 1200.0, "start_month": "2027-01", "end_month": None, "growth_yoy": 0.05},
+        {"id": "accreditation", "category": "admin", "name_ar": "الاعتمادات (STEM وغيرها)", "name_en": "Accreditations (STEM etc.)", "monthly": 250.0, "start_month": "2026-10", "end_month": None, "growth_yoy": 0.0},
     ],
     # --------------------------------------------------------------- capex
     "capex": [
@@ -327,10 +346,10 @@ DEFAULT_ASSUMPTIONS: dict = {
         "loan_rounding": 50000.0,
         "cash_buffer_months": 3,         # keep this many months of fixed costs as a cushion
         "loan_draw_month": "2026-11",
-        "loan_rate": 0.10,               # annual profit rate (SAIBOR + bank margin)
-        "loan_tenor_months": 72,
-        "loan_grace_months": 24,         # profit-only months before principal repayments
-        "loan_upfront_fee": 0.02,        # arrangement + Kafalah guarantee fee
+        "loan_rate": 0.0,                # interest-free financing (set a rate here if the lender charges one)
+        "loan_tenor_months": 84,
+        "loan_grace_months": 30,         # profit-only months before principal repayments (break-even is in year 3)
+        "loan_upfront_fee": 0.0,         # one-off arrangement / guarantee fee, if any
         "equity_injections": [],         # [{"month": "2027-01", "amount": 0}]
     },
     # ------------------------------------------------------------ valuation
@@ -343,9 +362,9 @@ DEFAULT_ASSUMPTIONS: dict = {
     # ------------------------------------------------------------ scenarios
     # multipliers applied on top of the base assumptions
     "scenarios": {
-        "conservative": {"conversion": 0.8, "cpl": 1.2, "renewal": 0.8, "growth_volume": 0.6, "price": 1.0, "delay_months": 3},
-        "base": {"conversion": 1.0, "cpl": 1.0, "renewal": 1.0, "growth_volume": 1.0, "price": 1.0, "delay_months": 0},
-        "optimistic": {"conversion": 1.2, "cpl": 0.9, "renewal": 1.15, "growth_volume": 1.3, "price": 1.0, "delay_months": 0},
+        "conservative": {"trials_volume": 0.85, "conversion": 0.8, "cpl": 1.2, "renewal": 0.8, "growth_volume": 0.6, "price": 1.0, "delay_months": 3},
+        "base": {"trials_volume": 1.0, "conversion": 1.0, "cpl": 1.0, "renewal": 1.0, "growth_volume": 1.0, "price": 1.0, "delay_months": 0},
+        "optimistic": {"trials_volume": 1.15, "conversion": 1.2, "cpl": 0.9, "renewal": 1.15, "growth_volume": 1.3, "price": 1.0, "delay_months": 0},
     },
     # assumption paths that follow the platform's actual data automatically
     "auto_fields": [
@@ -354,9 +373,11 @@ DEFAULT_ASSUMPTIONS: dict = {
         "markets.ksa.lead_to_trial",
         "markets.ksa.show_rate",
         "markets.ksa.trial_to_paid",
-        "streams.core_b2c.avg_discount",
         "streams.core_b2c.renewal_rate",
-        "team.base_payroll",
+        "team.marketing_payroll",
+        "team.admin_payroll",
+        "team.cs_current_agents",
+        "team.cs_salary",
         "team.base_headcount",
         "financing.opening_cash",
         "financing.owner_invested_to_date",

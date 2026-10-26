@@ -152,13 +152,38 @@ async def calibrate(db: AsyncSession, today: date | None = None) -> dict:
         values["streams.core_b2c.renewal_rate"] = min(renewals / eligible, 0.95)
         basis["streams.core_b2c.renewal_rate"] = f"{renewals} تجديد من {eligible} عميل أنهى دورته الأولى"
 
-    # current fixed team
-    t = (await _rows(db, "SELECT count(*) n, coalesce(sum(base_salary), 0) s FROM staff_members WHERE is_active AND base_salary > 0"))[0]
-    if int(t["n"]):
-        values["team.base_payroll"] = _f(t["s"])
-        values["team.base_headcount"] = int(t["n"])
-        basis["team.base_payroll"] = f"{int(t['n'])} موظف براتب ثابت (الموظفون في المالية)"
-        basis["team.base_headcount"] = basis["team.base_payroll"]
+    # current salaried team by function (Finance > staff, grouped by department name)
+    staff = await _rows(db, """
+        SELECT coalesce(d.name, '') dep, count(*) n, coalesce(sum(s.base_salary), 0) s
+        FROM staff_members s LEFT JOIN staff_departments d ON d.id = s.department_id
+        WHERE s.is_active AND s.base_salary > 0 GROUP BY 1""")
+    if staff:
+        mkt = cs = adm = 0.0
+        cs_n = heads = 0
+        for r in staff:
+            name = str(r["dep"]).lower()
+            amt, n = _f(r["s"]), int(r["n"])
+            heads += n
+            if "تسويق" in name or "market" in name or "جرافيك" in name:
+                mkt += amt
+            elif "خدمة" in name or "support" in name or "customer" in name:
+                cs += amt
+                cs_n += n
+            elif "معلم" in name or "teacher" in name or "محتوى" in name or "content" in name:
+                continue  # paid per lecture / per piece: costed elsewhere in the model
+            else:
+                adm += amt
+        values["team.marketing_payroll"] = mkt
+        values["team.admin_payroll"] = adm
+        values["team.base_headcount"] = heads
+        basis["team.marketing_payroll"] = f"رواتب قسم التسويق في المالية: {mkt:,.0f} ريال"
+        basis["team.admin_payroll"] = f"رواتب الأقسام الأخرى في المالية: {adm:,.0f} ريال"
+        basis["team.base_headcount"] = f"{heads} موظف براتب ثابت (الموظفون في المالية)"
+        if cs_n:
+            values["team.cs_current_agents"] = cs_n
+            values["team.cs_salary"] = cs / cs_n
+            basis["team.cs_current_agents"] = f"{cs_n} موظف في قسم خدمة العملاء"
+            basis["team.cs_salary"] = f"متوسط راتب خدمة العملاء: {cs / cs_n:,.0f} ريال"
 
     # money in / out so far
     funding = await _rows(db, "SELECT to_char(funding_date, 'YYYY-MM') m, sum(amount) a FROM finance_funding GROUP BY 1 ORDER BY 1")

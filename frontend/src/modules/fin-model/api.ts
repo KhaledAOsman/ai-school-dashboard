@@ -1,6 +1,7 @@
 import { api } from "@/lib/apiClient";
 
 export type Scenario = "conservative" | "base" | "optimistic";
+export type ExpenseCategory = "teachers" | "content" | "marketing_team" | "ads" | "marketing_extra" | "cs" | "quality" | "tools" | "commissions" | "payment_fees" | "admin" | "launch";
 
 export interface VersionMeta {
   id: string;
@@ -16,14 +17,14 @@ export interface VersionMeta {
 
 export interface Market {
   id: string; name_ar: string; name_en: string; start_month: string;
-  budget_by_year: number[]; seasonality: Record<string, number>;
+  trials_by_year: number[]; seasonality: Record<string, number>;
   cpl: number; organic_share: number; organic_share_target: number; cpl_growth_yoy: number;
   lead_to_trial: number; lead_to_trial_target: number; show_rate: number; show_rate_target: number;
   trial_to_paid: number; trial_to_paid_target: number; ramp_months: number; trial_cost: number;
 }
 
 export interface Stream {
-  id: string; name_ar: string; name_en: string; enabled: boolean; suggested: boolean;
+  id: string; name_ar: string; name_en: string; enabled: boolean; suggested: boolean; category: Segment;
   driver: "funnel" | "growth"; market?: string; funnel_share: number; start_month: string;
   initial_monthly: number; monthly_growth: number; max_monthly: number; active_months: number[];
   list_price: number; avg_discount: number; lessons: number; lessons_per_week: number; service_months?: number;
@@ -32,21 +33,24 @@ export interface Stream {
   payment_lag_months: number; uses_gateway: boolean; launch_cost: number;
 }
 
-export interface Hire { role_ar: string; role_en: string; month: string; salary: number; count: number }
-export interface OpexLine { id: string; name_ar: string; name_en: string; monthly: number; start_month: string; end_month: string | null; growth_yoy: number }
+export type Segment = "b2c" | "b2b";
+export type HireCategory = "marketing" | "cs" | "content" | "quality" | "admin";
+export interface Hire { role_ar: string; role_en: string; month: string; salary: number; count: number; category: HireCategory }
+export interface OpexLine { id: string; category: ExpenseCategory; name_ar: string; name_en: string; monthly: number; start_month: string; end_month: string | null; growth_yoy: number }
 export interface CapexItem { name_ar: string; name_en: string; month: string; amount: number; life_months: number }
-export interface ScenarioParams { conversion: number; cpl: number; renewal: number; growth_volume: number; price: number; delay_months: number }
+export interface ScenarioParams { trials_volume: number; conversion: number; cpl: number; renewal: number; growth_volume: number; price: number; delay_months: number }
 
 export interface Assumptions {
-  general: { start_month: string; horizon_months: number; weeks_per_month: number };
+  general: { start_month: string; horizon_months: number; weeks_per_month: number; revenue_basis: "billing" | "delivery" };
   markets: Market[];
   streams: Stream[];
   tax: { vat_rate: number; vat_mode: "auto" | "month" | "never"; vat_threshold: number; vat_from_month: string; zakat_rate: number; zakat_pay_lag_months: number };
   payments: { gateway_fee_pct: number; gateway_fee_fixed: number };
   team: {
-    base_payroll: number; base_headcount: number; annual_raise: number; raise_month: number; employer_oncost: number;
-    intl_transfer_fee_pct: number; cs_students_per_agent: number; cs_salary: number; cs_current_agents: number;
-    teacher_max_students: number; teacher_lessons_per_student_month: number; teachers_per_supervisor: number; supervisor_salary: number; teacher_onboarding_cost: number;
+    marketing_payroll: number; admin_payroll: number; base_headcount: number; annual_raise: number; raise_month: number; employer_oncost: number;
+    intl_transfer_fee_pct: number; teacher_capacity_lessons: number; teacher_onboarding_cost: number;
+    cs_load_per_agent: number; cs_salary: number; cs_current_agents: number;
+    quality_start_month: string; quality_lectures_per_reviewer: number; quality_salary: number;
     ad_spend_per_media_buyer: number; media_buyer_salary: number; media_buyers_current: number; hires: Hire[];
   };
   opex: OpexLine[];
@@ -73,7 +77,8 @@ export interface MonthRow {
   cfo: number; capex: number; loan_draw: number; loan_principal: number; equity_injection: number; vat_paid: number; zakat_paid: number;
   net_cash_flow: number; cash: number; receivables: number; deferred_revenue: number; vat_payable: number; zakat_payable: number;
   fixed_assets: number; loan_balance: number; equity: number; teacher_lessons: number;
-  headcount: { fixed: number; cs_agents: number; supervisors: number; media_buyers: number; teachers: number };
+  headcount: { fixed: number; cs_agents: number; quality: number; media_buyers: number; teachers: number };
+  subscriptions: number; expense_by_category: Record<ExpenseCategory, number>;
 }
 
 export interface YearRow extends Omit<MonthRow, "i" | "month" | "vat_registered" | "active_students" | "headcount" | "new_by_stream" | "teacher_lessons"> {
@@ -108,7 +113,7 @@ export interface Valuation {
 export interface ModelResult {
   scenario: Scenario; start_month: string; months: MonthRow[]; years: YearRow[]; kpis: Kpis;
   unit_economics: UnitEconomics[]; valuation: Valuation;
-  streams: { id: string; name_ar: string; name_en: string; suggested: boolean; driver: string; start_month: string }[];
+  streams: { id: string; name_ar: string; name_en: string; suggested: boolean; driver: string; start_month: string; category: Segment }[];
   opex_lines: { id: string; name_ar: string; name_en: string }[];
   checks: Record<string, boolean | number>;
   calibration?: { as_of: string; values: Record<string, number>; basis: Record<string, string> };

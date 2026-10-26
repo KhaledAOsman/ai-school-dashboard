@@ -20,24 +20,24 @@ export default function ScenariosPage() {
     staleTime: 120_000,
   });
   const risks = (ar ? [
-    ["الاعتماد على المدارس", "عقود شراكة على فصول كاملة + مسؤول مبيعات مخصص من فبراير 2027؛ السيناريو المتحفظ بيقلل حجمها 40%."],
-    ["تحويل الحصة المجانية لاشتراك", "متابعة كل حصة تجريبية خلال 24 ساعة وعرض لمدة محدودة؛ بيتراجع شهريًا في «الفعلي مقابل الخطة»."],
-    ["التجديد", "منهج بمستويات وشهادات + تقارير لولي الأمر؛ أكبر عامل مؤثر في تحليل الحساسية تحت."],
-    ["تكلفة الإعلانات", "زيادة العملاء من المعارف والزيارات المباشرة، وميزانية موسمية بتتضاعف في الصيف بس."],
-    ["جودة المعلمين مع التوسع", "مشرف أكاديمي لكل 20 معلم وتكلفة تدريب لكل معلم جديد محسوبين في الخطة."],
-    ["التنظيم والترخيص", "ترخيص التعليم الإلكتروني والتسجيل الضريبي ضمن بند الرسوم الحكومية."],
+    ["الاعتماد على الشراكات المؤسسية", "تبدأ الشراكات في السنة الثانية بعقود على فصول كاملة ومسؤول مبيعات مخصص، ويخفض السيناريو المتحفظ حجمها 40%."],
+    ["التحويل من المحاضرة المجانية", "متابعة كل محاضرة تجريبية خلال 24 ساعة بعرض محدد المدة، ومراجعة النسبة شهريًا في «الفعلي مقابل الخطة»."],
+    ["التجديد", "منهج متدرج المستويات مع شهادات وتقارير لأولياء الأمور، وهو أكثر العوامل تأثيرًا في تحليل الحساسية."],
+    ["تكلفة الإعلانات", "زيادة العملاء القادمين عبر الإحالات والزيارات المباشرة والمؤثرين، وتركيز الإنفاق في المواسم."],
+    ["جودة المحاضرات مع التوسع", "فريق جودة يراجع عينات من المحاضرات ويقيّم المعلمين، مع تكلفة تأهيل لكل معلم جديد."],
+    ["التنظيم والترخيص", "ترخيص التعليم الإلكتروني والتسجيل الضريبي ضمن بند الرسوم النظامية."],
   ] : [
-    ["Dependence on schools", "Whole-class partnership contracts + a dedicated sales lead from Feb 2027; the conservative case cuts volume 40%."],
-    ["Free-trial conversion", "Follow up every trial within 24h with a time-limited offer; reviewed monthly in Actual vs plan."],
-    ["Renewals", "Levelled curriculum with certificates and parent reports; the biggest driver in the sensitivity below."],
-    ["Ad costs", "Grow referrals and direct visits; seasonal budget that doubles only in summer."],
-    ["Teacher quality at scale", "One academic supervisor per 20 teachers and an onboarding cost per new teacher are in the plan."],
-    ["Regulation & licensing", "E-learning licence and VAT registration are covered by the government-fees line."],
+    ["Dependence on partnerships", "Partnerships start in year 2 with whole-class contracts and a dedicated sales lead; the conservative case cuts volume 40%."],
+    ["Free-lecture conversion", "Follow up every trial lecture within 24h with a time-limited offer; reviewed monthly in Actual vs plan."],
+    ["Renewals", "Levelled curriculum with certificates and parent reports; the strongest driver in the sensitivity analysis."],
+    ["Ad costs", "Grow referrals, direct visits and influencer reach; concentrate spend in peak seasons."],
+    ["Lecture quality at scale", "A quality team reviews sample lectures and evaluates teachers, with an onboarding cost per new teacher."],
+    ["Regulation & licensing", "E-learning licence and VAT registration are covered by the statutory-fees line."],
   ]);
   const head = (
     <>
       <ChapterHeader id="scenarios" />
-      <Block n="6.1" title={ar ? "أهم المخاطر وإزاي بنديرها" : "Key risks and how we manage them"}>
+      <Block n="8.1" title={ar ? "أهم المخاطر وخطة التعامل معها" : "Key risks and how we manage them"}>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {risks.map(([h, d], i) => (
             <div key={h} className={`${CARD} p-4 print:shadow-none`}>
@@ -63,7 +63,7 @@ export default function ScenariosPage() {
   return (
     <div className="space-y-5">
       {head}
-      <Block n="6.2" title={ar ? "3 سيناريوهات" : "Three scenarios"} lede={ar ? "نفس الخطة لو الأمور مشيت أبطأ (متحفظ) أو أسرع (متفائل) من المتوقع." : "The same plan if things go slower (conservative) or faster (optimistic) than expected."}><span /></Block>
+      <Block n="8.2" title={ar ? "ثلاثة سيناريوهات" : "Three scenarios"} lede={ar ? "الخطة نفسها في حال جاءت النتائج أبطأ (متحفظ) أو أسرع (متفائل) من المتوقع." : "The same plan if things go slower (conservative) or faster (optimistic) than expected."}><span /></Block>
       <div className="grid gap-3 md:grid-cols-3">
         {SC.map((k, i) => {
           const x = s.scenarios[k];
@@ -74,7 +74,7 @@ export default function ScenariosPage() {
                 <dt className="text-ink-600">{t("ebitda_y5")}</dt><dd className={`ltr-content text-end font-bold ${x.ebitda_y5 >= 0 ? "text-[#136c3a]" : "text-[#a02a24]"}`}>{big(x.ebitda_y5)}</dd>
                 <dt className="text-ink-600">{t("breakeven")}</dt><dd className="text-end font-semibold text-ink-900">{x.breakeven ? monthLabel(x.breakeven, lang) : t("not_reached")}</dd>
                 <dt className="text-ink-600">{t("loan")}</dt><dd className="ltr-content text-end font-semibold text-ink-900">{big(x.loan)}</dd>
-                <dt className="text-ink-600">{ar ? "التمويل بدون قرض" : "Need without loan"}</dt><dd className="ltr-content text-end font-semibold text-ink-900">{big(x.funding_need)}</dd>
+                <dt className="text-ink-600">{ar ? "العجز النقدي دون تمويل" : "Need without loan"}</dt><dd className="ltr-content text-end font-semibold text-ink-900">{big(x.funding_need)}</dd>
                 <dt className="text-ink-600">{t("ev")}</dt><dd className="ltr-content text-end font-semibold text-ink-900">{big(x.enterprise_value)}</dd>
               </dl>
             </Panel>
@@ -138,7 +138,7 @@ export default function ScenariosPage() {
                 {SC.map((k) => <th key={k} className="px-2 py-2 text-start font-semibold">{t(`sc_${k}` as "sc_base")}</th>)}
               </tr></thead>
               <tbody>
-                {([["conversion", "التحويل", "Conversion"], ["cpl", "تكلفة الليد", "Cost per lead"], ["renewal", "التجديد", "Renewal"], ["growth_volume", "حجم المدارس والبرامج", "Schools & programs volume"], ["price", "السعر", "Price"], ["delay_months", "تأخير المنتجات الجديدة (شهور)", "Delay of new products (months)"]] as const).map(([key, a, e]) => (
+                {([["trials_volume", "عدد المحاضرات المجانية", "Free trial lectures"], ["conversion", "التحويل إلى اشتراك", "Conversion"], ["cpl", "تكلفة العميل المحتمل", "Cost per lead"], ["renewal", "التجديد", "Renewal"], ["growth_volume", "حجم الشراكات والبرامج", "Partnerships & programs volume"], ["price", "السعر", "Price"], ["delay_months", "تأخير المنتجات الجديدة (بالأشهر)", "Delay of new products (months)"]] as const).map(([key, a, e]) => (
                   <tr key={key} className="border-b border-[#f0f2f7]">
                     <td className="px-2 py-1.5 text-ink-700">{ar ? a : e}</td>
                     {SC.map((k) => <td key={k} className="ltr-content px-2 py-1.5 font-semibold">{key === "delay_months" ? sp[k][key] : `×${sp[k][key]}`}</td>)}
@@ -149,7 +149,7 @@ export default function ScenariosPage() {
           </div>
         </Panel>
       )}
-      <Note>{ar ? "أكبر الأعمدة في الرسم هي المتغيرات اللي لازم نثبتها بالأرقام الفعلية أولًا قبل التوسع. المحلل المالي يقدر يغير مضاعفات كل سيناريو من صفحة الافتراضات." : "The longest bars are the drivers to prove with actual data before scaling. The analyst can change each scenario's multipliers on the Assumptions page."}</Note>
+      <Note>{ar ? "تمثل الأعمدة الأطول في الرسم المتغيرات الأكثر تأثيرًا، ويجب التحقق منها بالأرقام الفعلية قبل التوسع. ويمكن للمحلل المالي تعديل مضاعفات كل سيناريو من صفحة الافتراضات." : "The longest bars are the drivers to prove with actual data before scaling. The analyst can change each scenario's multipliers on the Assumptions page."}</Note>
       <ChapterNav id="scenarios" />
     </div>
   );

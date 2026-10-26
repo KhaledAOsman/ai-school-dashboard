@@ -26,6 +26,8 @@ export function StatementTable({ lines, cols, labels, totalCol }: {
               );
             }
             const vals = cols.map((c) => ln.value(c));
+            // detail lines that are zero in every column (e.g. no finance cost on an interest-free loan) are left out
+            if (ln.indent && !ln.kind && vals.every((v) => Math.abs(v) < 0.5)) return null;
             const strong = ln.kind === "subtotal" || ln.kind === "total";
             return (
               <tr key={ln.key} className={clsx(strong && "font-semibold", ln.kind === "total" && "text-[13.5px]")}>

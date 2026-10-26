@@ -23,12 +23,12 @@ export default function StatementsPage() {
       <ChapterHeader id="statements" />
       <ul className="grid gap-3 md:grid-cols-3">
         {(ar ? [
-          ["قائمة الدخل", "إحنا كسبنا ولا خسرنا؟ الإيراد ناقص كل التكاليف."],
-          ["التدفقات النقدية", "الفلوس دخلت وخرجت إمتى؟ (الاشتراك بيتدفع مقدم، والمدارس بتدفع بعد شهرين)."],
-          ["الميزانية", "عندنا إيه وعلينا إيه في آخر كل فترة — ولازم الطرفين يتساووا."],
+          ["قائمة الدخل", "توضح الربح أو الخسارة: الإيرادات مطروحًا منها جميع التكاليف."],
+          ["التدفقات النقدية", "توضح توقيت دخول النقد وخروجه؛ إذ تُسدَّد الاشتراكات الفردية مقدمًا، والمؤسسية بعد شهرين من الفوترة."],
+          ["المركز المالي", "يوضح الأصول والالتزامات وحقوق الملكية في نهاية كل فترة، ويتساوى طرفاه دائمًا."],
         ] : [
           ["Income statement", "Did we make or lose money? Revenue minus all costs."],
-          ["Cash flow", "When did cash come in and go out? (Plans are prepaid; schools pay two months later.)"],
+          ["Cash flow", "When cash comes in and goes out; individual plans are prepaid, institutional ones are paid two months after billing."],
           ["Balance sheet", "What we own and owe at each period end — both sides must match."],
         ]).map(([h, d]) => (
           <li key={h} className="rounded-xl border border-[#e1e7ef] bg-white p-4"><p className="text-[14.5px] font-bold text-ink-900">{h}</p><p className="mt-1 text-[13.5px] leading-6 text-ink-600">{d}</p></li>
@@ -40,7 +40,7 @@ export default function StatementsPage() {
           <Segmented value={String(year)} onChange={(v) => setYear(Number(v))}
             options={r.years.map((y) => ({ value: String(y.year), label: `${t("y")}${y.year}` }))} />
         )}
-        <span className="text-[12.5px] text-ink-600">{ar ? "المبالغ بالريال السعودي — السالب بين قوسين. السنة المالية للنموذج تبدأ أكتوبر." : "SAR — negatives in brackets. Model years start in October."}</span>
+        <span className="text-[12.5px] text-ink-600">{ar ? "المبالغ بالريال السعودي، والقيم السالبة بين قوسين. تبدأ سنة النموذج في أكتوبر." : "SAR — negatives in brackets. Model years start in October."}</span>
       </div>
       <Panel title={t("income_statement")}>
         <StatementTable lines={incomeLines(r)} cols={cols} labels={labels} totalCol={flowTotal} />
@@ -53,8 +53,8 @@ export default function StatementsPage() {
       </Panel>
       <Note>
         {ar
-          ? "الإيراد يُعترف به مع تقديم الحصص (الاشتراك المدفوع مقدمًا يظهر كإيراد مقدم حتى تُقدَّم حصصه). المدارس تدفع بعد شهرين (مستحقات). المعلم يُدفع له عن كل حصة محجوزة حتى لو الطالب غاب."
-          : "Revenue is recognised as lessons are delivered (prepaid subscriptions sit in deferred revenue until taught). Schools pay two months after billing (receivables). Teachers are paid for every booked lesson, even if the student misses it."}
+          ? "يُحتسب الإيراد على أساس الاشتراكات المدفوعة في الفترة، وتُحمَّل أجور محاضراتها في الفترة نفسها. تُسدِّد الجهات المؤسسية بعد شهرين من الفوترة فتظهر كذمم مدينة، ويُدفع للمعلم عن كل محاضرة محجوزة حتى عند غياب الطالب."
+          : "Revenue is the subscriptions paid in the period, with the cost of their lectures charged in the same period. Institutions pay two months after billing (receivables); teachers are paid for every booked lecture, even if the student is absent."}
       </Note>
       <ChapterNav id="statements" />
     </div>

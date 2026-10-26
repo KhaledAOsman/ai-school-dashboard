@@ -10,25 +10,28 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Reveal } from "@/components/motion";
 import { useFM } from "../context";
 
-export interface Chapter { to: string; ar: string; en: string; lede_ar: string; lede_en: string }
+export interface Chapter { to: string; ar: string; en: string; lede_ar: string; lede_en: string; short?: [string, string] }
 
 export const CHAPTERS: Chapter[] = [
-  { to: "overview", ar: "الملخص", en: "Summary",
-    lede_ar: "المشروع والأرقام الأساسية في صفحة واحدة.", lede_en: "The business and its headline numbers on one page." },
-  { to: "how-it-works", ar: "كيف يعمل المشروع", en: "How the business works",
-    lede_ar: "رحلة الطالب من الإعلان حتى التجديد، وإيه اللي بيفضل لنا من كل اشتراك.", lede_en: "The student's journey from ad to renewal, and what we keep from every subscription." },
-  { to: "growth", ar: "خطة النمو", en: "Growth plan",
-    lede_ar: "حجم السوق، والمنتجات الجديدة، والتوسع سنة بسنة.", lede_en: "The market, the new products and the expansion year by year." },
-  { to: "statements", ar: "القوائم المالية", en: "Financial statements",
-    lede_ar: "قائمة الدخل والتدفقات النقدية والميزانية لخمس سنوات.", lede_en: "Income statement, cash flow and balance sheet for five years." },
-  { to: "funding", ar: "التمويل والعائد", en: "Funding & returns",
-    lede_ar: "كام محتاجين، هيتصرف في إيه، وإزاي هيرجع.", lede_en: "How much we need, what it pays for and how it comes back." },
-  { to: "scenarios", ar: "المخاطر والسيناريوهات", en: "Risks & scenarios",
-    lede_ar: "إيه اللي ممكن يغيّر النتائج، وإزاي بنديره.", lede_en: "What could change the outcome, and how we manage it." },
+  { to: "overview", short: ["الملخص", "Summary"], ar: "الملخص التنفيذي", en: "Executive summary",
+    lede_ar: "المشروع ووضعه الحالي وأهم أرقام الخطة في صفحة واحدة.", lede_en: "The business, where it stands today and the plan's key figures on one page." },
+  { to: "business-model", short: ["نموذج العمل", "Model"], ar: "نموذج العمل", en: "Business model",
+    lede_ar: "كيف يصل العميل إلينا، وماذا يشتري، ومن يقدّم الخدمة.", lede_en: "How customers reach us, what they buy and who delivers the service." },
+  { to: "unit-economics", short: ["اقتصاديات الاشتراك", "Unit economics"], ar: "اقتصاديات الاشتراك", en: "Unit economics",
+    lede_ar: "إيراد الاشتراك الواحد وتكلفته وربحه، وتكلفة الحصول على مشترك جديد.", lede_en: "Revenue, cost and profit of one subscription, and the cost of winning a new subscriber." },
+  { to: "sales-plan", short: ["المبيعات", "Sales"], ar: "خطة المبيعات والإيرادات", en: "Sales & revenue plan",
+    lede_ar: "عدد المحاضرات المجانية والاشتراكات المدفوعة شهريًا وسنويًا، والإيراد الناتج عنها.", lede_en: "Free lectures and paid subscriptions per month and per year, and the revenue they produce." },
+  { to: "expenses", short: ["المصروفات", "Expenses"], ar: "المصروفات واستخدام الأموال", en: "Expenses & use of funds",
+    lede_ar: "أين تُصرف الأموال، موزعة على بنود واضحة لكل سنة.", lede_en: "Where the money goes, by clear category for every year." },
+  { to: "statements", short: ["القوائم المالية", "Statements"], ar: "القوائم المالية", en: "Financial statements",
+    lede_ar: "قائمة الدخل والتدفقات النقدية والمركز المالي لخمس سنوات.", lede_en: "Income statement, cash flow and balance sheet for five years." },
+  { to: "funding", short: ["التمويل", "Funding"], ar: "التمويل والعائد", en: "Funding & returns",
+    lede_ar: "حجم التمويل المطلوب وأوجه استخدامه وطريقة سداده والعائد المتوقع.", lede_en: "The funding required, how it is used, how it is repaid and the expected return." },
+  { to: "scenarios", short: ["المخاطر", "Risks"], ar: "المخاطر والسيناريوهات", en: "Risks & scenarios",
+    lede_ar: "العوامل التي قد تغيّر النتائج، وخطة التعامل معها.", lede_en: "What could change the outcome, and how it is managed." },
 ];
 
 export const TOOLS = [
-  { to: "unit-economics", ar: "اقتصاديات الوحدة", en: "Unit economics" },
   { to: "actual-vs-plan", ar: "الفعلي مقابل الخطة", en: "Actual vs plan" },
   { to: "assumptions", ar: "الافتراضات", en: "Assumptions" },
   { to: "versions", ar: "النسخ والنشر", en: "Versions", editorsOnly: true },
@@ -102,10 +105,9 @@ export function Block({ n, title, lede, children, className }: { n?: string; tit
 }
 
 const TOOL_LEDE: Record<string, [string, string]> = {
-  "unit-economics": ["تحليل تفصيلي لكل منتج: الهامش، قيمة العميل، وتكلفة اكتسابه.", "Per-product detail: margin, customer value and acquisition cost."],
-  "actual-vs-plan": ["مقارنة شهرية بين أرقام الداشبورد الفعلية وأرقام الخطة.", "Monthly comparison of actual dashboard figures with the plan."],
-  assumptions: ["كل رقم بتعتمد عليه الخطة. التعديل متاح للمحلل المالي على المسودات فقط.", "Every number the plan relies on. Editable by the financial analyst on drafts only."],
-  versions: ["المسودات والنسخ المنشورة للمستثمرين وسجل التعديلات.", "Drafts, versions published to investors and the change history."],
+  "actual-vs-plan": ["مقارنة شهرية بين الأرقام الفعلية في لوحة التحكم وأرقام الخطة.", "Monthly comparison of actual dashboard figures with the plan."],
+  assumptions: ["جميع المدخلات التي تُبنى عليها الخطة. يعدّلها المحلل المالي في المسودات فقط.", "Every input the plan is built on. Editable by the financial analyst on drafts only."],
+  versions: ["المسودات والنسخ المعتمدة للمستثمرين وسجل التعديلات.", "Drafts, versions published to investors and the change history."],
 };
 
 export function ToolHeader({ to }: { to: string }) {

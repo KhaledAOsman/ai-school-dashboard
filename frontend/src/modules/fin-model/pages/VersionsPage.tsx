@@ -28,7 +28,7 @@ export default function VersionsPage() {
   return (
     <div className="grid items-start gap-5 xl:grid-cols-[1fr_380px]">
       <div className="space-y-4">
-        <Note>{ar ? "المحلل يعدّل المسودات بحرية. لما المالك يدوس «نشر» النسخة تتقفل بأرقامها وبيانات التشغيل الفعلية لحظة النشر، وهي اللي يشوفها المستثمرون. لأي تعديل بعد النشر اعمل نسخة جديدة منها." : "The analyst edits drafts freely. When the owner publishes, the version is locked together with the actual data at that moment — that is what investors see. To change a published version, create a copy."}</Note>
+        <Note>{ar ? "يعدّل المحلل المالي المسودات بحرية. عند اعتماد المالك نسخة بالضغط على «نشر» تُقفل النسخة بأرقامها وبيانات التشغيل الفعلية في تاريخ النشر، وهي النسخة التي يطّلع عليها المستثمرون. لأي تعديل لاحق تُنشأ نسخة جديدة منها." : "The analyst edits drafts freely. When the owner publishes, the version is locked together with the actual data at that moment — that is what investors see. To change a published version, create a copy."}</Note>
         {versions.map((v) => (
           <div key={v.id} className={clsx(CARD, "p-4", v.id === version?.id && "ring-2 ring-brand-600")}>
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -44,7 +44,7 @@ export default function VersionsPage() {
               <div className="flex flex-wrap gap-2">
                 {v.id !== version?.id && <button type="button" onClick={() => setVersionId(v.id)} className="rounded-full border border-[#e1e7ef] px-3 py-1.5 text-[13px] font-semibold text-ink-700 hover:bg-brand-50">{ar ? "عرض" : "Open"}</button>}
                 {canPublish && v.status === "draft" && (
-                  <button type="button" disabled={publish.isPending} onClick={() => { if (window.confirm(ar ? `نشر «${v.name}» للمستثمرين؟ النسخة هتتقفل.` : `Publish “${v.name}” to investors? It will be locked.`)) publish.mutate(v.id); }}
+                  <button type="button" disabled={publish.isPending} onClick={() => { if (window.confirm(ar ? `نشر «${v.name}» للمستثمرين؟ ستُقفل النسخة بعد النشر.` : `Publish “${v.name}” to investors? It will be locked.`)) publish.mutate(v.id); }}
                     className="rounded-full bg-brand-600 px-3.5 py-1.5 text-[13px] font-semibold text-white hover:bg-brand-700">{ar ? "نشر للمستثمرين" : "Publish"}</button>
                 )}
                 {canPublish && (

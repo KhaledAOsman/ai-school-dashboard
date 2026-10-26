@@ -7,8 +7,10 @@ import { Panel } from "../components/ui";
 import { StatementTable } from "../components/StatementTable";
 import { balanceLines, cashLines, incomeLines } from "../components/statements";
 import OverviewPage from "./OverviewPage";
-import HowItWorksPage from "./HowItWorksPage";
-import GrowthPage from "./GrowthPage";
+import BusinessModelPage from "./HowItWorksPage";
+import UnitEconomicsPage from "./UnitEconomicsPage";
+import SalesPlanPage from "./GrowthPage";
+import ExpensesPage from "./ExpensesPage";
 import FundingPage from "./FundingPage";
 import ScenariosPage from "./ScenariosPage";
 import { ChapterHeader, ReportMode } from "../components/chapters";
@@ -41,8 +43,10 @@ export default function ReportPage() {
       </header>
       <ReportMode.Provider value>
         <OverviewPage />
-        <HowItWorksPage />
-        <GrowthPage />
+        <BusinessModelPage />
+        <UnitEconomicsPage />
+        <SalesPlanPage />
+        <ExpensesPage />
         <div className="space-y-5">
           <ChapterHeader id="statements" />
           <Panel title={`${t("income_statement")} (${monthLabel(r.years[0].from, lang)} – ${monthLabel(r.years[r.years.length - 1].to, lang)})`}>

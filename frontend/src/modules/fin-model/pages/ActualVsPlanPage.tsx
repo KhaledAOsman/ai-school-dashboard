@@ -54,7 +54,7 @@ export default function ActualVsPlanPage() {
   const labels: Record<Metric, [string, string]> = {
     sales: ["مبيعات الاشتراكات (المدفوع)", "Subscription sales (paid)"],
     subs: ["الاشتراكات (جديد + تجديد)", "Subscriptions (new + renewals)"],
-    leads: ["الليدز", "Leads"],
+    leads: ["العملاء المحتملون", "Leads"],
     ads: ["الإنفاق الإعلاني", "Ad spend"],
     spend: ["إجمالي المصروفات", "Total spend"],
   };
@@ -72,7 +72,7 @@ export default function ActualVsPlanPage() {
         <Kpi label={ar ? "اشتراكات مدفوعة" : "Paid subscriptions"} value={String(tot.subscriptions)} sub={ar ? `${tot.customers} عميل، ${tot.renewals} تجديد` : `${tot.customers} customers, ${tot.renewals} renewals`} delay={120} />
         <Kpi label={ar ? "مبيعات محصلة" : "Sales collected"} value={big(tot.sales_paid)} sub={ar ? `خصومات ${money(tot.sales_discount)} ر.س` : `Discounts SAR ${money(tot.sales_discount)}`} delay={180} />
       </div>
-      <Panel title={t("tab_actual")} subtitle={ar ? `بيانات حية من الداشبورد حتى ${aq.data.as_of}. الشهر الحالي جزئي.` : `Live data from the dashboard as of ${aq.data.as_of}. The current month is partial.`}
+      <Panel title={t("tab_actual")} subtitle={ar ? `بيانات فعلية من لوحة التحكم حتى ${aq.data.as_of}. الشهر الحالي جزئي.` : `Live data from the dashboard as of ${aq.data.as_of}. The current month is partial.`}
         action={<Segmented size="sm" value={metric} onChange={setMetric} options={(Object.keys(labels) as Metric[]).map((m) => ({ value: m, label: labels[m][ar ? 0 : 1] }))} />}>
         <div className="h-[300px]" dir="ltr">
           <ResponsiveContainer>
@@ -125,7 +125,7 @@ export default function ActualVsPlanPage() {
           </table>
         </div>
       </Panel>
-      <Note>{ar ? "الأشهر قبل بداية الخطة (أكتوبر 2026) فعلي فقط. المبيعات = اللي دفعه العملاء فعلًا في «الاشتراكات»، والمصروفات من «الفواتير والمصروفات» حسب شهر الاستحقاق." : "Months before the plan start (Oct 2026) are actuals only. Sales = what customers actually paid (Subscriptions); spend comes from Invoices & expenses by accrual month."}</Note>
+      <Note>{ar ? "الأشهر السابقة لبداية الخطة (أكتوبر 2026) تعرض الفعلي فقط. المبيعات هي المبالغ التي سددها العملاء فعليًا في «الاشتراكات»، والمصروفات من «الفواتير والمصروفات» حسب شهر الاستحقاق." : "Months before the plan start (Oct 2026) are actuals only. Sales = what customers actually paid (Subscriptions); spend comes from Invoices & expenses by accrual month."}</Note>
     </div>
   );
 }
