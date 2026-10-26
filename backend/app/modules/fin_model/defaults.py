@@ -24,7 +24,7 @@ SEASONALITY = {
 }
 
 # bump with a one-time conversion in service.upgrade() when plan policy changes
-SCHEMA = 6
+SCHEMA = 7
 
 DEFAULT_ASSUMPTIONS: dict = {
     "schema": SCHEMA,
@@ -49,12 +49,12 @@ DEFAULT_ASSUMPTIONS: dict = {
             # Ad spend is derived: trials / lead_to_trial = leads; paid leads x cost per lead.
             "trials_by_year": [200, 350, 500, 650, 800],
             "seasonality": dict(SEASONALITY),
-            "cpl": 46.0,                # cost per paid (ad) lead, SAR
-            "organic_share": 0.25,      # share of all leads that come free (direct visits, referrals, organic social)
+            "cpl": 17.0,                # cost per paid (ad) lead, SAR (actual Aug-Sep 2026)
+            "organic_share": 0.08,      # share of all leads that come free (direct visits, referrals, organic social)
             "organic_share_target": 0.35,
             "cpl_growth_yoy": 0.05,     # ad prices inflate each year
-            "lead_to_trial": 0.31,      # leads that book the free trial lecture
-            "lead_to_trial_target": 0.38,
+            "lead_to_trial": 0.40,      # leads that book the free trial lecture
+            "lead_to_trial_target": 0.42,
             "show_rate": 0.60,          # booked trials actually attended
             "show_rate_target": 0.70,
             "trial_to_paid": 0.074,     # attended trials that subscribe
@@ -69,7 +69,7 @@ DEFAULT_ASSUMPTIONS: dict = {
             "start_month": "2028-10",
             "trials_by_year": [0, 0, 150, 220, 300],
             "seasonality": dict(SEASONALITY),
-            "cpl": 55.0,
+            "cpl": 25.0,
             "organic_share": 0.10,
             "organic_share_target": 0.25,
             "cpl_growth_yoy": 0.05,
@@ -124,7 +124,7 @@ DEFAULT_ASSUMPTIONS: dict = {
             "driver": "partners",
             # partnerships start with the second model year
             "start_month": "2027-10",
-            "partners_by_year": [0, 4, 6, 8, 10],
+            "partners_by_year": [0, 5, 8, 10, 12],
             "students_per_partner": 40,
             "initial_monthly": 0,
             "monthly_growth": 0.0,
@@ -227,19 +227,19 @@ DEFAULT_ASSUMPTIONS: dict = {
         "annual_raise": 0.10,      # applies to planned hires and other staff
         "raise_month": 1,          # calendar month when raises apply
         "employer_oncost": 0.0,    # GOSI / insurance on top of salary (0 for remote contractors)
-        "intl_transfer_fee_pct": 0.015,  # bank fees on salaries paid abroad
+        "intl_transfer_fee_pct": 0.0,    # bank fees on salaries paid abroad (included in the team budgets)
         # teachers: paid per lecture, no salary. One teacher gives 60-80 lectures a month.
         "teacher_capacity_lessons": 70,
         "teacher_onboarding_cost": 300.0,
         # planned hires (suggested plan; edit freely). category: marketing | cs | content | quality | admin
         "hires": [
-            {"role_ar": "مسؤول مبيعات المدارس والشراكات", "role_en": "Schools & partnerships sales lead", "month": "2027-08", "salary": 4000.0, "count": 1, "category": "marketing"},
+            {"role_ar": "مسؤول مبيعات المدارس والشراكات", "role_en": "Schools & partnerships sales lead", "month": "2027-08", "salary": 4000.0, "count": 1, "category": "marketing", "in_budget": True},
         ],
     },
     # --------------------------------------------------------- other opex
     "opex": [
-        {"id": "content", "category": "content", "name_ar": "فريق تطوير المحتوى والمناهج", "name_en": "Content & curriculum development team", "monthly": 6000.0, "start_month": "2026-10", "end_month": None, "growth_yoy": 0.15},
-        {"id": "tools", "category": "tools", "name_ar": "الاشتراكات الشهرية (منصات الحصص، أدوات الذكاء الاصطناعي، الاتصالات)", "name_en": "Monthly subscriptions (lesson platforms, AI tools, telecom)", "monthly": 800.0, "start_month": "2026-10", "end_month": None, "growth_yoy": 0.30},
+        {"id": "content", "category": "content", "name_ar": "فريق تطوير المحتوى والمناهج", "name_en": "Content & curriculum development team", "monthly": 6000.0, "start_month": "2026-10", "end_month": None, "growth_yoy": 0.10},
+        {"id": "tools", "category": "tools", "name_ar": "الاشتراكات الشهرية (منصات الحصص، أدوات الذكاء الاصطناعي، الاتصالات)", "name_en": "Monthly subscriptions (lesson platforms, AI tools, telecom)", "monthly": 800.0, "start_month": "2026-10", "end_month": None, "growth_yoy": 0.10},
         {"id": "marketing_content", "category": "marketing_extra", "name_ar": "المؤثرون ومحتوى UGC والإنتاج التسويقي", "name_en": "Influencers, UGC & marketing production", "monthly": 3000.0, "start_month": "2026-10", "end_month": None, "growth_yoy": 0.25},
         {"id": "legal", "category": "admin", "name_ar": "التراخيص والمحاسب القانوني والرسوم الحكومية", "name_en": "Licences, auditor & government fees", "monthly": 500.0, "start_month": "2027-01", "end_month": None, "growth_yoy": 0.05},
         {"id": "accreditation", "category": "admin", "name_ar": "الاعتمادات (STEM وغيرها)", "name_en": "Accreditations (STEM etc.)", "monthly": 150.0, "start_month": "2026-10", "end_month": None, "growth_yoy": 0.0},
@@ -256,7 +256,7 @@ DEFAULT_ASSUMPTIONS: dict = {
         "loan_amount": 300000.0,
         "loan_rounding": 50000.0,
         "cash_buffer_months": 3,         # keep this many months of fixed costs as a cushion
-        "loan_draw_month": "2026-11",
+        "loan_draw_month": "2026-10",
         "loan_rate": 0.0,                # interest-free financing (set a rate here if the lender charges one)
         "loan_tenor_months": 84,
         "loan_grace_months": 30,         # profit-only months before principal repayments (break-even is in year 3)
@@ -286,6 +286,8 @@ DEFAULT_ASSUMPTIONS: dict = {
         "markets.ksa.trial_to_paid",
         "streams.core_b2c.renewal_rate",
         "team.base_headcount",
+        "opex.content.monthly",
+        "opex.tools.monthly",
         "financing.opening_cash",
         "financing.owner_invested_to_date",
     ],

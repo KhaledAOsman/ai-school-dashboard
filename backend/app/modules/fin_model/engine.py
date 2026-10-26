@@ -33,7 +33,7 @@ SCENARIOS = ("conservative", "base", "optimistic")
 
 # --------------------------------------------------------------- helpers
 # bump when the calculation changes so cached results are recomputed
-ENGINE_VERSION = 10
+ENGINE_VERSION = 11
 
 def ym_index(ym: str | None, start: str) -> int | None:
     if not ym:
@@ -351,12 +351,14 @@ def _run(a: dict, loan_amount: float) -> dict:
         for h in team.get("hires", []):
             hi = ym_index(h.get("month"), start)
             if hi is not None and i >= hi:
+                hires_n += int(h.get("count", 1))
+                if h.get("in_budget"):
+                    continue  # already paid out of the team's monthly budget
                 c = h.get("category") or "admin"
                 c = "marketing_team" if c == "marketing" else c
                 c = c if c in cat else "admin"
                 # planned hires get the yearly raise from their start
                 cat[c] += float(h.get("salary", 0)) * float(h.get("count", 1)) * raise_f[i] / raise_f[hi]
-                hires_n += int(h.get("count", 1))
         cat = {k: v * oncost for k, v in cat.items()}
         pay_cat.append(cat)
         payroll.append(sum(cat.values()))
@@ -677,38 +679,41 @@ def compute(assumptions: dict, scenario: str = "base", funding_history: list[dic
     rounding = float(fin.get("loan_rounding", 50000)) or 50000
     suggested = 0.0
     financeable = True
-    # months before the loan arrives are bridged by the owners (as they do today)
+    # the loan is the only new funding: if cash would run out before the planned draw month,
+    # the loan is drawn in the first month of need instead of bridging with owner money
     draw_i = ym_index(fin.get("loan_draw_month"), start) or 0
     bridge = 0.0
+    funding_gap = 0.0
     if draw_i > 0:
-        pre = min(m["cash"] for m in raw["months"][:draw_i])
-        if pre < 0:
-            bridge = math.ceil(-pre / 1000.0) * 1000.0
-            fin.setdefault("equity_injections", [])
-            fin["equity_injections"] = list(fin["equity_injections"]) + [{"month": start, "amount": bridge, "bridge": True}]
-            raw = _run(a, 0.0)
-            min_raw = min(m["cash"] for m in raw["months"])
+        first_neg = next((m["i"] for m in raw["months"][:draw_i] if m["cash"] < 0), None)
+        if first_neg is not None:
+            draw_i = first_neg
+            fin["loan_draw_month"] = idx_ym(draw_i, start)
     min_after = min(m["cash"] for m in raw["months"][draw_i:])
     need = max(0.0, buffer - min_after)
     suggested = math.ceil(need / rounding) * rounding if need > 0 else 0.0
-    loan = suggested if fin.get("loan_mode", "auto") == "auto" else float(fin.get("loan_amount", 0))
+    auto = fin.get("loan_mode", "auto") == "auto"
+    loan = suggested if auto else float(fin.get("loan_amount", 0))
     run = _run(a, loan)
-    financeable = min(m["cash"] for m in run["months"][draw_i:]) >= 0
-    last12 = sum(m["ebitda"] for m in run["months"][-12:])
-    if fin.get("loan_mode", "auto") == "auto" and loan > 0 and not financeable and last12 > 0:
-        # repayments open a second cash gap: borrow a little more so the instalments are covered too
-        # (only when operations turn profitable - a plan that never does is reported as not financeable)
-        cap_loan = max(1.5 * loan, loan + 4 * rounding)
+    if auto and loan > 0:
+        # instalments after the grace period can open a second cash gap: size the loan so cash stays positive
+        # (and keeps the reserve where possible) for the whole plan
+        cap_loan = max(20 * loan, 10_000_000.0)
         trial_loan = loan
-        while trial_loan < cap_loan:
+        while min(m["cash"] for m in run["months"]) < 0 and trial_loan < cap_loan:
             trial_loan += rounding
-            trial_run = _run(a, trial_loan)
-            low = min(m["cash"] for m in trial_run["months"][draw_i:])
-            if low >= 0 and not financeable:
-                loan, run, financeable, suggested = trial_loan, trial_run, True, trial_loan
-            if low >= buffer:
-                loan, run, suggested = trial_loan, trial_run, trial_loan
+            run = _run(a, trial_loan)
+            loan = suggested = trial_loan
+        extra = loan
+        while min(m["cash"] for m in run["months"][draw_i:]) < buffer and extra < loan * 1.5:
+            extra += rounding
+            trial_run = _run(a, extra)
+            if min(m["cash"] for m in trial_run["months"][draw_i:]) >= buffer:
+                loan, suggested, run = extra, extra, trial_run
                 break
+    last12 = sum(m["ebitda"] for m in run["months"][-12:])
+    # financeable = cash never runs out and operations end the plan profitable (able to keep repaying)
+    financeable = min(m["cash"] for m in run["months"]) >= 0 and last12 > 0
     # if repayments start before the business can carry them, find the grace period that works
     suggested_grace = None
     if loan > 0 and not financeable:
@@ -720,18 +725,6 @@ def compute(assumptions: dict, scenario: str = "base", funding_history: list[dic
             if min(m["cash"] for m in _run(trial, loan)["months"][draw_i:]) >= 0:
                 suggested_grace = gr
                 break
-    # whatever the loan cannot cover is shown as additional funding (owners / investors) in the month the
-    # cash would first turn negative, so the statements never carry a negative cash balance
-    funding_gap = 0.0
-    for _ in range(12):
-        neg = next((m for m in run["months"] if m["cash"] < -0.5), None)
-        if neg is None:
-            break
-        deepest = -min(m["cash"] for m in run["months"] if m["i"] >= neg["i"])
-        amt = math.ceil(deepest / 10000.0) * 10000.0
-        fin["equity_injections"] = list(fin.get("equity_injections") or []) + [{"month": neg["month"], "amount": amt, "gap": True}]
-        funding_gap += amt
-        run = _run(a, loan)
     months = run["months"]
     years = _annual(months, start)
 

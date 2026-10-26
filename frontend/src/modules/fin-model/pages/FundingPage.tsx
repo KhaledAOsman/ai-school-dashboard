@@ -1,4 +1,5 @@
-import { Area, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import clsx from "clsx";
+import { CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useFM } from "../context";
 import { COLORS, compact, money, monthLabel, pct, iso } from "../i18n";
 import { ChartTooltip, Kpi, Note, Panel, useMoney } from "../components/ui";
@@ -14,6 +15,12 @@ export default function FundingPage() {
   const f = r.resolved_assumptions?.financing;
   const v = r.valuation;
   const data = r.months.map((m) => ({ name: m.month, loan: Math.round(m.loan_balance), cash: Math.round(m.cash) }));
+  // one tick at the start of each model year
+  const yearTicks = r.years.map((y) => y.from);
+  const yearTickLabel = (m: string) => {
+    const y = r.years.find((yy) => yy.from === m);
+    return y ? (ar ? `بداية س${y.year}` : `Y${y.year} start`) : "";
+  };
   const funds = computeUseOfFunds(r);
   const fundLabels = FUND_LABELS;
   const biggest = [...funds.rows].filter((x) => x.key !== "reserve").sort((a, b) => b.value - a.value)[0];
@@ -24,11 +31,11 @@ export default function FundingPage() {
       <ChapterHeader id="funding" />
       <div className="grid gap-3 md:grid-cols-3">
         {(ar ? [
-          ["حجم التمويل", `قرض بقيمة ${big(k.loan_amount)} دون فوائد${k.owner_bridge ? `، و${big(k.owner_bridge)} يموّلها الملاك حتى استلام القرض` : ""}${k.funding_gap ? `، وتمويل إضافي من الملاك أو المستثمرين بقيمة ${big(k.funding_gap)} في ${monthLabel(k.funding_gap_month, lang)}` : ""}.`],
+          ["حجم التمويل", `قرض بقيمة ${big(k.loan_amount)} دون فوائد، يُستلم في ${monthLabel(f?.loan_draw_month, lang)}، وهو مصدر التمويل الوحيد في الخطة.`],
           ["أوجه الاستخدام", biggest ? `أكبر البنود: ${fundLabels[biggest.key][0]} بقيمة ${big(biggest.value)}، والتفاصيل في الفصل 05.` : "—"],
           ["طريقة السداد", `فترة سماح ${f?.loan_grace_months} شهرًا دون أقساط، ثم قسط شهري قدره ${full(k.loan_monthly_payment)} من أرباح التشغيل${k.loan_repaid_month ? ` حتى ${monthLabel(k.loan_repaid_month, lang)}` : ""}.`],
         ] : [
-          ["How much", `An interest-free loan of ${big(k.loan_amount)}${k.owner_bridge ? `, ${big(k.owner_bridge)} from the owners until it is received` : ""}${k.funding_gap ? `, and additional owner or investor funding of ${big(k.funding_gap)} in ${monthLabel(k.funding_gap_month, lang)}` : ""}.`],
+          ["How much", `An interest-free loan of ${big(k.loan_amount)}, received in ${monthLabel(f?.loan_draw_month, lang)}; it is the only funding in the plan.`],
           ["Use of funds", biggest ? `Largest item: ${fundLabels[biggest.key][1]} at ${big(biggest.value)}; details in chapter 05.` : "—"],
           ["Repayment", `A ${f?.loan_grace_months}-month grace period with no instalments, then ${full(k.loan_monthly_payment)} a month from operating profit${k.loan_repaid_month ? ` until ${monthLabel(k.loan_repaid_month, lang)}` : ""}.`],
         ]).map(([h, d]) => (
@@ -40,12 +47,7 @@ export default function FundingPage() {
         <Kpi label={ar ? "العجز النقدي دون تمويل" : "Cash deficit without financing"} value={big(k.funding_need_without_loan)} sub={ar ? "أكبر عجز تراكمي في النقد" : "Deepest cumulative cash deficit"} delay={60} />
         <Kpi label={ar ? "القسط الشهري بعد فترة السماح" : "Monthly instalment after grace"} value={full(k.loan_monthly_payment)}
           sub={k.loan_repaid_month ? (ar ? `يُسدَّد بالكامل في ${monthLabel(k.loan_repaid_month, lang)}` : `Fully repaid ${monthLabel(k.loan_repaid_month, lang)}`) : (ar ? "يمتد السداد إلى ما بعد السنة الخامسة" : "Runs beyond year 5")} delay={120} />
-        {k.funding_gap > 0 ? (
-          <Kpi label={ar ? "تمويل إضافي مطلوب" : "Additional funding required"} value={big(k.funding_gap)} tone="bad"
-            sub={ar ? `في ${monthLabel(k.funding_gap_month, lang)} لأن أقساط القرض تسبق قدرة التشغيل` : `In ${monthLabel(k.funding_gap_month, lang)}, as loan instalments precede operating capacity`} delay={180} animate={false} />
-        ) : (
-          <Kpi label={ar ? "تمويل مرحلي من الملاك" : "Owner bridge"} value={big(k.owner_bridge)} sub={ar ? `حتى استلام القرض في ${monthLabel(f?.loan_draw_month, lang)}` : `Until the loan is drawn ${monthLabel(f?.loan_draw_month, lang)}`} delay={180} />
-        )}
+        <Kpi label={ar ? "أقل رصيد نقدي" : "Lowest cash balance"} value={big(k.min_cash)} sub={monthLabel(k.min_cash_month, lang)} delay={180} />
       </div>
       {f && (
         <Note tone={k.financeable ? "info" : "warn"}>
@@ -55,17 +57,19 @@ export default function FundingPage() {
         </Note>
       )}
       <div className="grid gap-4 xl:grid-cols-2">
-        <Panel title={ar ? "الرصيد النقدي ورصيد القرض" : "Cash and loan balance"}>
+        <Panel title={ar ? "الرصيد النقدي ورصيد القرض" : "Cash and loan balance"}
+          subtitle={ar ? `يُستلم القرض في ${monthLabel(f?.loan_draw_month, lang)}، وتبدأ الأقساط بعد ${f?.loan_grace_months} شهرًا من الاستلام` : `Loan received ${monthLabel(f?.loan_draw_month, lang)}; instalments start ${f?.loan_grace_months} months later`}>
           <div className="h-[280px]" dir="ltr">
             <ResponsiveContainer>
-              <ComposedChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+              <ComposedChart data={data} margin={{ top: 8, right: 12, left: 8, bottom: 0 }}>
                 <CartesianGrid vertical={false} stroke={COLORS.grid} />
-                <XAxis dataKey="name" tickFormatter={(x) => monthLabel(x, "en", true)} tickLine={false} axisLine={false} fontSize={11} minTickGap={24} />
+                <XAxis dataKey="name" ticks={yearTicks} tickFormatter={(x) => yearTickLabel(x)} tickLine={false} axisLine={false} fontSize={12} interval={0} />
                 <YAxis tickFormatter={(x) => compact(x, "en")} tickLine={false} axisLine={false} fontSize={12} width={56} />
+                <ReferenceLine y={0} stroke="#8f97b3" />
                 <Tooltip content={<ChartTooltip labelFormatter={(l) => monthLabel(l, lang)} />} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Area dataKey="cash" name={t("cash")} stroke={COLORS.purple} fill={COLORS.purple} fillOpacity={0.12} strokeWidth={2} />
-                <Line dataKey="loan" name={ar ? "رصيد القرض" : "Loan balance"} stroke={COLORS.orange} strokeWidth={2.5} dot={false} />
+                <Line dataKey="cash" name={ar ? "الرصيد النقدي في نهاية الشهر" : "Cash at month end"} stroke={COLORS.purple} strokeWidth={2.5} dot={false} />
+                <Line dataKey="loan" name={ar ? "رصيد القرض المتبقي" : "Loan balance outstanding"} stroke={COLORS.orange} strokeWidth={2.5} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -120,21 +124,33 @@ export default function FundingPage() {
             </tbody>
           </table>
         </Panel>
-        <Panel title={ar ? "عائد الملاك" : "Owners' return"} delay={80}>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              [ar ? "رأس المال المستثمر" : "Capital invested", big(k.owner_invested)],
-              [ar ? "قيمة حقوق الملكية في السنة 5" : "Equity value at year 5", big(k.exit_equity_value)],
-              [ar ? "مضاعف رأس المال (MOIC)" : "Multiple on capital (MOIC)", k.owner_moic === null ? "—" : iso(`${k.owner_moic.toFixed(1)}x`)],
-              [ar ? "العائد الداخلي السنوي (IRR)" : "Annual IRR", pct(k.owner_irr, 0)],
-            ].map(([l, val]) => (
-              <div key={l} className="rounded-lg bg-[#f8f9fc] p-3"><p className="text-[12px] text-ink-600">{l}</p><p className="ltr-content mt-1 text-right text-[18px] font-bold text-ink-900">{val}</p></div>
-            ))}
-          </div>
+        <Panel title={ar ? "قيمة حقوق الملكية في نهاية السنة الخامسة" : "Equity value at the end of year 5"} delay={80}>
+          {(() => {
+            const ly = r.years[r.years.length - 1];
+            const tv = Math.round(v.terminal_value), lb = Math.round(ly.loan_balance), cs = Math.round(r.months.find((m) => m.month === ly.to)!.cash);
+            const rows: [string, number, boolean?][] = [
+              [ar ? "القيمة النهائية للمنشأة" : "Terminal enterprise value", tv],
+              [ar ? "− رصيد القرض المتبقي" : "− Remaining loan balance", -lb],
+              [ar ? "+ النقد في نهاية السنة" : "+ Cash at year end", cs],
+              [ar ? "= قيمة حقوق الملكية" : "= Equity value", tv - lb + cs, true],
+            ];
+            return (
+              <table className="w-full text-[13.5px]">
+                <tbody>
+                  {rows.map(([l, val, tot]) => (
+                    <tr key={l} className={clsx("border-b border-[#f0f2f7] last:border-0", tot && "font-bold")}>
+                      <td className={clsx("py-1.5", tot ? "py-2 text-ink-900" : "text-ink-700")}>{l}</td>
+                      <td className={clsx("ltr-content py-1.5 text-end", tot && "py-2 text-brand-700")}>{money(val)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            );
+          })()}
           <p className="mt-3 text-[12.5px] leading-6 text-ink-600">
             {ar
-              ? "قيمة حقوق الملكية = القيمة النهائية − رصيد القرض + النقد في نهاية السنة الخامسة. ويُحتسب العائد من تواريخ دفعات تمويل الملاك الفعلية المسجلة في النظام المالي. ونظرًا لصغر المبلغ المستثمر حتى الآن مقارنةً بقيمة المنشأة يظهر المضاعف مرتفعًا، بينما يُقيَّم أي مستثمر جديد على أساس «قيمة المنشأة اليوم»."
-              : "Equity value = terminal value − loan balance + cash at the end of year 5. Returns use the actual dates of owner funding recorded in Finance. Because little has been invested so far relative to the business value, the multiple is high; a new investor would price off today's enterprise value."}
+              ? "التمويل الوحيد في الخطة هو القرض الحسن؛ لذا تُعرض قيمة حقوق الملكية بعد خصم رصيد القرض المتبقي وإضافة النقد المتاح."
+              : "The interest-free loan is the plan's only funding, so equity value is shown after deducting the remaining loan and adding available cash."}
           </p>
         </Panel>
       </div>

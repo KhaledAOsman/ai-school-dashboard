@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, LabelList, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useFM } from "../context";
 import { fmApi, type Scenario } from "../api";
 import { COLORS, compact, iso, money, monthLabel, pct } from "../i18n";
@@ -78,7 +78,7 @@ export default function ScenariosPage() {
               ["renewal", "التجديد", "Renewal"], ["growth_volume", "الشراكات", "Partnerships"], ["price", "السعر", "Price"],
             ] as const).filter(([key]) => Math.abs((p[key] as number) - 1) > 1e-9).map(([key, la, le]) => `${ar ? la : le} ${iso(pctChange(p[key] as number))}`) : [];
             if (p && p.delay_months) changes.push(ar ? `تأخير المنتجات الجديدة ${p.delay_months} أشهر` : `${p.delay_months}-month delay of new products`);
-            const totalFunding = x.loan + (x.funding_gap ?? 0);
+            const totalFunding = x.loan;
             return (
               <Reveal key={k} delay={i * 70} className="h-full">
                 <section className={clsx(CARD, "flex h-full flex-col overflow-hidden print:shadow-none", isBase && "ring-2 ring-brand-600")}>
@@ -99,10 +99,10 @@ export default function ScenariosPage() {
                       <div><dt className="text-ink-500">{ar ? "الاشتراكات في السنة الخامسة" : "Subscriptions, year 5"}</dt><dd className="ltr-content mt-0.5 text-right text-[16px] font-bold text-ink-900">{money(Math.round(x.subs_y5 ?? 0))}</dd></div>
                       <div><dt className="text-ink-500">{ar ? "التمويل المطلوب" : "Funding required"}</dt><dd className="ltr-content mt-0.5 text-right text-[16px] font-bold text-ink-900">{big(totalFunding)}</dd></div>
                     </dl>
-                    <p className={clsx("mt-auto pt-4 text-[12.5px] font-semibold leading-5", x.funding_gap > 0 ? "text-[#a02a24]" : "text-[#136c3a]")}>
-                      {x.funding_gap > 0
-                        ? (ar ? `قرض ${big(x.loan)} + تمويل إضافي ${big(x.funding_gap)}` : `Loan ${big(x.loan)} + additional ${big(x.funding_gap)}`)
-                        : (ar ? `يكفي قرض ${big(x.loan)} دون تمويل إضافي` : `A ${big(x.loan)} loan is enough`)}
+                    <p className={clsx("mt-auto pt-4 text-[12.5px] font-semibold leading-5", x.financeable ? "text-[#136c3a]" : "text-[#a02a24]")}>
+                      {x.financeable
+                        ? (ar ? `قرض ${big(x.loan)} دون فوائد يغطي الخطة` : `A ${big(x.loan)} interest-free loan covers the plan`)
+                        : (ar ? `قرض ${big(x.loan)}، ولا يحقق التشغيل ربحًا كافيًا لسداده` : `A ${big(x.loan)} loan, but operations do not earn enough to repay it`)}
                     </p>
                   </div>
                 </section>
@@ -144,17 +144,21 @@ export default function ScenariosPage() {
       </div>
       <Panel title={ar ? `حساسية EBITDA السنة الخامسة لتغير ±${pct(s.pct, 0)} في كل متغير` : `Year-5 EBITDA sensitivity to ±${pct(s.pct, 0)} in each driver`}
         subtitle={ar ? `مقارنة بـ ${big(base)} في السيناريو ${t(`sc_${scenario}` as "sc_base")} — الأعلى تأثيرًا أولًا` : `Against ${big(base)} in the ${t(`sc_${scenario}` as "sc_base")} case — biggest impact first`}>
-        <div className="h-[380px]" dir="ltr">
+        <div className="h-[520px]" dir="ltr">
           <ResponsiveContainer>
-            <BarChart data={tornado} layout="vertical" stackOffset="sign" margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
+            <BarChart data={tornado} layout="vertical" barCategoryGap="22%" barGap={2} margin={{ top: 8, right: 56, left: 56, bottom: 0 }}>
               <CartesianGrid horizontal={false} stroke={COLORS.grid} />
               <XAxis type="number" tickFormatter={(v) => compact(v, "en")} tickLine={false} axisLine={false} fontSize={12} />
               <YAxis type="category" dataKey="name" width={ar ? 190 : 170} tickLine={false} axisLine={false} fontSize={12} />
-              <ReferenceLine x={0} stroke="#8f97b3" />
-              <Tooltip content={<ChartTooltip />} cursor={{ fill: "#f4f1ff" }} />
+              <ReferenceLine x={0} stroke="#555b7a" />
+              <Tooltip content={<ChartTooltip formatter={(v) => `${v > 0 ? "+" : ""}${money(v, { parens: false })}`} />} cursor={{ fill: "#f4f1ff" }} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="low" name={`-${pct(s.pct, 0)}`} fill={COLORS.purpleSoft} stackId="t" />
-              <Bar dataKey="high" name={`+${pct(s.pct, 0)}`} fill={COLORS.purple} stackId="t" />
+              <Bar dataKey="low" name={ar ? `خفض المتغير ${s.pct * 100}%` : `Driver −${s.pct * 100}%`} fill={COLORS.purpleSoft} radius={2}>
+                <LabelList dataKey="low" position="right" fontSize={10} formatter={(v: number) => compact(v, "en")} />
+              </Bar>
+              <Bar dataKey="high" name={ar ? `رفع المتغير ${s.pct * 100}%` : `Driver +${s.pct * 100}%`} fill={COLORS.purple} radius={2}>
+                <LabelList dataKey="high" position="right" fontSize={10} formatter={(v: number) => compact(v, "en")} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>

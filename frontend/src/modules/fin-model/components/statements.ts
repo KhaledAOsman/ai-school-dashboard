@@ -52,7 +52,6 @@ export const cashLines: StmtLine[] = [
   { key: "loan_fees", ar: "رسوم القرض", en: "Loan fees", value: (r) => -r.loan_fees, indent: true },
   { key: "interest", ar: "تكلفة التمويل المدفوعة", en: "Finance cost paid", value: (r) => -r.interest, indent: true },
   { key: "principal", ar: "سداد أصل القرض", en: "Loan principal repaid", value: (r) => -r.loan_principal, indent: true },
-  { key: "equity", ar: "تمويل من الملاك والمستثمرين", en: "Owner & investor funding", value: (r) => r.equity_injection, indent: true },
   { key: "cff", ar: "صافي التدفق من التمويل", en: "Net cash from financing", value: (r) => r.loan_draw - r.loan_fees - r.interest - r.loan_principal + r.equity_injection, kind: "subtotal" },
   { key: "net", ar: "صافي التغير في النقد", en: "Net change in cash", value: (r) => r.net_cash_flow, kind: "subtotal" },
   { key: "opening", ar: "النقد أول الفترة", en: "Opening cash", value: (r) => r.cash - r.net_cash_flow, indent: true, agg: "first" },

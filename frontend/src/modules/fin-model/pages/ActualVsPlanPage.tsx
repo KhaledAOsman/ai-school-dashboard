@@ -66,10 +66,9 @@ export default function ActualVsPlanPage() {
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label={ar ? "تمويل الملاك حتى الآن" : "Owner funding to date"} value={big(tot.invested)} />
+      <div className="grid gap-3 sm:grid-cols-3">
         <Kpi label={ar ? "إجمالي المصروفات حتى الآن" : "Total spend to date"} value={big(tot.spent)} delay={60} />
-        <Kpi label={ar ? "اشتراكات مدفوعة" : "Paid subscriptions"} value={String(tot.subscriptions)} sub={ar ? `${tot.customers} عميل، ${tot.renewals} تجديد` : `${tot.customers} customers, ${tot.renewals} renewals`} delay={120} />
+        <Kpi label={ar ? "اشتراكات مدفوعة" : "Paid subscriptions"} value={String(tot.subscriptions)} sub={ar ? `${tot.customers} اشتراك جديد + ${tot.renewals} تجديد` : `${tot.customers} new + ${tot.renewals} renewal(s)`} delay={120} />
         <Kpi label={ar ? "مبيعات محصلة" : "Sales collected"} value={big(tot.sales_paid)} sub={ar ? `خصومات ${money(tot.sales_discount)} ر.س` : `Discounts SAR ${money(tot.sales_discount)}`} delay={180} />
       </div>
       <Panel title={t("tab_actual")} subtitle={ar ? `بيانات فعلية من لوحة التحكم حتى ${aq.data.as_of}. الشهر الحالي جزئي.` : `Live data from the dashboard as of ${aq.data.as_of}. The current month is partial.`}

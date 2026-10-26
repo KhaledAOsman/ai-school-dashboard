@@ -24,6 +24,8 @@ SPEND_GROUPS = {
 }
 COMMISSION_CODES = {"5420"}  # sales commission per subscription (direct cost)
 MIN_SAMPLE = 20
+# bump when the way actuals are measured is corrected; calibrations frozen before it are refreshed
+CAL_VERSION = 2
 
 
 def _f(x) -> float:
@@ -59,7 +61,7 @@ async def monthly_actuals(db: AsyncSession) -> dict[str, dict]:
     for r in await _rows(db, """
         WITH s AS (
           SELECT subscribed_at, amount_paid, discount_amount,
-                 row_number() OVER (PARTITION BY regexp_replace(phone, '\\D', '', 'g') ORDER BY subscribed_at, created_at) rn
+                 row_number() OVER (PARTITION BY right(regexp_replace(phone, '\\D', '', 'g'), 9) ORDER BY subscribed_at, created_at) rn
           FROM subscriptions)
         SELECT to_char(subscribed_at, 'YYYY-MM') m,
                count(*) FILTER (WHERE rn = 1) new_subs, count(*) FILTER (WHERE rn > 1) renewals,
@@ -103,7 +105,9 @@ async def calibrate(db: AsyncSession, today: date | None = None) -> dict:
     basis: dict[str, str] = {}
 
     # funnel window: complete months with ad spend and leads
-    win = [m for m, r in months.items() if m < current and r["spend"].get("marketing", 0) > 0 and r["leads"] > 0]
+    # only months in which free-lecture bookings were tracked: before that, leads were not fully recorded
+    # in the CRM and the cost per lead would be overstated
+    win = [m for m, r in months.items() if m < current and r["spend"].get("marketing", 0) > 0 and r["leads"] > 0 and r["trials"] > 0]
     spend = sum(months[m]["spend"].get("marketing", 0) for m in win)
     leads = sum(months[m]["leads"] for m in win)
     organic = sum(months[m]["leads_organic"] for m in win)
@@ -126,7 +130,7 @@ async def calibrate(db: AsyncSession, today: date | None = None) -> dict:
     all_trials = sum(r["trials"] for r in months.values())
     all_att = sum(r["attended"] for r in months.values())
     all_dec = sum(r["decided"] for r in months.values())
-    cust_all = (await _rows(db, "SELECT count(DISTINCT regexp_replace(phone, '\\D', '', 'g')) c FROM subscriptions"))[0]["c"]
+    cust_all = (await _rows(db, "SELECT count(DISTINCT right(regexp_replace(phone, '\\D', '', 'g'), 9)) c FROM subscriptions"))[0]["c"]
     cust_all = int(cust_all or 0)
     if all_dec >= MIN_SAMPLE:
         values["markets.ksa.show_rate"] = all_att / all_dec
@@ -142,12 +146,21 @@ async def calibrate(db: AsyncSession, today: date | None = None) -> dict:
 
     # sales: discount and renewal
     s = (await _rows(db, """SELECT count(*) n, coalesce(sum(amount_paid), 0) paid, coalesce(sum(discount_amount), 0) disc,
-                                   count(DISTINCT regexp_replace(phone, '\\D', '', 'g')) customers
+                                   count(DISTINCT right(regexp_replace(phone, '\\D', '', 'g'), 9)) customers
                             FROM subscriptions"""))[0]
     n, paid, disc, customers = int(s["n"]), _f(s["paid"]), _f(s["disc"]), int(s["customers"])
     if n and paid + disc > 0:
         values["streams.core_b2c.avg_discount"] = disc / (paid + disc)
         basis["streams.core_b2c.avg_discount"] = f"خصم {disc:,.0f} من قيمة قائمة {paid + disc:,.0f} ({n} اشتراك)"
+    # monthly content-team and tools cost: average of the last 3 complete months with spend in that group
+    done = [m for m in months if m < current]
+    for grp, path, label in (("content", "opex.content.monthly", "تطوير المحتوى"), ("tools", "opex.tools.monthly", "الاشتراكات الشهرية")):
+        seen = [m for m in done if months[m]["spend"].get(grp, 0) > 0][-3:]
+        if seen:
+            avg = sum(months[m]["spend"][grp] for m in seen) / len(seen)
+            values[path] = round(avg, 2)
+            basis[path] = f"متوسط مصروف {label} الفعلي ({seen[0]} → {seen[-1]}): {avg:,.0f} ريال شهريًا"
+
     # renewal = repeat subscriptions / customers (e.g. 13 subscriptions from 12 customers = 1 / 12)
     renewals = n - customers
     if customers:
@@ -164,13 +177,13 @@ async def calibrate(db: AsyncSession, today: date | None = None) -> dict:
         cs_n = heads = 0
         for r in staff:
             name = str(r["dep"]).lower()
-            amt, n = _f(r["s"]), int(r["n"])
-            heads += n
+            amt, heads_n = _f(r["s"]), int(r["n"])
+            heads += heads_n
             if "تسويق" in name or "market" in name or "جرافيك" in name:
                 mkt += amt
             elif "خدمة" in name or "support" in name or "customer" in name:
                 cs += amt
-                cs_n += n
+                cs_n += heads_n
             elif "معلم" in name or "teacher" in name or "محتوى" in name or "content" in name:
                 continue  # paid per lecture / per piece: costed elsewhere in the model
             else:
@@ -199,6 +212,7 @@ async def calibrate(db: AsyncSession, today: date | None = None) -> dict:
         basis["financing.opening_cash"] = f"تمويل {invested:,.0f} + مبيعات {sales_cash:,.0f} − مصروفات {spent:,.0f}"
 
     return {
+        "cal_version": CAL_VERSION,
         "as_of": today.isoformat(),
         "values": values,
         "basis": basis,

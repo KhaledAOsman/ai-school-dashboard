@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit.service import AuditService
 from app.core.cache import cached
 from app.modules.fin_model import engine
-from app.modules.fin_model.calibration import calibrate
+from app.modules.fin_model.calibration import CAL_VERSION, calibrate
 from app.modules.fin_model.defaults import DEFAULT_ASSUMPTIONS, default_assumptions
 from app.modules.fin_model.models import FinModelVersion
 
@@ -99,7 +99,8 @@ def normalize(data: dict) -> dict:
     # lists of objects with their own templates
     stream_t = {**t["streams"][0], "active_months": list(range(1, 13)), "initial_monthly": 0.0, "monthly_growth": 0.0,
                 "max_monthly": 0.0, "service_months": 12, "partners_by_year": [0.0, 0.0, 0.0, 0.0, 0.0], "students_per_partner": 0.0}
-    market_t = t["markets"][0]
+    # new markets start empty: never inherit another market's volumes
+    market_t = {**t["markets"][0], "trials_by_year": [0.0] * 5}
     opex_t = t["opex"][0]
     capex_t = t["capex"][0]
     for key, tmpl in (("streams", stream_t), ("markets", market_t), ("opex", opex_t), ("capex", capex_t)):
@@ -131,6 +132,11 @@ def normalize(data: dict) -> dict:
                 m["trials_by_year"] = [max(0.0, float(v)) for v in b][:10]
             merged.append(m)
         out[key] = merged
+    # a planned hire is extra cost unless explicitly paid out of a team budget
+    raw_hires = (data.get("team") or {}).get("hires") if isinstance(data.get("team"), dict) else None
+    if isinstance(raw_hires, list):
+        out["team"]["hires"] = [{**h, "in_budget": bool(src.get("in_budget", False)) if isinstance(src, dict) else False}
+                                for h, src in zip(out["team"]["hires"], raw_hires)]
     sc = data.get("scenarios", t["scenarios"])
     out["scenarios"] = {name: _merge(t["scenarios"][name], (sc or {}).get(name, {})) for name in engine.SCENARIOS}
     af = data.get("auto_fields", t["auto_fields"])
@@ -221,6 +227,44 @@ def upgrade(assumptions: dict) -> dict:
                     if k in tmpl:
                         st[k] = copy.deepcopy(tmpl[k])
         a["schema"] = 6
+    if schema < 7:
+        # v7 audit: the partnerships sales lead is paid from the marketing & sales budget (no double count),
+        # team budgets already include transfer fees, the loan is the only funding (drawn from the first
+        # month), content and tools follow actual spend
+        team = a.get("team") if isinstance(a.get("team"), dict) else None
+        if team is not None:
+            team["intl_transfer_fee_pct"] = 0.0
+            for h in team.get("hires") or []:
+                role = f"{h.get('role_en', '')} {h.get('role_ar', '')}".lower() if isinstance(h, dict) else ""
+                if ("sales" in role or "مبيعات" in role) and any(w in role for w in ("school", "partner", "مدارس", "شراك")):
+                    h["in_budget"] = True
+        fin = a.get("financing") if isinstance(a.get("financing"), dict) else None
+        if fin is not None:
+            fin["loan_draw_month"] = (a.get("general") or {}).get("start_month") or fin.get("loan_draw_month")
+            fin["equity_injections"] = []
+        af = list(a.get("auto_fields") or [])
+        for p_ in ("opex.content.monthly", "opex.tools.monthly"):
+            if p_ not in af:
+                af.append(p_)
+        a["auto_fields"] = af
+        # plans saved before free-lecture volumes existed got the Saudi volumes copied into the Gulf market
+        tmpl_m = {m["id"]: m for m in DEFAULT_ASSUMPTIONS["markets"]}
+        mks = [m for m in (a.get("markets") or []) if isinstance(m, dict)]
+        ksa_t = next((m.get("trials_by_year") for m in mks if m.get("id") == "ksa"), None)
+        for mk in mks:
+            if mk.get("id") not in tmpl_m:
+                continue
+            missing = not mk.get("trials_by_year")
+            copied = mk.get("id") != "ksa" and mk.get("trials_by_year") == ksa_t
+            if missing or copied:
+                mk["trials_by_year"] = list(tmpl_m[mk["id"]]["trials_by_year"])
+        for st in a.get("streams") or []:
+            if isinstance(st, dict) and st.get("id") == "schools" and st.get("partners_by_year") in ([0, 4, 6, 8, 10], [0.0, 4.0, 6.0, 8.0, 10.0]):
+                st["partners_by_year"] = [0, 5, 8, 10, 12]  # more institutional volume (no acquisition cost)
+        for o in a.get("opex") or []:
+            if isinstance(o, dict) and o.get("id") in ("content", "tools") and float(o.get("growth_yoy") or 0) > 0.10:
+                o["growth_yoy"] = 0.10
+        a["schema"] = 7
     for st in a.get("streams", []):
         if isinstance(st, dict):
             if "category" not in st:
@@ -334,7 +378,7 @@ class FinModelService:
         if v.status != "draft":
             raise HTTPException(status.HTTP_409_CONFLICT, "النسخة منشورة بالفعل")
         cal = await calibrate(self.db)
-        v.calibration = {k: cal[k] for k in ("as_of", "values", "basis", "window", "funding_history", "totals")}
+        v.calibration = {k: cal[k] for k in ("cal_version", "as_of", "values", "basis", "window", "funding_history", "totals")}
         v.status = "published"
         v.published_by = user_id
         v.published_at = datetime.now(timezone.utc)
@@ -362,7 +406,7 @@ class FinModelService:
 
     # ------------------------------------------------------------ numbers
     async def calibration_for(self, v: FinModelVersion) -> dict:
-        if v.status == "published" and v.calibration:
+        if v.status == "published" and v.calibration and int(v.calibration.get("cal_version") or 1) >= CAL_VERSION:
             return v.calibration
         return await cached("fm:calibration", lambda: calibrate(self.db), ttl=300)
 

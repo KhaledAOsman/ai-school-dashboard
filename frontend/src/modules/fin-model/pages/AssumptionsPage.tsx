@@ -423,7 +423,6 @@ export default function AssumptionsPage() {
         <Section title={ar ? "8. التمويل والقرض" : "8. Financing & loan"}>
           <div className={grid}>
             {Num({ label: ["النقد في بداية الخطة", "Cash at plan start"], value: draft.financing.opening_cash, set: (v) => upd((d) => { d.financing.opening_cash = v; }), kind: "money", autoPath: "financing.opening_cash" })}
-            {Num({ label: ["ما استثمره الملاك حتى الآن", "Owners' investment so far"], value: draft.financing.owner_invested_to_date, set: (v) => upd((d) => { d.financing.owner_invested_to_date = v; }), kind: "money", autoPath: "financing.owner_invested_to_date" })}
             <FieldShell label={L(["حجم القرض", "Loan size"])}>
               <SelectInput value={draft.financing.loan_mode} disabled={readOnly} onChange={(v) => upd((d) => { d.financing.loan_mode = v; })}
                 options={[{ value: "auto", label: L(["تلقائي حسب العجز + الاحتياطي", "Auto from deficit + buffer"]) }, { value: "manual", label: L(["مبلغ محدد", "Fixed amount"]) }]} />
@@ -437,18 +436,6 @@ export default function AssumptionsPage() {
             {Num({ label: ["مدة القرض (شهور)", "Tenor (months)"], value: draft.financing.loan_tenor_months, set: (v) => upd((d) => { d.financing.loan_tenor_months = v; }), kind: "int" })}
             {Num({ label: ["فترة السماح (شهور)", "Grace period (months)"], value: draft.financing.loan_grace_months, set: (v) => upd((d) => { d.financing.loan_grace_months = v; }), kind: "int" })}
             {Num({ label: ["رسوم القرض والضمان", "Loan & guarantee fees"], value: draft.financing.loan_upfront_fee, set: (v) => upd((d) => { d.financing.loan_upfront_fee = v; }), kind: "pct" })}
-          </div>
-          <p className="mb-2 mt-5 text-[13px] font-bold text-ink-800">{L(["ضخ تمويل إضافي من الملاك أو مستثمرين", "Extra owner / investor equity"])}</p>
-          <div className="space-y-2">
-            {draft.financing.equity_injections.map((e, ei) => (
-              <div key={ei} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2 sm:max-w-[520px]">
-                {Month({ label: ["الشهر", "Month"], value: e.month, set: (v) => upd((d) => { d.financing.equity_injections[ei].month = v!; }) })}
-                {Num({ label: ["المبلغ", "Amount"], value: e.amount, set: (v) => upd((d) => { d.financing.equity_injections[ei].amount = v; }), kind: "money" })}
-                {!readOnly && <button type="button" aria-label={t("remove")} onClick={() => upd((d) => { d.financing.equity_injections.splice(ei, 1); })} className="mb-2 text-[#a02a24]"><Trash2 size={16} /></button>}
-              </div>
-            ))}
-            {!readOnly && <button type="button" onClick={() => upd((d) => { d.financing.equity_injections.push({ month: d.general.start_month, amount: 50000 }); })}
-              className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-brand-300 px-3.5 py-1.5 text-[13px] font-semibold text-brand-600 hover:bg-brand-50"><Plus size={14} /> {ar ? "إضافة تمويل" : "Add funding"}</button>}
           </div>
         </Section>
 

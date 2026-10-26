@@ -87,11 +87,10 @@ export default function OverviewPage() {
       {tot && (
         <Block n="1.1" title={ar ? "الوضع الحالي" : "Where we stand today"}
           lede={ar ? `أرقام فعلية من لوحة التحكم حتى ${aq.data!.as_of}.` : `Actual figures from the dashboard as of ${aq.data!.as_of}.`}>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Kpi label={ar ? "تمويل الملاك حتى الآن" : "Owner funding to date"} value={big(tot.invested)} />
+          <div className="grid gap-3 sm:grid-cols-3">
             <Kpi label={ar ? "المبيعات المحصلة" : "Sales collected"} value={big(tot.sales_paid)} delay={60} />
             <Kpi label={ar ? "الاشتراكات المدفوعة" : "Paid subscriptions"} value={money(tot.subscriptions)} animate={false}
-              sub={ar ? `${tot.customers} عميل و${tot.renewals} تجديد` : `${tot.customers} customers + ${tot.renewals} renewals`} delay={120} />
+              sub={ar ? `${tot.customers} اشتراك جديد + ${tot.renewals} تجديد` : `${tot.customers} new + ${tot.renewals} renewal(s)`} delay={120} />
             <Kpi label={ar ? "إجمالي المصروفات" : "Total spend"} value={big(tot.spent)} delay={180} />
           </div>
         </Block>
@@ -105,7 +104,7 @@ export default function OverviewPage() {
           <Kpi label={t("ebitda_y5")} value={big(k.ebitda_y5)} tone={k.ebitda_y5 >= 0 ? "good" : "bad"} sub={`${t("margin")}: ${pct(k.ebitda_margin_y5, 0)}`} delay={120} />
           <Kpi label={t("breakeven")} value={k.ebitda_breakeven_month ? monthLabel(k.ebitda_breakeven_month, lang) : t("not_reached")} hint={t("breakeven_hint")} delay={180} animate={false} />
           <Kpi label={t("funding_need")} value={big(k.loan_amount)} tone="accent"
-            sub={k.funding_gap > 0 ? (ar ? `قرض دون فوائد، ويلزم تمويل إضافي ${big(k.funding_gap)} في ${monthLabel(k.funding_gap_month, lang)}` : `Interest-free loan, plus ${big(k.funding_gap)} additional funding in ${monthLabel(k.funding_gap_month, lang)}`) : (ar ? "قرض دون فوائد يغطي العجز واحتياطيًا نقديًا" : "Interest-free loan covering the deficit and a cash reserve")} delay={240} />
+            sub={k.financeable ? (ar ? "قرض دون فوائد يغطي العجز واحتياطيًا نقديًا" : "Interest-free loan covering the deficit and a cash reserve") : (ar ? "يلزم مراجعة شروط القرض" : "Loan terms need review")} delay={240} />
           <Kpi label={t("ev")} value={big(k.enterprise_value)} sub={`${t("exit_equity")}: ${big(k.exit_equity_value)}`} delay={300} />
         </div>
       </Block>

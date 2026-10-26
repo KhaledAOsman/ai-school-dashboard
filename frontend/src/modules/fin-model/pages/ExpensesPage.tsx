@@ -90,9 +90,16 @@ export default function ExpensesPage() {
             </table>
           </div>
         </div>
-        <p className="mt-2 text-[12.5px] leading-6 text-ink-500">
-          {ar ? "لا تشمل المصروفات أعلاه الإهلاك والزكاة والاستثمار في المنصة، وتظهر في القوائم المالية." : "Depreciation, zakat and the platform investment are shown in the financial statements, not above."}
-        </p>
+        <div className="mt-2 grid gap-1 text-[12.5px] leading-6 text-ink-600">
+          <p>
+            {ar ? "المطابقة مع قائمة الدخل: " : "Tie-out to the income statement: "}
+            {r.years.map((y, i) => (
+              <span key={y.year} className="me-3 inline-block">{t("y")}{y.year}: {money(Math.round(y.cogs))} + {money(perYear[i].total - Math.round(y.cogs))} = <b className="text-ink-900">{money(perYear[i].total)}</b></span>
+            ))}
+            <span className="text-ink-500">{ar ? "(تكلفة الإيرادات + المصروفات التشغيلية)" : "(cost of sales + operating expenses)"}</span>
+          </p>
+          <p className="text-ink-500">{ar ? "لا تشمل المصروفات أعلاه الإهلاك والزكاة والاستثمار في المنصة، وتظهر في القوائم المالية." : "Depreciation, zakat and the platform investment are shown in the financial statements, not above."}</p>
+        </div>
       </Block>
 
       <Block n="5.2" title={ar ? "توزيع المصروفات" : "Expense mix"}>
@@ -112,35 +119,38 @@ export default function ExpensesPage() {
         </div>
       </Block>
 
-      <Block n="5.3" title={ar ? "تكلفة الفرق شهريًا" : "Team cost per month"}
-        lede={ar ? "رواتب الفرق الفعلية بحسب ميزانية كل سنة، ولا تزيد تلقائيًا مع حجم العمليات؛ أما المعلمون فيتقاضون أجرًا عن كل محاضرة فقط." : "Actual team salaries per each year's budget; they do not grow automatically with volume. Teachers are paid per lecture only."}>
+      <Block n="5.3" title={ar ? "المتوسط الشهري لكل بند" : "Monthly average by category"}
+        lede={ar
+          ? "إجمالي كل بند في الجدول 5.1 مقسومًا على 12 شهرًا، فيطابق الجدولان بعضهما. رواتب الفرق ثابتة بحسب ميزانية كل سنة، والمعلمون يتقاضون أجرًا عن كل محاضرة فقط."
+          : "Each category's total in table 5.1 divided by 12, so the two tables agree. Team salaries follow each year's budget; teachers are paid per lecture only."}>
         <div className={clsx(CARD, "overflow-hidden print:shadow-none")}>
           <div className="thin-scrollbar overflow-x-auto">
             <table className="w-full min-w-[620px] text-[13.5px]">
               <thead>
                 <tr className="border-b border-[#e1e7ef] bg-[#f8f9fc] text-[12.5px] text-ink-600">
-                  <th className="px-3 py-2.5 text-start font-semibold">{ar ? "متوسط التكلفة الشهرية (بالريال)" : "Average monthly cost (SAR)"}</th>
+                  <th className="px-3 py-2.5 text-start font-semibold">{ar ? "متوسط الشهر (بالريال)" : "Monthly average (SAR)"}</th>
                   {r.years.map((y) => <th key={y.year} className="px-3 py-2.5 text-end font-semibold">{t("y")}{y.year}</th>)}
                 </tr>
               </thead>
               <tbody>
-                {(["marketing_team", "cs", "quality", "content"] as ExpenseCategory[]).map((c) => (
+                {cats.map((c) => (
                   <tr key={c} className="border-b border-[#f0f2f7]">
-                    <td className="px-3 py-2.5 text-ink-800">{ar ? EXPENSE_LABELS[c].ar : EXPENSE_LABELS[c].en}</td>
-                    {r.years.map((y) => <td key={y.year} className="ltr-content px-3 py-2.5 text-end tabular-nums">{money((y.expense_by_category[c] ?? 0) / 12)}</td>)}
+                    <td className="px-3 py-2 text-ink-800"><span className="flex items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: EXPENSE_LABELS[c].color }} />{ar ? EXPENSE_LABELS[c].ar : EXPENSE_LABELS[c].en}</span></td>
+                    {perYear.map((y, i) => <td key={i} className="ltr-content px-3 py-2 text-end tabular-nums">{money(y.vals[c] / 12)}</td>)}
                   </tr>
                 ))}
-                <tr className="font-bold">
-                  <td className="px-3 py-2.5 text-ink-900">{ar ? "المعلمون المطلوبون في نهاية السنة (بالمحاضرة)" : "Teachers needed at year end (per lecture)"}</td>
+                <tr className="bg-brand-50/50 font-bold">
+                  <td className="px-3 py-2.5 text-ink-900">{ar ? "إجمالي المصروفات الشهرية" : "Total monthly expenses"}</td>
+                  {perYear.map((y, i) => <td key={i} className="ltr-content px-3 py-2.5 text-end tabular-nums text-ink-900">{money(y.total / 12)}</td>)}
+                </tr>
+                <tr>
+                  <td className="px-3 py-2.5 text-ink-700">{ar ? "المعلمون المطلوبون في نهاية السنة" : "Teachers needed at year end"}</td>
                   {yearEnd.map((m) => <td key={m.month} className="ltr-content px-3 py-2.5 text-end tabular-nums">{money(m.headcount.teachers)}</td>)}
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
-        <p className="mt-2 text-[12.5px] leading-6 text-ink-500">
-          {ar ? "تشمل تكلفة فريق التسويق والمبيعات مسؤول مبيعات المدارس والشراكات من تاريخ تعيينه، ورسوم التحويل الدولي للرواتب." : "The marketing & sales team includes the schools & partnerships sales lead from their start date, plus international transfer fees."}
-        </p>
       </Block>
 
       <Block n="5.4" title={ar ? "استخدام التمويل" : "Use of funds"}
