@@ -128,6 +128,16 @@
   unicode-bidi: isolate;
 }
 
+/* Financial model in Arabic: every table cell reads from the right; numbers are
+   isolated left-to-right by the formatters (i18n.iso), so the cells themselves stay RTL. */
+.fm-root[dir="rtl"] td,
+.fm-root[dir="rtl"] th {
+  text-align: right;
+}
+.fm-root[dir="rtl"] .ltr-content {
+  direction: rtl;
+}
+
 /* Slim, unobtrusive scrollbar for the sidebar and scrollable panels */
 .thin-scrollbar::-webkit-scrollbar {
   width: 6px;

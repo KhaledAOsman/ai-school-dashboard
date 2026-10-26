@@ -105,7 +105,7 @@ export default function OverviewPage() {
           <Kpi label={t("ebitda_y5")} value={big(k.ebitda_y5)} tone={k.ebitda_y5 >= 0 ? "good" : "bad"} sub={`${t("margin")}: ${pct(k.ebitda_margin_y5, 0)}`} delay={120} />
           <Kpi label={t("breakeven")} value={k.ebitda_breakeven_month ? monthLabel(k.ebitda_breakeven_month, lang) : t("not_reached")} hint={t("breakeven_hint")} delay={180} animate={false} />
           <Kpi label={t("funding_need")} value={big(k.loan_amount)} tone="accent"
-            sub={k.financeable ? (ar ? "قرض دون فوائد يغطي العجز واحتياطيًا نقديًا" : "Interest-free loan covering the deficit and a cash reserve") : (ar ? "تبدأ الأقساط قبل قدرة التشغيل على سدادها" : "Repayments start before operations can carry them")} delay={240} />
+            sub={k.funding_gap > 0 ? (ar ? `قرض دون فوائد، ويلزم تمويل إضافي ${big(k.funding_gap)} في ${monthLabel(k.funding_gap_month, lang)}` : `Interest-free loan, plus ${big(k.funding_gap)} additional funding in ${monthLabel(k.funding_gap_month, lang)}`) : (ar ? "قرض دون فوائد يغطي العجز واحتياطيًا نقديًا" : "Interest-free loan covering the deficit and a cash reserve")} delay={240} />
           <Kpi label={t("ev")} value={big(k.enterprise_value)} sub={`${t("exit_equity")}: ${big(k.exit_equity_value)}`} delay={300} />
         </div>
       </Block>

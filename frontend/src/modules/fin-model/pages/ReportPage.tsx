@@ -14,6 +14,7 @@ import ExpensesPage from "./ExpensesPage";
 import FundingPage from "./FundingPage";
 import ScenariosPage from "./ScenariosPage";
 import { ChapterHeader, ReportMode } from "../components/chapters";
+import { Reconciliation } from "../components/Reconciliation";
 
 /** Print-ready investor report: browser "Save as PDF" turns it into the PDF. */
 export default function ReportPage() {
@@ -54,6 +55,7 @@ export default function ReportPage() {
           </Panel>
           <Panel title={t("cash_flow")}><StatementTable lines={cashLines} cols={r.years} labels={labels} /></Panel>
           <Panel title={t("balance_sheet")}><StatementTable lines={balanceLines} cols={r.years} labels={labels} /></Panel>
+          <Reconciliation />
         </div>
         <FundingPage />
         <ScenariosPage />

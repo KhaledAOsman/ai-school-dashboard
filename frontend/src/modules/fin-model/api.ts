@@ -99,7 +99,7 @@ export interface Kpis {
   ebitda_margin_y5: number | null; net_income_y5: number; teacher_capacity_lessons: number; ebitda_breakeven_month: string | null;
   net_income_breakeven_month: string | null; cash_flow_breakeven_month: string | null; min_cash: number; min_cash_month: string;
   funding_need_without_loan: number; cash_buffer: number; loan_amount: number; suggested_loan: number; financeable: boolean;
-  owner_bridge: number; suggested_grace_months: number | null; loan_repaid_month: string | null; loan_monthly_payment: number;
+  owner_bridge: number; funding_gap: number; funding_gap_month: string | null; suggested_grace_months: number | null; loan_repaid_month: string | null; loan_monthly_payment: number;
   min_dscr: number | null; cash_end: number; students_active_end: number; teachers_end: number; headcount_end: number;
   vat_registration_month: string | null; owner_invested: number; owner_irr: number | null; owner_moic: number | null;
   enterprise_value: number; equity_value_today: number; exit_equity_value: number;

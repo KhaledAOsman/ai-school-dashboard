@@ -47,8 +47,8 @@ export default function BusinessModelPage() {
     {
       icon: Building2, title: ar ? "الاشتراكات المؤسسية (B2B)" : "Institutional subscriptions (B2B)",
       body: ar
-        ? `باقات للمدارس والجمعيات والشركات تُقدَّم فيها المحاضرات لمجموعات من الطلاب، بخصم يصل إلى ${pct(b2bMaxDiscount, 0)}.`
-        : `Packages for schools, associations and companies, delivered to groups of students, at up to ${pct(b2bMaxDiscount, 0)} off.`,
+        ? `باقات للمدارس والجمعيات والشركات يحصل فيها كل طالب على محاضرات فردية بخصم يصل إلى ${pct(b2bMaxDiscount, 0)}، دون تكلفة تسويق أو محاضرات مجانية.`
+        : `Packages for schools, associations and companies; each student takes one-to-one lectures at up to ${pct(b2bMaxDiscount, 0)} off, with no marketing or free-lecture cost.`,
       start: b2bStart ? (ar ? `تبدأ ${monthLabel(b2bStart, lang)} (السنة الثانية)` : `From ${monthLabel(b2bStart, lang)} (year 2)`) : "—",
       share: segRevenue("b2b") / (y5.revenue || 1),
     },
@@ -76,8 +76,8 @@ export default function BusinessModelPage() {
         ? `يشترك ولي الأمر في باقة من ${core.lessons} محاضرة بسعر ${money(core.list_price)} ${sar}، ويُسدَّد الاشتراك مقدمًا.`
         : `The parent buys a ${core.lessons}-lecture package for ${sar} ${money(core.list_price)}, paid upfront.`,
       facts: ar
-        ? [`يتحول ${pct(conv.now, 1)} من المحاضرات المجانية إلى اشتراك حاليًا، والمستهدف ${pct(conv.target, 1)}`, `عمولة مبيعات ${money(core.commission_per_enrolment)} ${sar} عن كل اشتراك`]
-        : [`${pct(conv.now, 1)} of free lectures convert today; target ${pct(conv.target, 1)}`, `${sar} ${money(core.commission_per_enrolment)} sales commission per subscription`],
+        ? [`يشترك حاليًا ${pct(conv.now, 1)} ممن حضروا المحاضرة المجانية، والمستهدف ${pct(conv.target, 0)}`, `عمولة مبيعات ${money(core.commission_per_enrolment)} ${sar} عن كل اشتراك`]
+        : [`${pct(conv.now, 1)} of those who attend the free lecture subscribe today; target ${pct(conv.target, 0)}`, `${sar} ${money(core.commission_per_enrolment)} sales commission per subscription`],
     },
     {
       icon: MonitorPlay, title: ar ? "تقديم المحاضرات" : "Delivering the lectures",

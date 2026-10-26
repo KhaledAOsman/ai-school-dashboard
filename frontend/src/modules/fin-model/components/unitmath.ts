@@ -47,16 +47,16 @@ export function freeLectureFunnel(mk: Market, target: boolean) {
   const attended = r1(lectures * show);
   const subs = r2(attended * t2p);
   const total = adCost + lectureCost;
-  return { cpl, lectures, leads, paidLeads, adCost, lectureCost, attended, subs, total, conversion: subs / lectures, perSub: subs ? total / subs : null };
+  return { cpl, lectures, leads, paidLeads, adCost, lectureCost, attended, subs, total, conversion: attended ? subs / attended : 0, perSub: subs ? total / subs : null };
 }
 
-/** Conversion from a booked free lecture to a paid subscription (current and target). */
+/** Conversion from an attended free lecture to a paid subscription (current and target). */
 export function lectureConversion(mk: Market) {
-  return { now: mk.show_rate * mk.trial_to_paid, target: mk.show_rate_target * mk.trial_to_paid_target };
+  return { now: mk.trial_to_paid, target: mk.trial_to_paid_target };
 }
 
 export interface SalesRow {
-  label: string; trials: number; fromTrials: number; otherB2c: number; renewals: number; b2b: number;
+  label: string; trials: number; attended: number; fromTrials: number; otherB2c: number; renewals: number; b2b: number;
   subs: number; revenue: number; revenueB2c: number; revenueB2b: number; grossProfit: number;
 }
 
@@ -64,9 +64,10 @@ export interface SalesRow {
 export function salesRow(label: string, ms: MonthRow[], r: ModelResult): SalesRow {
   const seg = new Map(r.streams.map((s) => [s.id, s.category]));
   const funnel = new Set((r.resolved_assumptions?.streams ?? []).filter((s) => s.driver === "funnel").map((s) => s.id));
-  const row: SalesRow = { label, trials: 0, fromTrials: 0, otherB2c: 0, renewals: 0, b2b: 0, subs: 0, revenue: 0, revenueB2c: 0, revenueB2b: 0, grossProfit: 0 };
+  const row: SalesRow = { label, trials: 0, attended: 0, fromTrials: 0, otherB2c: 0, renewals: 0, b2b: 0, subs: 0, revenue: 0, revenueB2c: 0, revenueB2b: 0, grossProfit: 0 };
   for (const m of ms) {
     row.trials += m.trials;
+    row.attended += m.attended;
     row.subs += m.subscriptions;
     row.revenue += m.revenue;
     row.grossProfit += m.gross_profit;
@@ -98,7 +99,7 @@ export function roundTo(values: number[], target: number): number[] {
   return out;
 }
 
-const KEYS = ["trials", "fromTrials", "otherB2c", "renewals", "b2b", "subs", "revenue", "revenueB2c", "revenueB2b", "grossProfit"] as const;
+const KEYS = ["trials", "attended", "fromTrials", "otherB2c", "renewals", "b2b", "subs", "revenue", "revenueB2c", "revenueB2b", "grossProfit"] as const;
 
 /**
  * Whole-number table for one model year: every month row adds up (components = total)
@@ -108,12 +109,12 @@ export function yearTable(r: ModelResult, year: number, monthLabel: (m: string) 
   const ms = r.months.filter((m) => m.year === year);
   const raw = ms.map((m) => salesRow(monthLabel(m.month), [m], r));
   const sum = (k: (typeof KEYS)[number]) => raw.reduce((a, x) => a + x[k], 0);
-  const col = (k: "trials" | "subs" | "revenue" | "grossProfit") => roundTo(raw.map((x) => x[k]), Math.round(sum(k)));
-  const trials = col("trials"), subs = col("subs"), revenue = col("revenue"), gp = col("grossProfit");
+  const col = (k: "trials" | "attended" | "subs" | "revenue" | "grossProfit") => roundTo(raw.map((x) => x[k]), Math.round(sum(k)));
+  const trials = col("trials"), attended = col("attended"), subs = col("subs"), revenue = col("revenue"), gp = col("grossProfit");
   const rows: SalesRow[] = raw.map((x, i) => {
     const [fromTrials, otherB2c, renewals, b2b] = roundTo([x.fromTrials, x.otherB2c, x.renewals, x.b2b], subs[i]);
     const [revenueB2c, revenueB2b] = roundTo([x.revenueB2c, x.revenueB2b], revenue[i]);
-    return { label: x.label, trials: trials[i], fromTrials, otherB2c, renewals, b2b, subs: subs[i], revenue: revenue[i], revenueB2c, revenueB2b, grossProfit: gp[i] };
+    return { label: x.label, trials: trials[i], attended: attended[i], fromTrials, otherB2c, renewals, b2b, subs: subs[i], revenue: revenue[i], revenueB2c, revenueB2b, grossProfit: gp[i] };
   });
   const total = { label: totalLabel } as SalesRow;
   for (const k of KEYS) (total as unknown as Record<string, number>)[k] = rows.reduce((a, x) => a + x[k], 0);

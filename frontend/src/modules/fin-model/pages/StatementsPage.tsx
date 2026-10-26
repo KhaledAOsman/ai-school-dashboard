@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useFM } from "../context";
 import { monthLabel } from "../i18n";
 import { Note, Panel, Segmented } from "../components/ui";
-import { ChapterHeader, ChapterNav } from "../components/chapters";
+import { Block, ChapterHeader, ChapterNav } from "../components/chapters";
+import { Reconciliation } from "../components/Reconciliation";
 import { StatementTable } from "../components/StatementTable";
 import { balanceLines, cashLines, incomeLines } from "../components/statements";
 
@@ -51,6 +52,12 @@ export default function StatementsPage() {
       <Panel title={t("balance_sheet")} subtitle={ar ? "في نهاية كل فترة" : "At the end of each period"}>
         <StatementTable lines={balanceLines} cols={cols} labels={labels} />
       </Panel>
+      <Block n="6.1" title={ar ? "مطابقة قائمة الدخل مع التدفقات النقدية" : "Reconciling the income statement with cash flow"}
+        lede={ar
+          ? "لا يُشترط أن يتساوى الإيراد مع المتحصلات، ولا الربح مع النقد؛ لأن الإيراد يُسجَّل دون ضريبة القيمة المضافة بينما يُحصَّل النقد شاملًا لها، ولأن الجهات المؤسسية تُسدِّد بعد شهرين من الفوترة. يوضح الجدولان الفروقات بندًا بندًا، ويتطابق ناتجهما مع قائمة التدفقات النقدية بالريال."
+          : "Revenue need not equal cash collected, nor profit equal cash: revenue excludes VAT while cash includes it, and institutions pay two months after billing. The two tables bridge the difference line by line and land exactly on the cash-flow statement."}>
+        <Reconciliation />
+      </Block>
       <Note>
         {ar
           ? "يُحتسب الإيراد على أساس الاشتراكات المدفوعة في الفترة، وتُحمَّل أجور محاضراتها في الفترة نفسها. تُسدِّد الجهات المؤسسية بعد شهرين من الفوترة فتظهر كذمم مدينة، ويُدفع للمعلم عن كل محاضرة محجوزة حتى عند غياب الطالب."

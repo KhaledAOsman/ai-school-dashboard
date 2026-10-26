@@ -1,6 +1,6 @@
 import { Area, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useFM } from "../context";
-import { COLORS, compact, money, monthLabel, pct } from "../i18n";
+import { COLORS, compact, money, monthLabel, pct, iso } from "../i18n";
 import { ChartTooltip, Kpi, Note, Panel, useMoney } from "../components/ui";
 import { FUND_LABELS, computeUseOfFunds } from "../components/funds";
 import { ChapterHeader, ChapterNav } from "../components/chapters";
@@ -24,11 +24,11 @@ export default function FundingPage() {
       <ChapterHeader id="funding" />
       <div className="grid gap-3 md:grid-cols-3">
         {(ar ? [
-          ["حجم التمويل", `قرض بقيمة ${big(k.loan_amount)} دون فوائد${k.owner_bridge ? `، إضافة إلى ${big(k.owner_bridge)} يموّلها الملاك حتى استلام القرض` : ""}.`],
+          ["حجم التمويل", `قرض بقيمة ${big(k.loan_amount)} دون فوائد${k.owner_bridge ? `، و${big(k.owner_bridge)} يموّلها الملاك حتى استلام القرض` : ""}${k.funding_gap ? `، وتمويل إضافي من الملاك أو المستثمرين بقيمة ${big(k.funding_gap)} في ${monthLabel(k.funding_gap_month, lang)}` : ""}.`],
           ["أوجه الاستخدام", biggest ? `أكبر البنود: ${fundLabels[biggest.key][0]} بقيمة ${big(biggest.value)}، والتفاصيل في الفصل 05.` : "—"],
           ["طريقة السداد", `فترة سماح ${f?.loan_grace_months} شهرًا دون أقساط، ثم قسط شهري قدره ${full(k.loan_monthly_payment)} من أرباح التشغيل${k.loan_repaid_month ? ` حتى ${monthLabel(k.loan_repaid_month, lang)}` : ""}.`],
         ] : [
-          ["How much", `An interest-free loan of ${big(k.loan_amount)}${k.owner_bridge ? `, plus ${big(k.owner_bridge)} from the owners until it is received` : ""}.`],
+          ["How much", `An interest-free loan of ${big(k.loan_amount)}${k.owner_bridge ? `, ${big(k.owner_bridge)} from the owners until it is received` : ""}${k.funding_gap ? `, and additional owner or investor funding of ${big(k.funding_gap)} in ${monthLabel(k.funding_gap_month, lang)}` : ""}.`],
           ["Use of funds", biggest ? `Largest item: ${fundLabels[biggest.key][1]} at ${big(biggest.value)}; details in chapter 05.` : "—"],
           ["Repayment", `A ${f?.loan_grace_months}-month grace period with no instalments, then ${full(k.loan_monthly_payment)} a month from operating profit${k.loan_repaid_month ? ` until ${monthLabel(k.loan_repaid_month, lang)}` : ""}.`],
         ]).map(([h, d]) => (
@@ -40,7 +40,12 @@ export default function FundingPage() {
         <Kpi label={ar ? "العجز النقدي دون تمويل" : "Cash deficit without financing"} value={big(k.funding_need_without_loan)} sub={ar ? "أكبر عجز تراكمي في النقد" : "Deepest cumulative cash deficit"} delay={60} />
         <Kpi label={ar ? "القسط الشهري بعد فترة السماح" : "Monthly instalment after grace"} value={full(k.loan_monthly_payment)}
           sub={k.loan_repaid_month ? (ar ? `يُسدَّد بالكامل في ${monthLabel(k.loan_repaid_month, lang)}` : `Fully repaid ${monthLabel(k.loan_repaid_month, lang)}`) : (ar ? "يمتد السداد إلى ما بعد السنة الخامسة" : "Runs beyond year 5")} delay={120} />
-        <Kpi label={ar ? "تمويل مرحلي من الملاك" : "Owner bridge"} value={big(k.owner_bridge)} sub={ar ? `حتى استلام القرض في ${monthLabel(f?.loan_draw_month, lang)}` : `Until the loan is drawn ${monthLabel(f?.loan_draw_month, lang)}`} delay={180} />
+        {k.funding_gap > 0 ? (
+          <Kpi label={ar ? "تمويل إضافي مطلوب" : "Additional funding required"} value={big(k.funding_gap)} tone="bad"
+            sub={ar ? `في ${monthLabel(k.funding_gap_month, lang)} لأن أقساط القرض تسبق قدرة التشغيل` : `In ${monthLabel(k.funding_gap_month, lang)}, as loan instalments precede operating capacity`} delay={180} animate={false} />
+        ) : (
+          <Kpi label={ar ? "تمويل مرحلي من الملاك" : "Owner bridge"} value={big(k.owner_bridge)} sub={ar ? `حتى استلام القرض في ${monthLabel(f?.loan_draw_month, lang)}` : `Until the loan is drawn ${monthLabel(f?.loan_draw_month, lang)}`} delay={180} />
+        )}
       </div>
       {f && (
         <Note tone={k.financeable ? "info" : "warn"}>
@@ -92,7 +97,7 @@ export default function FundingPage() {
                 ...(hasInterest ? [[ar ? "تكلفة التمويل" : "Financing cost", (y: typeof r.years[0]) => money(-y.interest)] as const] : []),
                 [ar ? "سداد أصل القرض" : "Principal repaid", (y: typeof r.years[0]) => money(-y.loan_principal)],
                 [ar ? "رصيد القرض في نهاية السنة" : "Loan balance (year end)", (y: typeof r.years[0]) => money(y.loan_balance)],
-                [ar ? "تغطية خدمة الدين (DSCR)" : "Debt service coverage (DSCR)", (y: typeof r.years[0]) => (y.dscr === null ? "—" : `${y.dscr.toFixed(2)}x`)],
+                [ar ? "تغطية خدمة الدين (DSCR)" : "Debt service coverage (DSCR)", (y: typeof r.years[0]) => (y.dscr === null ? "—" : iso(`${y.dscr.toFixed(2)}x`))],
               ] as const).map(([l, fn]) => (
                 <tr key={l} className="border-b border-[#f0f2f7]"><td className="px-2 py-1.5 text-ink-700">{l}</td>{r.years.map((y) => <td key={y.year} className="ltr-content px-2 py-1.5 text-end">{fn(y)}</td>)}</tr>
               ))}
@@ -120,7 +125,7 @@ export default function FundingPage() {
             {[
               [ar ? "رأس المال المستثمر" : "Capital invested", big(k.owner_invested)],
               [ar ? "قيمة حقوق الملكية في السنة 5" : "Equity value at year 5", big(k.exit_equity_value)],
-              [ar ? "مضاعف رأس المال (MOIC)" : "Multiple on capital (MOIC)", k.owner_moic === null ? "—" : `${k.owner_moic.toFixed(1)}x`],
+              [ar ? "مضاعف رأس المال (MOIC)" : "Multiple on capital (MOIC)", k.owner_moic === null ? "—" : iso(`${k.owner_moic.toFixed(1)}x`)],
               [ar ? "العائد الداخلي السنوي (IRR)" : "Annual IRR", pct(k.owner_irr, 0)],
             ].map(([l, val]) => (
               <div key={l} className="rounded-lg bg-[#f8f9fc] p-3"><p className="text-[12px] text-ink-600">{l}</p><p className="ltr-content mt-1 text-right text-[18px] font-bold text-ink-900">{val}</p></div>

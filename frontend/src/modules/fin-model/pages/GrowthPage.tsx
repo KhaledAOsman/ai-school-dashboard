@@ -41,7 +41,7 @@ export default function SalesPlanPage() {
   const sar = t("sar");
   const total5 = annual.reduce((acc, x) => {
     const o = { ...acc } as SalesRow;
-    (["trials", "fromTrials", "otherB2c", "renewals", "b2b", "subs", "revenue", "revenueB2c", "revenueB2b", "grossProfit"] as const).forEach((key) => { o[key] = (acc[key] ?? 0) + x[key]; });
+    (["trials", "attended", "fromTrials", "otherB2c", "renewals", "b2b", "subs", "revenue", "revenueB2c", "revenueB2b", "grossProfit"] as const).forEach((key) => { o[key] = (acc[key] ?? 0) + x[key]; });
     return o;
   }, {} as SalesRow);
   const hasOther = annual.some((x) => x.otherB2c > 0);
@@ -51,7 +51,8 @@ export default function SalesPlanPage() {
   type Row = { label: string; v: (x: SalesRow) => string; kind?: "total" | "sub" | "pct" };
   const rows: Row[] = [
     { label: ar ? "المحاضرات المجانية المقدَّمة" : "Free lectures given", v: (x) => money(x.trials) },
-    { label: ar ? "نسبة التحويل إلى اشتراك مدفوع" : "Conversion to a paid subscription", v: (x) => pct(x.trials ? x.fromTrials / x.trials : null, 1), kind: "pct" },
+    { label: ar ? "المحاضرات المجانية التي تم حضورها" : "Free lectures attended", v: (x) => money(x.attended) },
+    { label: ar ? "نسبة الاشتراك ممن حضروا" : "Conversion of attendees", v: (x) => pct(x.attended ? x.fromTrials / x.attended : null, 1), kind: "pct" },
     { label: ar ? "اشتراكات جديدة من المحاضرات المجانية" : "New subscriptions from free lectures", v: (x) => money(x.fromTrials) },
     { label: ar ? "تجديدات الاشتراكات الفردية" : "Individual renewals", v: (x) => money(x.renewals) },
     ...(hasOther ? [{ label: ar ? "برامج ومعسكرات فردية" : "Individual programmes & camps", v: (x: SalesRow) => money(x.otherB2c) }] : []),
@@ -73,7 +74,6 @@ export default function SalesPlanPage() {
   }
   for (const m of ra.markets) if (m.start_month > start) ev.push({ month: m.start_month, kind: "market", text: ar ? `دخول سوق ${nm(m)}` : `Enter ${nm(m)}` });
   for (const h of ra.team.hires) ev.push({ month: h.month, kind: "hire", text: `${ar ? "تعيين" : "Hire"} ${h.count > 1 ? `${h.count} × ` : ""}${ar ? h.role_ar : h.role_en}` });
-  if (ra.team.quality_start_month > start) ev.push({ month: ra.team.quality_start_month, kind: "hire", text: ar ? "تأسيس فريق الجودة ومتابعة المحاضرات" : "Quality & lecture review team set up" });
   for (const c of ra.capex) ev.push({ month: c.month, kind: "capex", text: nm(c), sub: `${money(c.amount)} ${sar}` });
   if (k.loan_amount > 0) ev.push({ month: ra.financing.loan_draw_month, kind: "funding", text: ar ? `استلام التمويل ${big(k.loan_amount)}` : `Financing of ${big(k.loan_amount)} received` });
   if (k.vat_registration_month) ev.push({ month: k.vat_registration_month, kind: "tax", text: ar ? "التسجيل في ضريبة القيمة المضافة" : "VAT registration" });
@@ -132,6 +132,7 @@ export default function SalesPlanPage() {
                 <tr className="border-b border-[#e1e7ef] bg-[#f8f9fc] text-[12.5px] text-ink-600">
                   <th className="px-3 py-2.5 text-start font-semibold">{ar ? "الشهر" : "Month"}</th>
                   <th className={th}>{ar ? "محاضرات مجانية" : "Free lectures"}</th>
+                  <th className={th}>{ar ? "تم حضورها" : "Attended"}</th>
                   <th className={th}>{ar ? "اشتراكات جديدة" : "New"}</th>
                   <th className={th}>{ar ? "تجديدات" : "Renewals"}</th>
                   {hasOther && <th className={th}>{ar ? "برامج فردية" : "Programmes"}</th>}
@@ -148,6 +149,7 @@ export default function SalesPlanPage() {
                     <tr key={x.label + i} className={clsx("border-b border-[#f0f2f7] last:border-0", isTotal && "bg-brand-50/50 font-bold")}>
                       <td className={clsx("whitespace-nowrap px-3 py-2", isTotal ? "text-ink-900" : "text-ink-700")}>{x.label}</td>
                       <td className="ltr-content px-3 py-2 text-end tabular-nums">{money(x.trials)}</td>
+                      <td className="ltr-content px-3 py-2 text-end tabular-nums">{money(x.attended)}</td>
                       <td className="ltr-content px-3 py-2 text-end tabular-nums">{money(x.fromTrials)}</td>
                       <td className="ltr-content px-3 py-2 text-end tabular-nums">{money(x.renewals)}</td>
                       {hasOther && <td className="ltr-content px-3 py-2 text-end tabular-nums">{money(x.otherB2c)}</td>}

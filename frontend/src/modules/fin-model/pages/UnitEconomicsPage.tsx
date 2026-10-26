@@ -6,7 +6,7 @@
  */
 import clsx from "clsx";
 import { useFM } from "../context";
-import { COLORS, money, monthLabel, pct } from "../i18n";
+import { COLORS, money, monthLabel, pct, iso } from "../i18n";
 import { CARD, Note } from "../components/ui";
 import { Block, ChapterHeader, ChapterNav } from "../components/chapters";
 import { freeLectureFunnel, r1, subscriptionMath } from "../components/unitmath";
@@ -27,13 +27,51 @@ export default function UnitEconomicsPage() {
 
   // whole riyals so that each column adds up exactly as printed
   const W = (v: number) => Math.round(v);
-  const col = (c: typeof sub.before) => {
-    const list = W(sub.list), disc = W(sub.discount), paid = list - disc;
-    const vat = W(c.vat), net = paid - vat, teacher = W(sub.teacher), comm = W(sub.commission), gw = W(sub.gateway);
+  const colOf = (m: typeof sub, c: typeof sub.before) => {
+    const list = W(m.list), disc = W(m.discount), paid = list - disc;
+    const vat = W(c.vat), net = paid - vat, teacher = W(m.teacher), comm = W(m.commission), gw = W(m.gateway);
     return { list, disc, paid, vat, net, teacher, comm, gw, profit: net - teacher - comm - gw };
   };
+  const col = (c: typeof sub.before) => colOf(sub, c);
   const B = col(sub.before), A = col(sub.after);
-  const rows: { label: string; b: number; a: number; kind?: "sub" | "total" | "neg" }[] = [
+  type PRow = { label: string; b: number; a: number; kind?: "sub" | "total" | "neg" };
+  const profitRows = (st: typeof core, m: typeof sub): PRow[] => {
+    const b = colOf(m, m.before), af = colOf(m, m.after);
+    const out: PRow[] = [
+      { label: ar ? "سعر الباقة (شامل الضريبة)" : "Package price (VAT-inclusive)", b: b.list, a: af.list },
+      { label: ar ? `الخصم (بحد أقصى ${pct(st.avg_discount, 0)})` : `Discount (maximum ${pct(st.avg_discount, 0)})`, b: -b.disc, a: -af.disc, kind: "neg" },
+      { label: ar ? "المبلغ المدفوع" : "Amount paid", b: b.paid, a: af.paid, kind: "sub" },
+      { label: ar ? `ضريبة القيمة المضافة ${pct(ra.tax.vat_rate, 0)}` : `VAT ${pct(ra.tax.vat_rate, 0)}`, b: -b.vat, a: -af.vat, kind: "neg" },
+      { label: ar ? "إيراد الاشتراك" : "Subscription revenue", b: b.net, a: af.net, kind: "sub" },
+      { label: ar ? `أجر المعلم (${st.lessons} محاضرة × ${money(st.teacher_cost_per_lesson)})` : `Teacher (${st.lessons} lectures × ${money(st.teacher_cost_per_lesson)})`, b: -b.teacher, a: -af.teacher, kind: "neg" },
+    ];
+    if (b.comm) out.push({ label: ar ? "عمولة المبيعات" : "Sales commission", b: -b.comm, a: -af.comm, kind: "neg" });
+    if (b.gw) out.push({ label: ar ? `رسوم الدفع الإلكتروني (${pct(ra.payments.gateway_fee_pct, 1)} + ${money(ra.payments.gateway_fee_fixed)})` : `Payment fees (${pct(ra.payments.gateway_fee_pct, 1)} + ${money(ra.payments.gateway_fee_fixed)})`, b: -b.gw, a: -af.gw, kind: "neg" });
+    out.push({ label: ar ? "ربح الاشتراك الواحد" : "Profit per subscription", b: b.profit, a: af.profit, kind: "total" });
+    return out;
+  };
+  const ProfitTable = ({ rows: rr }: { rows: PRow[] }) => (
+    <table className="w-full text-[13px] sm:text-[14px] [&_td]:px-2.5 [&_th]:px-2.5 sm:[&_td]:px-4 sm:[&_th]:px-4">
+      <thead>
+        <tr className="border-b border-[#e1e7ef] bg-[#f8f9fc] text-[12.5px] text-ink-600">
+          <th className="py-2.5 text-start font-semibold">{ar ? "بالريال" : "SAR"}</th>
+          <th className="py-2.5 text-end font-semibold">{ar ? "قبل التسجيل الضريبي" : "Before VAT registration"}</th>
+          <th className="py-2.5 text-end font-semibold">{ar ? "بعد التسجيل الضريبي" : "After VAT registration"}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rr.map((x) => (
+          <tr key={x.label} className={clsx("border-b border-[#f0f2f7] last:border-0", x.kind === "total" && "bg-brand-50/60")}>
+            <td className={clsx("py-2.5", x.kind === "neg" ? "ps-6 text-ink-600" : "font-semibold text-ink-900", x.kind === "total" && "font-bold")}>{x.label}</td>
+            {[x.b, x.a].map((v, j) => (
+              <td key={j} className={clsx("ltr-content py-2.5 text-end tabular-nums", v < 0 ? "text-[#a02a24]" : "text-ink-900", (x.kind === "sub" || x.kind === "total") && "font-bold", x.kind === "total" && "text-brand-700")}>{money(v)}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+  const rows: PRow[] = [
     { label: ar ? "سعر الباقة (شامل الضريبة)" : "Package price (VAT-inclusive)", b: B.list, a: A.list },
     { label: ar ? `الخصم (بحد أقصى ${pct(core.avg_discount, 0)})` : `Discount (maximum ${pct(core.avg_discount, 0)})`, b: -B.disc, a: -A.disc, kind: "neg" },
     { label: ar ? "المبلغ المدفوع" : "Amount paid", b: B.paid, a: A.paid, kind: "sub" },
@@ -59,7 +97,7 @@ export default function UnitEconomicsPage() {
     { label: ar ? `تكلفة الإعلانات (× ${money(ksa.cpl, { decimals: 2 })} ${sar})` : `Ad cost (× ${sar} ${money(ksa.cpl, { decimals: 2 })})`, n: (x) => money(x.adCost), kind: "cost" },
     { label: ar ? `أجر المعلمين للمحاضرات المجانية (× ${money(ksa.trial_cost)} ${sar})` : `Teacher fees for free lectures (× ${sar} ${money(ksa.trial_cost)})`, n: (x) => money(x.lectureCost), kind: "cost" },
     { label: ar ? "حضروا المحاضرة" : "Attended", n: (x) => money(x.attended, { decimals: 1 }) },
-    { label: ar ? "اشتركوا" : "Subscribed", n: (x) => money(x.subs, { decimals: 2 }) },
+    { label: ar ? `اشتركوا (${pct(ksa.trial_to_paid, 1)} ممن حضروا حاليًا)` : `Subscribed (${pct(ksa.trial_to_paid, 1)} of attendees today)`, n: (x) => money(x.subs, { decimals: 2 }) },
     { label: ar ? "إجمالي التكلفة" : "Total cost", n: (x) => money(x.total), kind: "total" },
     { label: ar ? "تكلفة الحصول على مشترك (الإجمالي ÷ المشتركين)" : "Cost per new subscriber (total ÷ subscribers)", n: (x) => money(x.perSub), kind: "strong" },
   ];
@@ -84,25 +122,7 @@ export default function UnitEconomicsPage() {
           : `One core package. The second column shows the effect of VAT registration${vatMonth ? ` (expected ${monthLabel(vatMonth, lang)})` : ""}: prices stay the same, so VAT comes out of company revenue.`}>
         <div className="grid gap-4 xl:grid-cols-5">
           <div className={clsx(CARD, "overflow-hidden xl:col-span-3 print:shadow-none")}>
-            <table className="w-full text-[13px] sm:text-[14px] [&_td]:px-2.5 [&_th]:px-2.5 sm:[&_td]:px-4 sm:[&_th]:px-4">
-              <thead>
-                <tr className="border-b border-[#e1e7ef] bg-[#f8f9fc] text-[12.5px] text-ink-600">
-                  <th className="py-2.5 text-start font-semibold">{ar ? "بالريال" : "SAR"}</th>
-                  <th className="py-2.5 text-end font-semibold">{ar ? "قبل التسجيل الضريبي" : "Before VAT registration"}</th>
-                  <th className="py-2.5 text-end font-semibold">{ar ? "بعد التسجيل الضريبي" : "After VAT registration"}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((x) => (
-                  <tr key={x.label} className={clsx("border-b border-[#f0f2f7] last:border-0", x.kind === "total" && "bg-brand-50/60")}>
-                    <td className={clsx("py-2.5", x.kind === "neg" ? "ps-6 text-ink-600" : "font-semibold text-ink-900", x.kind === "total" && "font-bold")}>{x.label}</td>
-                    {[x.b, x.a].map((v, j) => (
-                      <td key={j} className={clsx("ltr-content py-2.5 text-end tabular-nums", v < 0 ? "text-[#a02a24]" : "text-ink-900", (x.kind === "sub" || x.kind === "total") && "font-bold", x.kind === "total" && "text-brand-700")}>{money(v)}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <ProfitTable rows={rows} />
           </div>
           <div className={clsx(CARD, "flex flex-col p-4 xl:col-span-2 print:shadow-none")}>
             <p className="text-[14px] font-bold text-ink-900">{ar ? `توزيع المبلغ المدفوع (${money(A.paid)} ${sar})` : `How the ${sar} ${money(A.paid)} paid is split`}</p>
@@ -158,8 +178,8 @@ export default function UnitEconomicsPage() {
             </Note>
             <Note>
               {ar
-                ? `في المستهدف تنخفض التكلفة إلى ${money(tgt.perSub)} ${sar} لكل مشترك، لأن نسبة التحويل ترتفع من ${pct(now.conversion, 1)} إلى ${pct(tgt.conversion, 1)} من المحاضرات المجانية.`
-                : `At target the cost falls to ${sar} ${money(tgt.perSub)} per subscriber as conversion rises from ${pct(now.conversion, 1)} to ${pct(tgt.conversion, 1)} of free lectures.`}
+                ? `في المستهدف تنخفض التكلفة إلى ${money(tgt.perSub)} ${sar} لكل مشترك، لأن نسبة الاشتراك ممن حضروا المحاضرة المجانية ترتفع من ${pct(ksa.trial_to_paid, 1)} إلى ${pct(ksa.trial_to_paid_target, 0)}.`
+                : `At target the cost falls to ${sar} ${money(tgt.perSub)} per subscriber as conversion of attendees rises from ${pct(ksa.trial_to_paid, 1)} to ${pct(ksa.trial_to_paid_target, 0)}.`}
             </Note>
           </div>
         </div>
@@ -183,7 +203,7 @@ export default function UnitEconomicsPage() {
                 [ar ? "ربح الباقة الواحدة (بعد الضريبة)" : "Profit per package (after VAT)", money(A.profit), money(A.profit)],
                 [ar ? "قيمة العميل = الربح × عدد الباقات" : "Customer value = profit × packages", money(valueNow), money(valueTgt)],
                 [ar ? "تكلفة الحصول على العميل" : "Cost to win the customer", money(cacNow), money(cacTgt)],
-                [ar ? "مضاعف القيمة إلى التكلفة" : "Value ÷ cost", cacNow ? `${(valueNow / cacNow).toFixed(1)}x` : "—", cacTgt ? `${(valueTgt / cacTgt).toFixed(1)}x` : "—"],
+                [ar ? "مضاعف القيمة إلى التكلفة" : "Value ÷ cost", cacNow ? iso(`${(valueNow / cacNow).toFixed(1)}x`) : "—", cacTgt ? iso(`${(valueTgt / cacTgt).toFixed(1)}x`) : "—"],
               ] as const).map(([l, a, b], i, arr) => (
                 <tr key={l} className={clsx("border-b border-[#f0f2f7] last:border-0", i === arr.length - 1 && "bg-brand-50/60")}>
                   <td className={clsx("py-2.5", i === arr.length - 1 ? "font-bold text-ink-900" : "text-ink-700")}>{l}</td>
@@ -201,20 +221,11 @@ export default function UnitEconomicsPage() {
 
       {b2bMath && b2b && (
         <Block n="3.4" title={ar ? "الاشتراك المؤسسي (B2B)" : "Institutional subscription (B2B)"}
-          lede={ar ? "تُقدَّم المحاضرات لمجموعات، فيتوزع أجر المعلم على عدة طلاب، ولا توجد تكلفة إعلانات أو محاضرات مجانية." : "Lectures are given to groups, so the teacher fee is shared by several students, with no ad or free-lecture cost."}>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {[
-              [ar ? "سعر الطالب بعد الخصم" : "Price per student after discount", `${money(b2bMath.paid)} ${sar}`, `${money(b2b.list_price)} − ${pct(b2b.avg_discount, 0)}`],
-              [ar ? "أجر المعلم لكل طالب" : "Teacher fee per student", `${money(b2bMath.teacher)} ${sar}`, ar ? `${b2b.lessons} محاضرة × ${money(b2b.teacher_cost_per_lesson)} ÷ ${b2bMath.grp} طلاب` : `${b2b.lessons} lectures × ${money(b2b.teacher_cost_per_lesson)} ÷ ${b2bMath.grp} students`],
-              [ar ? "ربح الطالب (بعد الضريبة)" : "Profit per student (after VAT)", `${money(b2bMath.after.profit)} ${sar}`, pct(b2bMath.after.margin, 0)],
-              [ar ? "مدة السداد" : "Payment terms", ar ? `بعد ${b2b.payment_lag_months === 1 ? "شهر" : b2b.payment_lag_months === 2 ? "شهرين" : `${b2b.payment_lag_months} أشهر`} من الفوترة` : `${b2b.payment_lag_months} months after billing`, ar ? "حسب التعاقد" : "per contract"],
-            ].map(([l, v, s]) => (
-              <div key={l} className={clsx(CARD, "p-4 print:shadow-none")}>
-                <p className="text-[13px] text-ink-600">{l}</p>
-                <p className="ltr-content mt-1 text-right text-[20px] font-bold text-ink-900">{v}</p>
-                <p className="ltr-content mt-0.5 text-right text-[12.5px] text-ink-500">{s}</p>
-              </div>
-            ))}
+          lede={ar
+            ? `يحصل طالب الجهة المؤسسية على المحاضرات فرديًا كالعميل الفردي، بخصم يصل إلى ${pct(b2b.avg_discount, 0)}، ويتقاضى المعلم ${money(b2b.teacher_cost_per_lesson)} ريالًا للمحاضرة. ولا توجد تكلفة تسويق أو محاضرات مجانية أو عمولة، وتُسدِّد الجهة بعد ${b2b.payment_lag_months === 1 ? "شهر" : b2b.payment_lag_months === 2 ? "شهرين" : `${b2b.payment_lag_months} أشهر`} من الفوترة.`
+            : `Institutional students also take one-to-one lectures, at up to ${pct(b2b.avg_discount, 0)} off, with the teacher paid ${sar} ${money(b2b.teacher_cost_per_lesson)} per lecture. There is no marketing, free-lecture or commission cost; the institution pays ${b2b.payment_lag_months} months after billing.`}>
+          <div className={clsx(CARD, "overflow-hidden print:shadow-none")}>
+            <ProfitTable rows={profitRows(b2b, b2bMath)} />
           </div>
         </Block>
       )}

@@ -117,12 +117,15 @@ export function monthLabel(ym: string | null | undefined, lang: Lang, short = fa
 }
 
 /** 1,234,567 (negatives in parentheses, accounting style) */
+/** Left-to-right isolate: keeps "1,250", "(300)" and "30%" intact inside Arabic text. */
+export const iso = (t: string) => `\u2066${t}\u2069`;
+
 export function money(v: number | null | undefined, opts: { parens?: boolean; decimals?: number } = {}): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return "—";
   const d = opts.decimals ?? 0;
   const abs = Math.abs(v).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
-  if (v < 0 && Math.abs(v) >= 0.5 * 10 ** -d) return opts.parens === false ? `-${abs}` : `(${abs})`;
-  return abs;
+  if (v < 0 && Math.abs(v) >= 0.5 * 10 ** -d) return iso(opts.parens === false ? `-${abs}` : `(${abs})`);
+  return iso(abs);
 }
 
 /** 1.2M / 350K */
@@ -130,14 +133,14 @@ export function compact(v: number | null | undefined, lang: Lang): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return "—";
   const a = Math.abs(v);
   const sign = v < 0 ? "-" : "";
-  if (a >= 1e6) return `${sign}${(a / 1e6).toLocaleString("en-US", { maximumFractionDigits: 2 })}${lang === "ar" ? " مليون" : "M"}`;
-  if (a >= 1e3) return `${sign}${(a / 1e3).toLocaleString("en-US", { maximumFractionDigits: 0 })}${lang === "ar" ? " ألف" : "K"}`;
-  return `${sign}${a.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  if (a >= 1e6) return lang === "ar" ? `${iso(sign + (a / 1e6).toLocaleString("en-US", { maximumFractionDigits: 2 }))} مليون` : `${sign}${(a / 1e6).toLocaleString("en-US", { maximumFractionDigits: 2 })}M`;
+  if (a >= 1e3) return lang === "ar" ? `${iso(sign + (a / 1e3).toLocaleString("en-US", { maximumFractionDigits: 0 }))} ألف` : `${sign}${(a / 1e3).toLocaleString("en-US", { maximumFractionDigits: 0 })}K`;
+  return iso(`${sign}${a.toLocaleString("en-US", { maximumFractionDigits: 0 })}`);
 }
 
 export function pct(v: number | null | undefined, decimals = 1): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return "—";
-  return `${(v * 100).toLocaleString("en-US", { maximumFractionDigits: decimals })}%`;
+  return iso(`${(v * 100).toLocaleString("en-US", { maximumFractionDigits: decimals })}%`);
 }
 
 export const COLORS = {

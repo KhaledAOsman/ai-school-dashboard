@@ -33,7 +33,7 @@ SCENARIOS = ("conservative", "base", "optimistic")
 
 # --------------------------------------------------------------- helpers
 # bump when the calculation changes so cached results are recomputed
-ENGINE_VERSION = 5
+ENGINE_VERSION = 7
 
 def ym_index(ym: str | None, start: str) -> int | None:
     if not ym:
@@ -711,6 +711,18 @@ def compute(assumptions: dict, scenario: str = "base", funding_history: list[dic
             if min(m["cash"] for m in _run(trial, loan)["months"][draw_i:]) >= 0:
                 suggested_grace = gr
                 break
+    # whatever the loan cannot cover is shown as additional funding (owners / investors) in the month the
+    # cash would first turn negative, so the statements never carry a negative cash balance
+    funding_gap = 0.0
+    for _ in range(12):
+        neg = next((m for m in run["months"] if m["cash"] < -0.5), None)
+        if neg is None:
+            break
+        deepest = -min(m["cash"] for m in run["months"] if m["i"] >= neg["i"])
+        amt = math.ceil(deepest / 10000.0) * 10000.0
+        fin["equity_injections"] = list(fin.get("equity_injections") or []) + [{"month": neg["month"], "amount": amt, "gap": True}]
+        funding_gap += amt
+        run = _run(a, loan)
     months = run["months"]
     years = _annual(months, start)
 
@@ -763,7 +775,9 @@ def compute(assumptions: dict, scenario: str = "base", funding_history: list[dic
         "min_cash": min_cash_m["cash"], "min_cash_month": min_cash_m["month"],
         "funding_need_without_loan": max(0.0, -min_raw), "cash_buffer": buffer,
         "loan_amount": loan, "suggested_loan": suggested, "financeable": financeable,
-        "owner_bridge": bridge, "suggested_grace_months": suggested_grace, "loan_repaid_month": repaid,
+        "owner_bridge": bridge, "funding_gap": funding_gap,
+        "funding_gap_month": next((e["month"] for e in fin.get("equity_injections") or [] if e.get("gap")), None),
+        "suggested_grace_months": suggested_grace, "loan_repaid_month": repaid,
         "loan_monthly_payment": run["pmt"] if loan else 0.0,
         "min_dscr": min((y["dscr"] for y in years if y["dscr"] is not None), default=None),
         "cash_end": months[-1]["cash"],
@@ -782,6 +796,20 @@ def compute(assumptions: dict, scenario: str = "base", funding_history: list[dic
     checks["expenses_equal_categories"] = all(abs(m["cogs"] + m["opex"] - sum(m["expense_by_category"].values())) < 0.01 for m in months)
     checks["annual_equals_months"] = all(abs(y["revenue"] - sum(m["revenue"] for m in months if m["year"] == y["year"])) < 0.01 for y in years)
     checks["cash_bridge"] = abs((months[0]["cash"] - months[0]["net_cash_flow"]) + sum(m["net_cash_flow"] for m in months) - months[-1]["cash"]) < 0.5
+    # revenue -> cash: collections = revenue + VAT billed + change in deferred revenue - change in receivables,
+    # and operating cash flow = EBITDA - change in receivables + change in deferred revenue + change in VAT payable - zakat paid
+    rec_ok = cfo_ok = True
+    prev = {"receivables": 0.0, "deferred_revenue": 0.0, "vat_payable": 0.0}
+    for m in months:
+        d_ar = m["receivables"] - prev["receivables"]
+        d_def = m["deferred_revenue"] - prev["deferred_revenue"]
+        d_vat = m["vat_payable"] - prev["vat_payable"]
+        vat_billed = d_vat + m["vat_paid"]
+        rec_ok &= abs(m["revenue"] + vat_billed + d_def - d_ar - m["collections"]) < 0.01
+        cfo_ok &= abs(m["ebitda"] - d_ar + d_def + d_vat - m["zakat_paid"] - m["cfo"]) < 0.01
+        prev = m
+    checks["revenue_to_collections"] = rec_ok
+    checks["ebitda_to_operating_cash"] = cfo_ok
     checks["all_ok"] = all(v for k, v in checks.items() if isinstance(v, bool))
 
     streams_meta = [{"id": k, "name_ar": d["s"].get("name_ar"), "name_en": d["s"].get("name_en"),

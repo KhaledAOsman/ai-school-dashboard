@@ -25,7 +25,7 @@ export function computeUseOfFunds(r: ModelResult) {
     team: sum((m) => m.expense_by_category.content + m.expense_by_category.cs + m.expense_by_category.quality + m.expense_by_category.admin),
     product: sum((m) => m.expense_by_category.launch + m.expense_by_category.tools + m.capex),
   };
-  const funded = k.loan_amount + k.owner_bridge;
+  const funded = k.loan_amount + k.owner_bridge + (k.funding_gap ?? 0);
   const used = Object.values(parts).reduce((a, b) => a + b, 0);
   const scale = used > 0 ? Math.min(1, Math.max(0, funded - k.cash_buffer) / used) : 0;
   // whole riyals that add up exactly to the amount raised

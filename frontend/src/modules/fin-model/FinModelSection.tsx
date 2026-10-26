@@ -66,7 +66,7 @@ function Shell() {
   }
 
   return (
-    <div dir={dir} lang={lang} className={clsx(lang === "en" && "text-left")}>
+    <div dir={dir} lang={lang} className={clsx("fm-root", lang === "en" && "text-left")}>
       {!isReport && (
         <div className="print:hidden">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">

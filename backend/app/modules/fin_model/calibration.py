@@ -10,7 +10,7 @@ analyst can judge it; values with too little data are left to the defaults.
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import text
@@ -122,17 +122,23 @@ async def calibrate(db: AsyncSession, today: date | None = None) -> dict:
         if trials:
             values["markets.ksa.lead_to_trial"] = min(trials / leads, 1.0)
             basis["markets.ksa.lead_to_trial"] = f"{trials} محاضرة تجريبية من {leads} ليد ({wtxt})"
-    if dec >= MIN_SAMPLE:
-        values["markets.ksa.show_rate"] = att / dec
-        basis["markets.ksa.show_rate"] = f"{att} حضروا من {dec} محاضرة مسجلة نتيجتها ({wtxt})"
-        if att:
-            values["markets.ksa.trial_to_paid"] = min(new_subs / att, 1.0)
-            basis["markets.ksa.trial_to_paid"] = f"{new_subs} اشتراك جديد من {att} حضروا ({wtxt})"
-    elif trials >= MIN_SAMPLE and new_subs:
+    # conversion is measured on all recorded trial lectures to date: new subscribers / lectures attended
+    all_trials = sum(r["trials"] for r in months.values())
+    all_att = sum(r["attended"] for r in months.values())
+    all_dec = sum(r["decided"] for r in months.values())
+    cust_all = (await _rows(db, "SELECT count(DISTINCT regexp_replace(phone, '\\D', '', 'g')) c FROM subscriptions"))[0]["c"]
+    cust_all = int(cust_all or 0)
+    if all_dec >= MIN_SAMPLE:
+        values["markets.ksa.show_rate"] = all_att / all_dec
+        basis["markets.ksa.show_rate"] = f"{all_att} حضروا من {all_dec} محاضرة مجانية سُجّلت نتيجتها"
+    if all_att >= 10 and cust_all:
+        values["markets.ksa.trial_to_paid"] = min(cust_all / all_att, 1.0)
+        basis["markets.ksa.trial_to_paid"] = f"{cust_all} مشترك جديد من {all_att} محاضرة مجانية تم حضورها"
+    elif all_trials >= MIN_SAMPLE and cust_all:
         # attendance not recorded yet: take the show rate as assumed and back out the rest
         show = 0.6
-        values["markets.ksa.trial_to_paid"] = min(new_subs / (trials * show), 1.0)
-        basis["markets.ksa.trial_to_paid"] = f"{new_subs} اشتراك من {trials} محاضرة × حضور مفترض 60% ({wtxt})"
+        values["markets.ksa.trial_to_paid"] = min(cust_all / (all_trials * show), 1.0)
+        basis["markets.ksa.trial_to_paid"] = f"{cust_all} مشترك جديد من {all_trials} محاضرة محجوزة × حضور مفترض 60%"
 
     # sales: discount and renewal
     s = (await _rows(db, """SELECT count(*) n, coalesce(sum(amount_paid), 0) paid, coalesce(sum(discount_amount), 0) disc,
@@ -142,15 +148,11 @@ async def calibrate(db: AsyncSession, today: date | None = None) -> dict:
     if n and paid + disc > 0:
         values["streams.core_b2c.avg_discount"] = disc / (paid + disc)
         basis["streams.core_b2c.avg_discount"] = f"خصم {disc:,.0f} من قيمة قائمة {paid + disc:,.0f} ({n} اشتراك)"
-    cutoff = today - timedelta(days=45)  # a 12-lesson cycle takes ~6 weeks
-    eligible = (await _rows(db, """
-        SELECT count(*) c FROM (
-          SELECT regexp_replace(phone, '\\D', '', 'g') p, min(subscribed_at) f FROM subscriptions GROUP BY 1) x
-        WHERE f <= :cut""", cut=cutoff))[0]["c"]
+    # renewal = repeat subscriptions / customers (e.g. 13 subscriptions from 12 customers = 1 / 12)
     renewals = n - customers
-    if eligible:
-        values["streams.core_b2c.renewal_rate"] = min(renewals / eligible, 0.95)
-        basis["streams.core_b2c.renewal_rate"] = f"{renewals} تجديد من {eligible} عميل أنهى دورته الأولى"
+    if customers:
+        values["streams.core_b2c.renewal_rate"] = min(renewals / customers, 0.95)
+        basis["streams.core_b2c.renewal_rate"] = f"{renewals} تجديد من {customers} عميل ({n} اشتراك)"
 
     # current salaried team by function (Finance > staff, grouped by department name)
     staff = await _rows(db, """

@@ -171,6 +171,31 @@ def upgrade(assumptions: dict) -> dict:
             fin["loan_rate"] = 0.0
             fin["loan_upfront_fee"] = 0.0
         a["schema"] = 3
+    if schema < 4:
+        # board decisions of v4: only individual + institutional subscriptions (no NSMA, curriculum
+        # courses or camps), institutional students taught one-to-one, GCC from year 3,
+        # and the partnerships sales lead as the only planned hire
+        dropped = {"curriculum", "nsma", "summer_camp"}
+        a["streams"] = [st for st in (a.get("streams") or []) if not (isinstance(st, dict) and st.get("id") in dropped)]
+        for st in a["streams"]:
+            if not isinstance(st, dict):
+                continue
+            if st.get("id") == "core_b2c":
+                st["funnel_share"] = 1.0
+            if st.get("id") == "schools":
+                st["group_size"] = 1
+            if st.get("id") == "gcc_b2c" and str(st.get("start_month") or "") < "2028-10":
+                st["start_month"] = "2028-10"
+        for mk in a.get("markets") or []:
+            if isinstance(mk, dict) and mk.get("id") == "gcc" and str(mk.get("start_month") or "") < "2028-10":
+                mk["start_month"] = "2028-10"
+        team = a.get("team") if isinstance(a.get("team"), dict) else None
+        if team is not None:
+            def _partner_sales(h):
+                role = f"{h.get('role_en', '')} {h.get('role_ar', '')}".lower()
+                return ("sales" in role or "مبيعات" in role) and any(w in role for w in ("school", "partner", "مدارس", "شراك"))
+            team["hires"] = [h for h in (team.get("hires") or []) if isinstance(h, dict) and _partner_sales(h)]
+        a["schema"] = 4
     for st in a.get("streams", []):
         if isinstance(st, dict):
             if "category" not in st:
